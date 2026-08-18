@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AnchorStatus {
+  LIVE
+  DEGRADED
+  DOWN
+  UNKNOWN
+
+  @@map("anchor_status")
+}
+
+enum TransferStatus {
+  COMPLETED
+  PARTIAL
+  REFUNDED
+  EXPIRED
+  ERROR
+
+  @@map("transfer_status")
+}
+
+enum ReputationScoreBand {
+  GREEN @map("green")
+  AMBER @map("amber")
+  RED   @map("red")
+
+  @@map("reputation_score_band")
+}
+
+enum ReputationState {
+  INSUFFICIENT_DATA @map("insufficient_data")
+  OK                @map("ok")
+
+  @@map("reputation_state")
+}
+
+model Anchor {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String       @unique
+  name              String
+  homeDomain        String       @map("home_domain")
+  tomlUrl           String       @map("toml_url")
+  seps              Int[]        @default([])
+  isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
+  status            AnchorStatus @default(UNKNOWN)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  corridors        AnchorCorridor[]
+  rateSnapshots    RateSnapshot[]
+  transferOutcomes TransferOutcome[]
+  reputationScore  ReputationScore?
+
+  @@map("anchors")
+}
+
+model Corridor {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetCodeFrom String @map("asset_code_from")
+  countryFrom   String @map("country_from")
+  assetCodeTo   String @map("asset_code_to")
+  countryTo     String @map("country_to")
+  slug          String @unique
+
+  anchors          AnchorCorridor[]
+  rateSnapshots    RateSnapshot[]
+  transferOutcomes TransferOutcome[]
+
+  @@map("corridors")
+}
+
+model AnchorCorridor {
+  anchorId   String @map("anchor_id") @db.Uuid
+  corridorId String @map("corridor_id") @db.Uuid
+
+  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([anchorId, corridorId])
+  @@index([corridorId], map: "anchor_corridors_corridor_id_idx")
+  @@map("anchor_corridors")
+}
+
+/// One individual anchor quote for a corridor. Freshness is derived from
+/// capturedAt at read time; computed corridor medians are not stored here.
+model RateSnapshot {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId          String   @map("anchor_id") @db.Uuid
+  corridorId        String   @map("corridor_id") @db.Uuid
+  rate              Decimal  @db.Decimal(38, 18)
+  sourceAmount      Decimal  @map("source_amount") @db.Decimal(38, 18)
+  destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
+  fee               Decimal  @default(0) @db.Decimal(38, 18)
+  capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+
+  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
+  @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
+  @@map("rate_snapshots")
+}
+
+model TransferOutcome {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId     String         @map("anchor_id") @db.Uuid
+  corridorId   String         @map("corridor_id") @db.Uuid
+  status       TransferStatus
+  fillRate     Float          @map("fill_rate")
+  settlementMs Int            @map("settlement_ms")
+  slippage     Float
+  recordedAt   DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([anchorId, recordedAt(sort: Desc)], map: "transfer_outcomes_anchor_id_recorded_at_idx")
+  @@map("transfer_outcomes")
+}
+
+model ReputationScore {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId       String               @unique @map("anchor_id") @db.Uuid
+  compositeScore Float?               @map("composite_score")
+  scoreBand      ReputationScoreBand? @map("score_band")
+  fillRate7d     Float?               @map("fill_rate_7d")
+  fillRate30d    Float?               @map("fill_rate_30d")
+  fillRate90d    Float?               @map("fill_rate_90d")
+  settleP50Ms    Int?                 @map("settle_p50_ms")
+  settleP95Ms    Int?                 @map("settle_p95_ms")
+  slippageP50    Float?               @map("slippage_p50")
+  slippageP95    Float?               @map("slippage_p95")
+  sampleSize     Int                  @default(0) @map("sample_size")
+  state          ReputationState      @default(INSUFFICIENT_DATA)
+  computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@map("reputation_scores")
+}
