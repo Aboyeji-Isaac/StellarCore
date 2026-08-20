@@ -4,6 +4,10 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HOME_DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
+export function isValidHomeDomain(homeDomain: string): boolean {
+  return HOME_DOMAIN_PATTERN.test(homeDomain);
+}
+
 export function validateAnchorRegistry(
   entries: readonly AnchorRegistryEntry[],
 ): void {
@@ -19,7 +23,7 @@ export function validateAnchorRegistry(
       throw new Error(`Anchor "${entry.slug}" has an empty name`);
     }
 
-    if (!HOME_DOMAIN_PATTERN.test(entry.homeDomain)) {
+    if (!isValidHomeDomain(entry.homeDomain)) {
       throw new Error(
         `Anchor "${entry.slug}" has an invalid home domain: "${entry.homeDomain}"`,
       );
