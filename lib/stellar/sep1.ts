@@ -127,6 +127,7 @@ export function parseSep1Toml(
     tomlUrl,
   );
   const endpoints = parseEndpoints(document, tomlUrl);
+  const signingKey = optionalString(document, "SIGNING_KEY", tomlUrl);
   const assets = parseAssets(document.CURRENCIES, tomlUrl);
   const seps = detectSupportedSeps(endpoints);
 
@@ -136,6 +137,7 @@ export function parseSep1Toml(
     networkPassphrase,
     seps,
     endpoints,
+    ...(signingKey ? { signingKey } : {}),
     assets,
   });
 }
@@ -222,6 +224,7 @@ export async function discoverAnchor(
     seps: data.seps,
     isTransferCapable: transferCapable(data.seps),
     endpoints: data.endpoints,
+    ...(data.signingKey ? { signingKey: data.signingKey } : {}),
     assets: data.assets,
   });
 }

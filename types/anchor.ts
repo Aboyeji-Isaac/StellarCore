@@ -30,6 +30,7 @@ export type Sep1Data = Readonly<{
   networkPassphrase: string;
   seps: readonly StellarSep[];
   endpoints: DiscoveredAnchorEndpoints;
+  signingKey?: string;
   assets: readonly DiscoveredAnchorAsset[];
 }>;
 
@@ -44,5 +45,6 @@ export type DiscoveredAnchor = Readonly<{
   seps: readonly StellarSep[];
   isTransferCapable: boolean;
   endpoints: DiscoveredAnchorEndpoints;
+  signingKey?: string;
   assets: readonly DiscoveredAnchorAsset[];
 }>;

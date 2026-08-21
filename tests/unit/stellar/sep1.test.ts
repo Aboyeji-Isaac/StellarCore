@@ -34,6 +34,24 @@ test("transferCapable recognizes SEP-6, SEP-24, or SEP-31", () => {
   assert.equal(transferCapable([SEPS.SEP_1, SEPS.SEP_24]), true);
 });
 
+test("SEP-1 exposes authentication metadata required by SEP-10", () => {
+  const data = parseSep1Toml(`
+NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
+WEB_AUTH_ENDPOINT = "https://auth.anchor.example/sep10"
+SIGNING_KEY = "GREFERENCE"
+
+[DOCUMENTATION]
+ORG_NAME = "Reference Anchor"
+`);
+
+  assert.deepEqual(data.seps, [1, 10]);
+  assert.equal(
+    data.endpoints.webAuthEndpoint,
+    "https://auth.anchor.example/sep10",
+  );
+  assert.equal(data.signingKey, "GREFERENCE");
+});
+
 test("buildSep1TomlUrl rejects malformed home domains", () => {
   assert.throws(
     () => buildSep1TomlUrl("https://anchor.example/path"),
