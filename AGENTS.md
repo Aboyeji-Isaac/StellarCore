@@ -14,6 +14,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
 - `npm test` runs Vitest unit and integration tests.
+- `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
 - `npm run sync:anchors` refreshes anchor TOML data.

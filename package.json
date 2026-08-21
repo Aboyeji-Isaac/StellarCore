@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",
-    "test": "tsx --test tests/**/*.test.ts"
+    "test": "tsx --test tests/**/*.test.ts",
+    "verify:sep10": "tsx scripts/verify-sep10.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

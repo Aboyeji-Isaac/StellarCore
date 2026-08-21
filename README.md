@@ -641,9 +641,17 @@ npm test
 # Type check only
 npx tsc --noEmit
 
+# Opt-in live SEP-10 verification against the official Stellar test anchor
+npm run verify:sep10
+
 # E2E tests
 npm run test:e2e
 ```
+
+`verify:sep10` generates an unfunded ephemeral authentication key in memory,
+prints safe verification metadata only, and never prints or persists the secret
+seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
+the production build, or `postinstall`.
 
 ---
 
