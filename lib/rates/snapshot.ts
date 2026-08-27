@@ -43,24 +43,25 @@ export async function persistRateSnapshot(
   }
 }
 
-const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository = Object.freeze({
+export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
+  Object.freeze({
   async findAnchorBySlug(slug) {
-    const { db } = await import("@/lib/db");
+    const { db } = await import("@/lib/dbClient");
     return db.anchor.findUnique({ where: { slug }, select: { id: true } });
   },
   async findCorridorBySlug(slug) {
-    const { db } = await import("@/lib/db");
+    const { db } = await import("@/lib/dbClient");
     return db.corridor.findUnique({ where: { slug }, select: { id: true } });
   },
   async hasAssociation(anchorId, corridorId) {
-    const { db } = await import("@/lib/db");
+    const { db } = await import("@/lib/dbClient");
     return (await db.anchorCorridor.findUnique({
       where: { anchorId_corridorId: { anchorId, corridorId } },
       select: { anchorId: true },
     })) !== null;
   },
   async createSnapshot(input) {
-    const { db } = await import("@/lib/db");
+    const { db } = await import("@/lib/dbClient");
     return db.rateSnapshot.create({
       data: input,
       select: {

@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "postinstall": "prisma generate",
     "test": "tsx --test tests/**/*.test.ts",
-    "verify:sep10": "tsx scripts/verify-sep10.ts"
+    "verify:sep10": "tsx scripts/verify-sep10.ts",
+    "snapshot:rates": "tsx scripts/snapshot-rates.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

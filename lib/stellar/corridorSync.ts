@@ -67,7 +67,7 @@ const CORRIDOR_SELECT = {
 export async function persistCorridor(
   corridor: CorridorRegistryEntry,
 ): Promise<PersistedCorridor> {
-  const { db } = await import("@/lib/db");
+  const { db } = await import("@/lib/dbClient");
   const data = {
     assetCodeFrom: corridor.assetCodeFrom,
     countryFrom: corridor.countryFrom,
@@ -88,7 +88,7 @@ export async function persistCorridor(
 export async function persistAnchorCorridorAssociations(
   mapping: AnchorCorridorRegistryEntry,
 ): Promise<AnchorCorridorAssociationResult> {
-  const { db } = await import("@/lib/db");
+  const { db } = await import("@/lib/dbClient");
 
   return db.$transaction(async (transaction) => {
     const anchor = await transaction.anchor.findUnique({

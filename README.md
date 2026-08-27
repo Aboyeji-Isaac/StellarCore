@@ -625,7 +625,7 @@ Open [http://localhost:3000](http://localhost:3000).
 # Sync anchors from the Stellar network
 npm run sync:anchors
 
-# Snapshot live rates (normally runs on 60s cron)
+# Manually verify reviewed live SEP-38 sources and append snapshots
 npm run snapshot:rates
 
 # Recompute all reputation scores
@@ -647,6 +647,10 @@ npm run verify:sep10
 # E2E tests
 npm run test:e2e
 ```
+
+`snapshot:rates` is an opt-in production network check; it discovers only reviewed
+registry sources, verifies their advertised SEP-38 pair, and appends individual
+rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret

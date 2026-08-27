@@ -25,6 +25,13 @@ const corridorRegistry = [
     assetCodeTo: "NGN",
     countryTo: "NG",
   }),
+  Object.freeze({
+    slug: "usdc-us-brl-br",
+    assetCodeFrom: "USDC",
+    countryFrom: "US",
+    assetCodeTo: "BRL",
+    countryTo: "BR",
+  }),
 ] as const satisfies readonly CorridorRegistryEntry[];
 
 const anchorCorridorRegistry = [
@@ -35,6 +42,10 @@ const anchorCorridorRegistry = [
   Object.freeze({
     anchorSlug: "cowrie",
     corridorSlugs: Object.freeze(["ngnt-ng-ngn-ng"]),
+  }),
+  Object.freeze({
+    anchorSlug: "zeam",
+    corridorSlugs: Object.freeze(["usdc-us-brl-br"]),
   }),
 ] as const satisfies readonly AnchorCorridorRegistryEntry[];
 

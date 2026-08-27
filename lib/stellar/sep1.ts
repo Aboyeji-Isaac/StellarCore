@@ -306,7 +306,11 @@ function parseAssets(
       "anchor_asset_type",
       tomlUrl,
     );
-    const anchorAsset = optionalString(currency, "anchor_asset", tomlUrl);
+    const anchorAsset = optionalAssetMetadataString(
+      currency,
+      "anchor_asset",
+      tomlUrl,
+    );
 
     return Object.freeze({
       code,
@@ -375,6 +379,16 @@ function optionalString(
   }
 
   return value.trim();
+}
+
+function optionalAssetMetadataString(
+  record: Record<string, unknown>,
+  key: string,
+  tomlUrl: string,
+): string | undefined {
+  const value = record[key];
+  if (value === undefined || value === "") return undefined;
+  return optionalString(record, key, tomlUrl);
 }
 
 function optionalBoolean(

@@ -12,6 +12,11 @@ const anchorRegistry = [
     name: "Cowrie",
     homeDomain: "cowrie.exchange",
   }),
+  Object.freeze({
+    slug: "zeam",
+    name: "Zeam",
+    homeDomain: "zeam.money",
+  }),
 ] as const satisfies readonly AnchorRegistryEntry[];
 
 validateAnchorRegistry(anchorRegistry);

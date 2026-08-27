@@ -93,3 +93,17 @@ test("fetchSep1Toml returns a typed non-2xx error without reading the body", asy
       error.status === 503,
   );
 });
+
+test("SEP-1 tolerates an empty optional currency anchor_asset", () => {
+  const data = parseSep1Toml(`
+NETWORK_PASSPHRASE = "Public Global Stellar Network ; September 2015"
+
+[[CURRENCIES]]
+code = "RCAPS"
+anchor_asset = ""
+
+[DOCUMENTATION]
+ORG_NAME = "Reference Anchor"
+`);
+  assert.deepEqual(data.assets, [{ code: "RCAPS" }]);
+});
