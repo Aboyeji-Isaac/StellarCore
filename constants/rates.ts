@@ -1,0 +1,2 @@
+export const RATE_FRESHNESS_THRESHOLD_MS = 120_000;
+export const MIN_FRESH_SOURCES = 2;
