@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "test": "tsx --test tests/**/*.test.ts",
     "verify:sep10": "tsx scripts/verify-sep10.ts",
-    "snapshot:rates": "tsx scripts/snapshot-rates.ts"
+    "snapshot:rates": "tsx scripts/snapshot-rates.ts",
+    "verify:latest-rates": "tsx scripts/verify-latest-rates.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
