@@ -202,27 +202,37 @@ If fewer than `MIN_FRESH_SOURCES` (default: 2) are available, the fallback chain
 
 ### 3. Reputation Scoring
 
-StellarCore tracks the outcome of every transfer processed by each anchor. Each completed transfer contributes three signals to the anchor's reputation:
+StellarCore's first reputation engine uses only evidence already persisted by
+StellarCore. It is not an external endorsement or a claim about an anchor's
+legal, custodial, or financial trustworthiness.
 
-| Signal | Description | Weight |
-|---|---|---|
-| Fill Rate | Did the transfer complete at the quoted amount? | 33% |
-| Settlement Speed | How fast did funds arrive (p50 and p95)? | 33% |
-| Slippage | How far was the final rate from the quoted rate? | 33% |
+| Component | Weight | Definition |
+|---|---:|---|
+| Availability | 20% | Last synchronized status: `LIVE` 100, `DEGRADED` 50, `DOWN`/`UNKNOWN` 0. |
+| Rate freshness | 15% | Fresh latest observations divided by latest observations for synchronized corridors. |
+| Coverage | 15% | Synchronized corridors with a fresh latest observation divided by all synchronized corridors. |
+| Transfer reliability | 50% | `COMPLETED` outcomes divided by all outcomes in the trailing 90 days. |
 
-Scores are computed on rolling 7-day, 30-day, and 90-day windows. An anchor needs at least `MIN_OUTCOMES_THRESHOLD` (default: 30) recorded outcomes before leaving the **bootstrap phase**.
+Missing evidence scores zero for its component; weight is never redistributed.
+Only `COMPLETED` is success. `PARTIAL`, `REFUNDED`, `EXPIRED`, and `ERROR` are
+failures. Rate freshness reuses the shared 120-second rule and selects at most
+one latest observation per synchronized corridor at one evaluation timestamp.
 
-```
-Bootstrap phase (< 30 outcomes):
-  compositeScore:  null
-  state:           "insufficient_data"
-  scoreBand:       null
+A score is published only when there are at least 30 outcomes in the 90-day
+window, at least one synchronized corridor, and at least one latest rate
+observation. Otherwise `compositeScore` and `scoreBand` remain null and the
+persisted state is `INSUFFICIENT_DATA`. Established results use state `OK` and
+bands `GREEN` (95–100), `AMBER` (80–94), or `RED` (0–79).
 
-Live phase (≥ 30 outcomes):
-  compositeScore:  94.2
-  state:           "ok"
-  scoreBand:       "amber"   ← ≥95 green · 80-94 amber · <80 red
-```
+Ratios use integer basis-point arithmetic with explicit half-up rounding; the
+0–100 result is deterministic and bounded. Stored 7/30/90-day fill rates report
+the completed-outcome ratio. Settlement and slippage p50/p95 metrics use
+completed outcomes in the trailing 30 days and deterministic nearest-rank
+percentiles; they are explanatory metrics, not hidden score inputs.
+
+The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
+calculation upserts the current row and advances `computedAt`; it does not append
+historical scores. The engine has no scheduler or public reputation endpoint.
 
 ### 4. The Public API
 
@@ -287,29 +297,19 @@ Every 60 seconds via Vercel cron:
 ### Reputation Computation Flow
 
 ```
-Every hour via Vercel cron:
+For one persisted anchor at one evaluation timestamp:
 
-  1. Load all anchors with at least 1 outcome
-  2. For each anchor:
-       a. Count outcomes in last 90 days
-       b. If count < MIN_OUTCOMES_THRESHOLD:
-            → state = "insufficient_data"
-            → compositeScore = null
-            → skip
-       c. Compute rolling window metrics:
-            fillRate7d   = completed[7d] / total[7d]
-            fillRate30d  = completed[30d] / total[30d]
-            settleP50Ms  = percentile(50, settlementMs[30d])
-            settleP95Ms  = percentile(95, settlementMs[30d])
-            slippageP50  = percentile(50, slippage[30d])
-       d. compositeScore = (fillRate30d × 0.33)
-                         + (speedScore  × 0.33)
-                         + (slippageScore × 0.33)
-       e. scoreBand:
-            ≥ 95 → "green"
-            80–94 → "amber"
-            < 80  → "red"
-       f. Upsert into reputation_scores
+  1. Read synchronized corridors and last persisted anchor status.
+  2. Select one latest RateSnapshot per synchronized corridor.
+  3. Read TransferOutcome rows from the trailing 90 days.
+  4. Reuse shared freshness semantics and normalize bounded evidence counts.
+  5. Calculate the four documented weighted components with basis-point math.
+  6. If evidence thresholds are unmet:
+       → compositeScore = null
+       → scoreBand = null
+       → state = INSUFFICIENT_DATA
+     Otherwise persist the 0–100 score, band, and state = OK.
+  7. Upsert the anchor's single current ReputationScore row.
 ```
 
 ---
@@ -631,8 +631,8 @@ npm run snapshot:rates
 # Read the latest persisted rate per independent anchor without writing
 npm run verify:latest-rates
 
-# Recompute all reputation scores
-npm run compute:reputation
+# Recompute current reputation rows from the local database
+npm run verify:reputation
 ```
 
 ### Running Tests
@@ -659,6 +659,11 @@ rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 snapshot per independent anchor, evaluates freshness at read time, computes the
 exact median when enough sources exist, and verifies the snapshot count is
 unchanged. It performs no SEP-38 request or database write.
+
+`verify:reputation` is a local-database-only calculation for Cowrie,
+MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network
+request, upserts each anchor's single current `ReputationScore`, and prints only
+safe structured evidence and results.
 
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret
