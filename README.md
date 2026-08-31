@@ -784,29 +784,62 @@ Errors use stable codes:
 | 404 | `corridor_not_found` | No persisted corridor matches the slug. |
 | 500 | `internal_error` | The persisted-rate read failed safely. |
 
-### `GET /api/reputation/:anchorId`
+### `GET /api/reputation`
 
-Returns the full reputation breakdown for a single anchor.
+Returns every persisted anchor in slug order with its latest persisted
+reputation evaluation, if one exists. This is a read model over `Anchor` and
+optional `ReputationScore` only: GET requests do not run the engine, inspect
+rate or transfer history, synchronize anchors, or make network calls.
 
 ```json
 {
-  "data": {
-    "anchorId": "...",
-    "compositeScore": 94.2,
-    "scoreBand": "amber",
-    "state": "ok",
-    "fillRate7d": 0.97,
-    "fillRate30d": 0.94,
-    "fillRate90d": 0.91,
-    "settleP50Ms": 4200,
-    "settleP95Ms": 12000,
-    "slippageP50": 0.003,
-    "slippageP95": 0.012,
-    "sampleSize": 847,
-    "computedAt": "2026-08-12T10:00:00Z"
-  }
+  "reputation": [
+    {
+      "anchor": { "slug": "zeam", "name": "Zeam" },
+      "state": "insufficient_evidence",
+      "score": null,
+      "scoreBand": null,
+      "evidence": { "outcomeCount": 0 },
+      "metrics": {
+        "fillRate7d": null,
+        "fillRate30d": null,
+        "fillRate90d": null,
+        "settleP50Ms": null,
+        "settleP95Ms": null,
+        "slippageP50": null,
+        "slippageP95": null
+      },
+      "computedAt": "2026-08-31T13:54:41.719Z"
+    }
+  ],
+  "count": 1
 }
 ```
+
+### `GET /api/reputation/[slug]`
+
+Returns the same bounded reputation representation for one persisted anchor.
+A valid unknown anchor returns HTTP 404 with `anchor_not_found`; a malformed
+slug returns HTTP 400 with `invalid_anchor_slug`.
+
+Public states map persisted data explicitly:
+
+| Public state | Meaning |
+|---|---|
+| `not_evaluated` | The anchor exists but has no persisted `ReputationScore`; all score, evidence, metrics, and `computedAt` fields are null. |
+| `insufficient_evidence` | The latest persisted evaluation is sparse (`INSUFFICIENT_DATA`); `score` and `scoreBand` remain null. |
+| `established` | The latest persisted evaluation is `OK`; the persisted score, band, outcome count, and metrics are returned. |
+
+`scoreBand` is lower-case `green`, `amber`, or `red`; it is mapped from the
+persisted engine result rather than recalculated. `evidence.outcomeCount` is the
+persisted score sample size. The metric fields are persisted explanatory values,
+not request-time recomputations. Component scores and corridor/freshness counts
+are not exposed because the current schema does not persist them.
+
+`computedAt` is the timestamp of the latest completed reputation evaluation, not
+a live-health timestamp. Both routes are dynamic, use `Cache-Control: no-store`,
+and return safe HTTP 500 `internal_error` responses for repository failures.
+They never expose UUIDs, database enums, raw errors, or environment values.
 
 ### `GET /api/corridors`
 
