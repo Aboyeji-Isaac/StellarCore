@@ -673,33 +673,68 @@ All endpoints return JSON. Rate-limited to 100 requests per minute per IP.
 
 ### `GET /api/anchors`
 
-Returns all transfer-capable anchors with their current reputation.
+Returns the public directory of anchors currently persisted by StellarCore,
+ordered by slug ascending. The static anchor registry is synchronization input
+only; a registry entry that has never been synchronized does not appear here.
 
 ```json
 {
-  "data": [
+  "anchors": [
     {
-      "id": "clx...",
-      "slug": "moneygram",
-      "name": "MoneyGram",
-      "homeDomain": "moneygram.com",
-      "seps": [1, 10, 6, 24],
-      "isTransferCapable": true,
+      "slug": "zeam",
+      "name": "Zeam",
+      "homeDomain": "zeam.money",
       "status": "LIVE",
-      "reputation": {
-        "compositeScore": 94.2,
-        "scoreBand": "amber",
-        "state": "ok",
-        "sampleSize": 847
-      }
+      "seps": [1, 10, 24, 31, 38],
+      "corridorCount": 1
     }
   ],
-  "meta": {
-    "total": 12,
-    "computedAt": "2026-08-12T10:30:00Z"
+  "count": 1
+}
+```
+
+`status` is the stored result of the last synchronization/discovery condition;
+it is not a guarantee of current quote health. GET requests do not refresh it.
+`seps` contains only stored discovered SEP numbers, sorted numerically; no
+capability is inferred from other fields. `corridorCount` counts persisted
+`AnchorCorridor` associations, not live quotes or fresh rate sources.
+
+An empty database returns HTTP 200 with `{"anchors":[],"count":0}`.
+
+### `GET /api/anchors/[slug]`
+
+Returns one persisted anchor by its stable slug, with its synchronized corridor
+relationships ordered by corridor slug. The bounded query does not load rate
+snapshots, transfer outcomes, reputation history, or registry-only mappings.
+
+```json
+{
+  "anchor": {
+    "slug": "zeam",
+    "name": "Zeam",
+    "homeDomain": "zeam.money",
+    "status": "LIVE",
+    "seps": [1, 10, 24, 31, 38],
+    "corridors": [
+      {
+        "slug": "usdc-us-brl-br",
+        "sourceAsset": "USDC",
+        "sourceCountry": "US",
+        "destinationAsset": "BRL",
+        "destinationCountry": "BR"
+      }
+    ]
   }
 }
 ```
+
+Anchor slugs must be 1–100 characters of lowercase ASCII letters or digits,
+with single hyphens as separators. Malformed slugs return HTTP 400 with
+`invalid_anchor_slug`; valid unknown slugs return HTTP 404 with
+`anchor_not_found`. Unexpected reads return HTTP 500 with `internal_error` and
+no database details. Both anchor routes are dynamic and send
+`Cache-Control: no-store`. They are GET-only and perform no synchronization,
+live SEP calls, authentication, or writes.
 
 ### `GET /api/rates?corridor=<slug>`
 
