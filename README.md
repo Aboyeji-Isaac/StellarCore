@@ -770,7 +770,37 @@ Returns the full reputation breakdown for a single anchor.
 
 ### `GET /api/corridors`
 
-Returns all supported corridors with active anchor count.
+Returns the public directory of corridors currently persisted in StellarCore,
+ordered by slug ascending. This is database-backed discovery: the reviewed
+registry supplies synchronization input, while only synchronized `Corridor`
+rows appear in this response.
+
+```json
+{
+  "corridors": [
+    {
+      "slug": "usdc-us-brl-br",
+      "sourceAsset": "USDC",
+      "sourceCountry": "US",
+      "destinationAsset": "BRL",
+      "destinationCountry": "BR",
+      "anchorCount": 1
+    }
+  ],
+  "count": 1
+}
+```
+
+`anchorCount` is the number of synchronized `AnchorCorridor` associations. It
+does not represent fresh rate sources, a healthy median, or anchors currently
+available for live quotes. This endpoint performs no rate reads or live Stellar
+requests.
+
+An empty database is a successful state and returns HTTP 200 with
+`{"corridors":[],"count":0}`. Unexpected database failures return HTTP 500
+with `{"error":{"code":"internal_error","message":"Unable to load corridors."}}`.
+The route is dynamic and sends `Cache-Control: no-store`, so directory changes
+are visible without relying on accidental Next.js caching.
 
 ### `POST /api/outcomes`
 
