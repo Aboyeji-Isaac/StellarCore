@@ -420,7 +420,7 @@ stellarcore/
 │       │   ├── route.ts                   # GET /api/corridors
 │       │   └── [id]/rates/route.ts        # GET /api/corridors/:id/rates
 │       ├── rates/
-│       │   └── route.ts                   # GET /api/rates?from=&to=
+│       │   └── route.ts                   # GET /api/rates?corridor=
 │       ├── reputation/
 │       │   └── [anchorId]/route.ts        # GET /api/reputation/:anchorId
 │       └── outcomes/
@@ -701,41 +701,48 @@ Returns all transfer-capable anchors with their current reputation.
 }
 ```
 
-### `GET /api/rates?from=USDC&to=NGN`
+### `GET /api/rates?corridor=<slug>`
 
-Returns live rates for a corridor from all active anchors, with median.
+Returns the latest persisted rate observation per independent anchor for the
+requested stable corridor slug. The endpoint reads existing snapshots only and
+never performs live SEP-38 requests.
+
+A healthy aggregation returns HTTP 200:
 
 ```json
 {
-  "data": {
-    "corridor": "usdc-ng",
-    "median": 1612.50,
-    "fallbackEngaged": false,
-    "sources": [
-      {
-        "anchorId": "...",
-        "anchorName": "MoneyGram",
-        "rate": 1615.00,
-        "isStale": false,
-        "capturedAt": "2026-08-12T10:29:42Z"
-      }
-    ],
-    "excludedSources": [
-      {
-        "anchorId": "...",
-        "anchorName": "Cowrie",
-        "reason": "stale",
-        "capturedAt": "2026-08-12T10:27:11Z"
-      }
-    ]
+  "corridor": {
+    "slug": "usdc-us-brl-br",
+    "sourceAsset": "USDC",
+    "sourceCountry": "US",
+    "destinationAsset": "BRL",
+    "destinationCountry": "BR"
   },
-  "meta": {
-    "freshSources": 3,
-    "staleSources": 1,
-    "computedAt": "2026-08-12T10:30:00Z"
-  }
+  "evaluatedAt": "2026-08-28T12:00:00.000Z",
+  "state": "healthy",
+  "medianRate": "0.175",
+  "sourceCount": 2,
+  "freshSourceCount": 2,
+  "observations": []
 }
 ```
+
+A valid corridor with fewer than two fresh independent sources also returns
+HTTP 200, with `state: "insufficient_fresh_sources"` and `medianRate: null`.
+The current real USDC/US → BRL/BR result has one Zeam source and zero fresh
+sources, so it correctly returns that insufficient state with a null median.
+
+Freshness is evaluated dynamically on every request. Responses include
+`Cache-Control: no-store` so changing source age cannot be hidden by caching.
+
+Errors use stable codes:
+
+| HTTP | Code | Meaning |
+|---|---|---|
+| 400 | `missing_corridor` | The corridor query parameter is absent or empty. |
+| 400 | `invalid_corridor` | The corridor slug is malformed or too long. |
+| 404 | `corridor_not_found` | No persisted corridor matches the slug. |
+| 500 | `internal_error` | The persisted-rate read failed safely. |
 
 ### `GET /api/reputation/:anchorId`
 
