@@ -232,7 +232,8 @@ percentiles; they are explanatory metrics, not hidden score inputs.
 
 The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
 calculation upserts the current row and advances `computedAt`; it does not append
-historical scores. The engine has no scheduler or public reputation endpoint.
+historical scores. The engine is run by the authenticated scheduled-refresh
+boundary and remains independent of the public, read-only reputation API.
 
 ### 4. The Public API
 
@@ -279,19 +280,20 @@ Every 24 hours via GitHub Actions cron:
 ### Rate Snapshot Flow
 
 ```
-Every 60 seconds via Vercel cron:
+An external scheduler invokes GET /api/internal/cron/refresh:
 
-  1. Load all active anchors with SEP-38 support
-  2. For each anchor:
-       → POST /sep38/quote for each supported corridor
-       → Record { anchorId, corridorId, rate, capturedAt }
-       → Mark isStale = true if age > FRESHNESS_THRESHOLD
-  3. For each corridor:
-       → Filter to fresh rates only
-       → Compute median across fresh sources
-       → Engage fallback if < MIN_FRESH_SOURCES fresh
-       → Store MedianRateSnapshot in rate_snapshots
-  4. API responses now reflect updated rates
+  1. Require exactly: Authorization: Bearer <CRON_SECRET>
+       → Missing, malformed, or invalid credentials return safe 401 JSON.
+  2. Build only reviewed SEP-38 indicative-price candidates.
+       → No firm quote endpoint is called.
+  3. Fetch each prepared public indicative price and append an individual
+     RateSnapshot for each successful observation.
+  4. Evaluate every persisted anchor at the one run start timestamp.
+       → Each calculation upserts its single current ReputationScore.
+  5. Return a bounded, no-store JSON run summary.
+
+Rate preparation failures are returned as a safe rate failure while reputation
+evaluation still runs. A fatal reputation-run failure returns a safe HTTP 500;
 ```
 
 ### Reputation Computation Flow

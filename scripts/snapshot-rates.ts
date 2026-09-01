@@ -2,23 +2,9 @@ import "dotenv/config";
 
 import { pathToFileURL } from "node:url";
 
-import {
-  buildReviewedLiveRateCandidates,
-  fetchReviewedIndicativeRate,
-  formatLiveRateRunSummary,
-} from "@/lib/rates/liveRateSource";
-import { runRateEngine } from "@/lib/rates/rateEngine";
-import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
-import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
+import { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 
-export async function snapshotReviewedLiveRates(): Promise<SafeLiveRateRunSummary> {
-  const candidates = await buildReviewedLiveRateCandidates();
-  const result = await runRateEngine(candidates, {
-    quote: fetchReviewedIndicativeRate,
-    repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
-  });
-  return formatLiveRateRunSummary(result);
-}
+export { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 
 async function main(): Promise<void> {
   try {
