@@ -17,7 +17,8 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
-- `npm run sync:anchors` refreshes anchor TOML data.
+- `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
+- `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database.
 
 Do not add undocumented scripts; update this guide and the README when commands change.
 

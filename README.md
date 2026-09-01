@@ -672,6 +672,17 @@ prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
 
+## Production deployment
+
+StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma ORM. The full staged deployment procedure is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); it does not provision or deploy infrastructure.
+
+- Use Node.js 22.x and `npm run build`; existing `postinstall` generates Prisma Client.
+- Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
+- Apply tracked migrations only through protected CI/release execution of `npx prisma migrate deploy`, never ordinary Vercel builds or previews.
+- Run `npm run bootstrap:registry` once after migration before the first refresh.
+- Vercel Cron calls the authenticated refresh route every ten minutes.
+- Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
+
 ---
 
 ## API Reference

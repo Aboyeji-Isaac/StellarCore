@@ -2,6 +2,7 @@
   "name": "stellarcore",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "22.x" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +13,8 @@
     "verify:sep10": "tsx scripts/verify-sep10.ts",
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
-    "verify:reputation": "tsx scripts/verify-reputation.ts"
+    "verify:reputation": "tsx scripts/verify-reputation.ts",
+    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
