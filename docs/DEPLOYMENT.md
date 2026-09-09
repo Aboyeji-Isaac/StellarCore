@@ -27,6 +27,45 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 Do not run `prisma migrate dev`, `prisma db push`, reset commands, or `migrate deploy` from ordinary Vercel builds. Keeping migrations outside the build prevents preview deployments from mutating a shared production database.
 
+## Production migration workflow (GitHub Actions)
+
+The protected step above is implemented as a manual GitHub Actions workflow:
+`.github/workflows/deploy-production-migrations.yml`. It is triggered only by
+`workflow_dispatch` and is intentionally separate from Vercel builds, so a
+preview or an ordinary build can never mutate the production database. It runs
+exactly `npx prisma migrate deploy` on `ubuntu-latest` with Node.js 22 after
+`npm ci`, uses least-privilege `contents: read` permissions, a 10-minute job
+timeout, and a non-cancelling `production-database-migration` concurrency group
+so two migration runs can never overlap.
+
+One-time setup (repository admin):
+
+1. Open the GitHub repository **Settings**.
+2. Under **Environments**, create a GitHub Actions environment named
+   `production`.
+3. In that environment, add an environment secret named `DATABASE_URL`.
+4. Set it to the **direct** PostgreSQL connection string suitable for Prisma
+   Migrate (a `postgres://` / `postgresql://` URL, not a pooled/PgBouncer
+   endpoint). Do not put this value in any repository file.
+5. Optionally add **required reviewers** and other environment protection rules
+   to `production` so a human must approve each migration run.
+
+Running a migration:
+
+6. Open the repository **Actions** tab.
+7. Select the **Deploy production migrations** workflow.
+8. Choose **Run workflow** on the intended branch and confirm.
+9. Confirm the **prisma migrate deploy** step succeeds (the run log shows the
+   applied migrations, or "No pending migrations to apply").
+10. Only then continue to the production registry bootstrap
+    (`npm run bootstrap:registry`) and the application deployment described
+    below.
+
+The workflow never prints the secret and adds no environment-dumping debug
+steps. `DATABASE_URL` is the only secret it consumes; it does not use the
+Vercel CLI, Vercel tokens, `CRON_SECRET`, `POSTGRES_URL`, or
+`PRISMA_DATABASE_URL`.
+
 ## Preview policy
 
 Preview deployments must not receive the production `DATABASE_URL` or `CRON_SECRET`. Until isolated preview database infrastructure exists, omit database secrets from previews; database-backed routes will fail safely rather than target production.

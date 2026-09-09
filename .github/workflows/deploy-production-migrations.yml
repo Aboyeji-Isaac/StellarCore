@@ -1,0 +1,63 @@
+# Manually applies committed Prisma migrations to the production database.
+#
+# This workflow is intentionally manual and kept separate from Vercel builds
+# and preview deployments, so an ordinary build or a preview can never mutate
+# the production database. It runs only `npx prisma migrate deploy`, which
+# applies already-committed migrations; it never runs `prisma migrate dev`,
+# `prisma db push`, or any reset command, and it never creates or edits a
+# migration.
+#
+# One-time setup a repository admin must complete before the first run
+# (see docs/DEPLOYMENT.md for the full procedure):
+#   1. Create a GitHub Actions environment named `production`.
+#   2. Add a `DATABASE_URL` secret to that environment containing the direct
+#      PostgreSQL connection string suitable for Prisma Migrate.
+#   3. Optionally attach required reviewers / protection rules to the
+#      `production` environment.
+#
+# The secret is read only from the GitHub `production` environment. Do not
+# place it in any repository file.
+
+name: Deploy production migrations
+
+on:
+  workflow_dispatch:
+
+# Never run two production migrations at once, and never cancel a migration
+# that is already in progress just because another run was triggered.
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+# Least privilege: the job only needs to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: prisma migrate deploy
+    runs-on: ubuntu-latest
+    # GitHub Actions environment: scopes the DATABASE_URL secret to production
+    # and allows future required-reviewer / protection rules on this job.
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # `npm ci` runs the existing `postinstall` lifecycle script
+      # (`prisma generate`), so no separate Prisma Client generation step is
+      # required here.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
