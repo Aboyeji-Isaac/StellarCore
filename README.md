@@ -679,7 +679,7 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 - Use Node.js 22.x and `npm run build`; existing `postinstall` generates Prisma Client.
 - Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
 - Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- Run `npm run bootstrap:registry` once after migration before the first refresh.
+- Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - Vercel Cron calls the authenticated refresh route every ten minutes.
 - Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
 

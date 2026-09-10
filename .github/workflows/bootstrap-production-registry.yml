@@ -1,0 +1,71 @@
+# Manually synchronizes the reviewed anchor/corridor registry into the
+# production database.
+#
+# This workflow is intentionally manual and kept separate from Vercel builds,
+# preview deployments, the migration workflow, and the scheduled refresh, so an
+# ordinary build, a preview, or a cron run can never mutate the production
+# registry. It runs only `npm run bootstrap:registry`, which upserts the
+# already-reviewed anchor/corridor registry defined in the repository; it
+# creates no new anchors, infers no corridors, and never resets data. The
+# bootstrap is idempotent: normally required once for a fresh production
+# database, but safe to re-run deliberately after a reviewed registry change.
+#
+# One-time setup a repository admin must complete before the first run
+# (see docs/DEPLOYMENT.md for the full procedure):
+#   1. The GitHub Actions environment named `production` must already exist
+#      (created for the migration workflow).
+#   2. Its `DATABASE_URL` environment secret must be the direct PostgreSQL
+#      connection string suitable for Prisma.
+#   3. Optionally attach required reviewers / protection rules to the
+#      `production` environment.
+#
+# The secret is read only from the GitHub `production` environment. Do not
+# place it in any repository file.
+
+name: Bootstrap production registry
+
+on:
+  workflow_dispatch:
+
+# Never run two production registry bootstraps at once, and never cancel a
+# bootstrap that is already in progress just because another run was triggered.
+concurrency:
+  group: production-registry-bootstrap
+  cancel-in-progress: false
+
+# Least privilege: the job only needs to read the repository contents.
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: bootstrap registry
+    runs-on: ubuntu-latest
+    # GitHub Actions environment: scopes the DATABASE_URL secret to production
+    # and allows future required-reviewer / protection rules on this job.
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # `npm ci` runs the existing `postinstall` lifecycle script
+      # (`prisma generate`), which loads `prisma.config.ts`. That config
+      # resolves `DATABASE_URL`, so the production secret must be present for
+      # this step or `npm ci` fails with `PrismaConfigEnvError` before the
+      # bootstrap runs. It is scoped to this step only; it is never printed.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Bootstrap registry
+        run: npm run bootstrap:registry
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

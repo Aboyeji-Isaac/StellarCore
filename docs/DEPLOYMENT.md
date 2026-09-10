@@ -65,9 +65,8 @@ Running a migration:
 8. Choose **Run workflow** on the intended branch and confirm.
 9. Confirm the **prisma migrate deploy** step succeeds (the run log shows the
    applied migrations, or "No pending migrations to apply").
-10. Only then continue to the production registry bootstrap
-    (`npm run bootstrap:registry`) and the application deployment described
-    below.
+10. Only then continue to the **Bootstrap production registry** workflow
+    (see below) and the application deployment described below.
 
 The workflow never prints the secret and adds no environment-dumping debug
 steps. `DATABASE_URL` is the only secret it consumes; it does not use the
@@ -88,6 +87,51 @@ npm run bootstrap:registry
 
 It uses the existing reviewed registries and synchronization logic to discover/upsert anchors, upsert corridors, and reconcile associations. It prints safe structured results and exits nonzero for failures. It is never called by a web request, build, or cron route.
 
+## Production registry bootstrap workflow (GitHub Actions)
+
+The bootstrap above is also implemented as a manual GitHub Actions workflow:
+`.github/workflows/bootstrap-production-registry.yml`. It is triggered only by
+`workflow_dispatch` and is intentionally separate from Vercel builds, preview
+deployments, the migration workflow, and the scheduled refresh, so none of
+those can mutate the production registry. It runs exactly
+`npm run bootstrap:registry` on `ubuntu-latest` with Node.js 22 after `npm ci`,
+uses least-privilege `contents: read` permissions, a 10-minute job timeout, and
+a non-cancelling `production-registry-bootstrap` concurrency group so two
+bootstrap runs can never overlap.
+
+The bootstrap is manual and idempotent. It is normally required once for a
+fresh production database, immediately after migrations and before the first
+scheduled refresh. It may also be re-run deliberately after a reviewed change
+to the anchor/corridor registry in the repository; re-running upserts the
+current reviewed registry and reconciles associations without creating
+duplicates. It creates no new anchors, infers no corridors, and never resets
+data; it exits nonzero on any synchronization failure.
+
+The `production` environment's `DATABASE_URL` secret is supplied to both the
+dependency-installation step and the bootstrap step, for the same reason as the
+migration workflow: `npm ci` runs `postinstall` (`prisma generate`), which
+loads `prisma.config.ts`, and that configuration resolves `DATABASE_URL`;
+without the secret the install step fails with `PrismaConfigEnvError` before
+the bootstrap runs. The secret stays scoped to those two steps rather than the
+whole workflow, and is never printed. `DATABASE_URL` is the only secret the
+workflow consumes; it does not use the Vercel CLI, Vercel tokens, `CRON_SECRET`,
+`POSTGRES_URL`, or `PRISMA_DATABASE_URL`.
+
+Running the bootstrap:
+
+1. Confirm the **Deploy production migrations** workflow has completed
+   successfully and the `production` environment / `DATABASE_URL` secret are in
+   place (they are shared with the migration workflow).
+2. Open the repository **Actions** tab.
+3. Select the **Bootstrap production registry** workflow.
+4. Choose **Run workflow** on the intended branch and confirm.
+5. Confirm the **Bootstrap registry** step succeeds; the run log prints a safe
+   structured JSON summary of anchor and corridor synchronization. A nonzero
+   exit means at least one entry failed to synchronize — resolve it and
+   re-run.
+6. Only then continue to the application deployment and scheduled refresh
+   described below.
+
 ## Scheduler
 
 `vercel.json` schedules the single production-only refresh route every ten minutes (`*/10 * * * *`). Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
@@ -96,8 +140,11 @@ The locally verified run took about ten seconds. This MVP has one reviewed sourc
 
 ## First production cycle
 
-1. Apply committed migrations.
-2. Run `npm run bootstrap:registry` and resolve any nonzero result.
+1. Apply committed migrations with the **Deploy production migrations**
+   workflow (`.github/workflows/deploy-production-migrations.yml`).
+2. Synchronize the reviewed registry with the **Bootstrap production registry**
+   workflow (`.github/workflows/bootstrap-production-registry.yml`) and resolve
+   any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
 4. Let the scheduled refresh ingest indicative rates, then evaluate reputations.
 5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
