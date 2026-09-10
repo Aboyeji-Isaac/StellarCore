@@ -53,9 +53,14 @@ jobs:
 
       # `npm ci` runs the existing `postinstall` lifecycle script
       # (`prisma generate`), so no separate Prisma Client generation step is
-      # required here.
+      # required here. That generate step loads `prisma.config.ts`, which
+      # resolves `DATABASE_URL`, so the same production secret must be present
+      # for this step as well or `npm ci` fails with `PrismaConfigEnvError`.
+      # It is scoped to this step only; it is never printed.
       - name: Install dependencies
         run: npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Apply migrations
         run: npx prisma migrate deploy

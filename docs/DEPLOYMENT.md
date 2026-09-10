@@ -38,6 +38,14 @@ exactly `npx prisma migrate deploy` on `ubuntu-latest` with Node.js 22 after
 timeout, and a non-cancelling `production-database-migration` concurrency group
 so two migration runs can never overlap.
 
+The `production` environment's `DATABASE_URL` secret is supplied to both the
+dependency-installation step and the migration step. `npm ci` runs the
+`postinstall` script (`prisma generate`), which loads `prisma.config.ts`, and
+that configuration resolves `DATABASE_URL`; without the secret the install step
+fails with `PrismaConfigEnvError: Cannot resolve environment variable:
+DATABASE_URL` before any migration runs. The secret stays scoped to those two
+steps rather than the whole workflow, and is never printed.
+
 One-time setup (repository admin):
 
 1. Open the GitHub repository **Settings**.
