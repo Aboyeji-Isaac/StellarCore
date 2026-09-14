@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   gsap,
   useGSAP,
@@ -40,6 +41,7 @@ function Navbar() {
         <a href="#system">System</a>
         <a href="#anchors">Anchors</a>
         <a href="#network">Network</a>
+        <Link href="/dashboard">Dashboard</Link>
       </nav>
       <a className="nav-cta" href="#anchors">
         Explore live rates <Arrow />
