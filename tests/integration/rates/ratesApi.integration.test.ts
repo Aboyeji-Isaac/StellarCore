@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { getRatesApiResult } from "@/lib/api/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import type {
@@ -34,6 +35,14 @@ test("API composition preserves latest-per-anchor selection and exact median off
   assert.equal(result.body.freshSourceCount, 2);
   assert.equal(result.body.state, "healthy");
   assert.equal(result.body.medianRate, "0.1000000000000000015");
+  assert.deepEqual(result.body.reviewedCandidateConfiguration, {
+    candidateCount: 1,
+    uniqueAnchorCount: 1,
+  });
+  assert.equal(
+    result.body.medianRequirement.minimumFreshIndependentSources,
+    MIN_FRESH_SOURCES,
+  );
   assert.deepEqual(
     result.body.observations.map(({ rate }) => rate),
     ["0.100000000000000002", "0.100000000000000001"],

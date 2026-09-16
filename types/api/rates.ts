@@ -18,6 +18,15 @@ export type PublicRateObservation = Readonly<{
   exclusionReason?: MedianExclusionReason;
 }>;
 
+export type PublicReviewedCandidateConfiguration = Readonly<{
+  candidateCount: number;
+  uniqueAnchorCount: number;
+}>;
+
+export type PublicMedianRequirement = Readonly<{
+  minimumFreshIndependentSources: number;
+}>;
+
 export type PublicRatesResponse = Readonly<{
   corridor: Readonly<{
     slug: string;
@@ -31,6 +40,8 @@ export type PublicRatesResponse = Readonly<{
   medianRate: string | null;
   sourceCount: number;
   freshSourceCount: number;
+  reviewedCandidateConfiguration: PublicReviewedCandidateConfiguration;
+  medianRequirement: PublicMedianRequirement;
   observations: readonly PublicRateObservation[];
 }>;
 

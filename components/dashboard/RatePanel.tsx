@@ -24,8 +24,20 @@ export async function RatePanel() {
     return <SectionError message={result.body.error.message} />;
   }
 
-  const { corridor, state, medianRate, sourceCount, freshSourceCount, observations, evaluatedAt } =
-    result.body;
+  const {
+    corridor,
+    state,
+    medianRate,
+    sourceCount,
+    freshSourceCount,
+    reviewedCandidateConfiguration,
+    medianRequirement,
+    observations,
+    evaluatedAt,
+  } = result.body;
+  const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"} across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"}`;
+  const observationLabel = `${sourceCount} latest persisted anchor ${sourceCount === 1 ? "observation" : "observations"}`;
+  const medianEvidenceLabel = `${freshSourceCount} fresh independent ${freshSourceCount === 1 ? "observation" : "observations"} of ${medianRequirement.minimumFreshIndependentSources} required`;
 
   return (
     <div className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-6">
@@ -42,7 +54,7 @@ export async function RatePanel() {
         <Badge tone={state === "healthy" ? "positive" : "warning"} label={state.replace(/_/g, " ")} />
       </div>
 
-      <dl className="mt-6 grid grid-cols-3 gap-4 border-t border-[var(--ghost)] pt-4 text-sm">
+      <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-[var(--ghost)] pt-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <div>
           <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median rate</dt>
           <dd className="mt-1 text-2xl text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
@@ -50,14 +62,30 @@ export async function RatePanel() {
           </dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Sources</dt>
-          <dd className="mt-1 text-[var(--white)]">{sourceCount}</dd>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Configuration</dt>
+          <dd className="mt-1 text-[var(--white)]">Reviewed candidates known to StellarCore</dd>
+          <dd className="mt-1 text-[var(--muted)]">{candidateLabel}</dd>
         </div>
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Fresh sources</dt>
-          <dd className="mt-1 text-[var(--white)]">{freshSourceCount}</dd>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Observations</dt>
+          <dd className="mt-1 text-[var(--white)]">Latest persisted observations</dd>
+          <dd className="mt-1 text-[var(--muted)]">{observationLabel}</dd>
+        </div>
+        <div>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median evidence</dt>
+          <dd className="mt-1 text-[var(--white)]">{medianEvidenceLabel}</dd>
         </div>
       </dl>
+
+      <p className="mt-4 text-xs text-[var(--muted)]">
+        Configuration is not proof that a source is operational or currently returning a price.
+      </p>
+
+      {state === "insufficient_fresh_sources" && (
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Median unavailable: insufficient fresh independent observations.
+        </p>
+      )}
 
       {observations.length === 0 ? (
         <div className="mt-6">

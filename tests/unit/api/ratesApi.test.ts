@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { GET, dynamic } from "@/app/api/rates/route";
+import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { getRatesApiResult, serializeRates } from "@/lib/api/rates";
 import type { LatestCorridorRate } from "@/types/latestRates";
 
@@ -83,6 +84,13 @@ test("one source is a successful insufficient response with string decimals", as
   assert.equal(result.body.observations[0]?.rate, "0.170000000000000001");
   assert.equal(typeof result.body.observations[0]?.rate, "string");
   assert.equal(result.body.evaluatedAt, NOW.toISOString());
+  assert.deepEqual(result.body.reviewedCandidateConfiguration, {
+    candidateCount: 1,
+    uniqueAnchorCount: 1,
+  });
+  assert.deepEqual(result.body.medianRequirement, {
+    minimumFreshIndependentSources: MIN_FRESH_SOURCES,
+  });
 });
 
 test("serializer exposes an exact healthy median and normalized exclusions", () => {
@@ -102,10 +110,26 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   assert.equal(body.medianRate, "0.1000000000000000015");
   assert.equal(body.observations[2]?.freshness.state, "stale");
   assert.equal(body.observations[3]?.exclusionReason, "future_timestamp");
+  assert.equal(body.sourceCount, 4);
+  assert.equal(body.freshSourceCount, 2);
+  assert.deepEqual(body.reviewedCandidateConfiguration, {
+    candidateCount: 1,
+    uniqueAnchorCount: 1,
+  });
+  assert.deepEqual(body.medianRequirement, {
+    minimumFreshIndependentSources: MIN_FRESH_SOURCES,
+  });
+  assert.deepEqual(Object.keys(body.reviewedCandidateConfiguration).sort(), [
+    "candidateCount",
+    "uniqueAnchorCount",
+  ]);
+  assert.equal(JSON.stringify(body).includes("sellAsset"), false);
   assert.equal("snapshotId" in body.observations[0]!, false);
   assert.equal(Object.isFrozen(body), true);
   assert.equal(Object.isFrozen(body.observations), true);
   assert.equal(Object.isFrozen(body.observations[0]), true);
+  assert.equal(Object.isFrozen(body.reviewedCandidateConfiguration), true);
+  assert.equal(Object.isFrozen(body.medianRequirement), true);
   assert.doesNotThrow(() => JSON.stringify(body));
   assert.equal(JSON.stringify(body).includes("bigint"), false);
 });

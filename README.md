@@ -526,14 +526,33 @@ production state:
   "medianRate": "0.175",
   "sourceCount": 2,
   "freshSourceCount": 2,
+  "reviewedCandidateConfiguration": {
+    "candidateCount": 2,
+    "uniqueAnchorCount": 2
+  },
+  "medianRequirement": {
+    "minimumFreshIndependentSources": 2
+  },
   "observations": []
 }
 ```
 
 A valid corridor with fewer than two fresh independent sources also returns
 HTTP 200, with `state: "insufficient_fresh_sources"` and `medianRate: null`.
-The current reviewed USDC/US → BRL/BR source configuration contains only Zeam,
-so it cannot produce a median even when that observation is fresh.
+`reviewedCandidateConfiguration` describes only reviewed static configuration
+for the requested corridor: `candidateCount` is the number of matching reviewed
+entries, while `uniqueAnchorCount` counts the distinct anchor slugs represented
+by those entries. It is not evidence that a source is operational, has returned
+a price, or is eligible for a median. `medianRequirement` reports the
+architectural minimum fresh independent observations required for a median.
+
+The response distinguishes reviewed configuration from persisted observations:
+`sourceCount` is the number of anchors represented by the latest persisted
+observations, `freshSourceCount` is the number of those observations currently
+eligible for the median, and `state` / `medianRate` are calculated exclusively
+from that persisted freshness evidence. The current reviewed USDC/US → BRL/BR
+configuration contains one Zeam candidate, so it cannot produce a median even
+when that observation is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.

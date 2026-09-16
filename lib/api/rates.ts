@@ -1,6 +1,8 @@
 import { ANCHOR_REGISTRY } from "@/constants/anchors";
 import { CORRIDOR_REGISTRY } from "@/constants/corridors";
+import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
+import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
 import type {
   PublicRateObservation,
@@ -78,6 +80,7 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
     }) satisfies PublicRateObservation;
     return serialized;
   }));
+  const reviewedCandidateConfiguration = getReviewedCandidateConfiguration(result.corridorSlug);
 
   return Object.freeze({
     corridor: Object.freeze({
@@ -92,6 +95,10 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
     medianRate: result.median,
     sourceCount: result.totalIndependentSources,
     freshSourceCount: result.freshSourceCount,
+    reviewedCandidateConfiguration,
+    medianRequirement: Object.freeze({
+      minimumFreshIndependentSources: MIN_FRESH_SOURCES,
+    }),
     observations,
   });
 }
