@@ -14,7 +14,7 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--black); }
 body { margin: 0; background: var(--black); color: var(--white); font-family: var(--sans); overflow-x: hidden; }
-body, a { cursor: none; }
+.landing-page, .landing-page a { cursor: none; }
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
 ::selection { color: var(--black); background: var(--accent); }
@@ -72,7 +72,7 @@ footer { min-height: 140px; display: grid; grid-template-columns: 1fr 1.5fr 1fr 
 .cursor { position: fixed; left: -7px; top: -7px; z-index: 200; width: 14px; height: 14px; pointer-events: none; border-radius: 50%; background: var(--accent); mix-blend-mode: difference; will-change: transform; transition: width .25s, height .25s, margin .25s; }.cursor span { display: none; }.cursor.is-active { width: 46px; height: 46px; margin: -16px 0 0 -16px; }
 
 @media (max-width: 899px) {
-  body, a { cursor: auto; }.cursor { display: none; }.navbar { height: 68px; grid-template-columns: 1fr auto; }.navbar nav { display: none; }.nav-cta { padding: .65rem .85rem; }.nav-cta span { display: none; }
+  .landing-page, .landing-page a { cursor: auto; }.cursor { display: none; }.navbar { height: 68px; grid-template-columns: 1fr auto; }.navbar nav { display: none; }.nav-cta { padding: .65rem .85rem; }.nav-cta span { display: none; }
   .hero { padding-top: 110px; min-height: 850px; }.hero-title { margin-top: 4vh; font-size: clamp(3.4rem, 13vw, 7rem); }.hero-kicker span:last-child { display: none; }.hero-bottom { align-items: end; }.network-map { margin-inline: 0; }.map-label { display: none; }.route-readout { bottom: 15%; }.scroll-cue { display: none; }
   .section-intro { grid-template-columns: 1fr; gap: 2rem; }.system-section { grid-template-columns: 1fr; padding-block: 120px; }.system-heading { position: static; }.system-steps { margin-top: 4rem; }.system-step { min-height: 540px; }.system-step h3 { margin-top: 280px; }
   .anchors-section { display: block; padding: 120px 0 120px 5vw; }.anchors-heading { padding-right: 5vw; margin-bottom: 4rem; }.anchor-track { width: auto; overflow-x: auto; padding: 0 5vw 1.5rem 0; scroll-snap-type: x mandatory; }.anchor-card { flex: 0 0 84vw; height: 610px; scroll-snap-align: start; }

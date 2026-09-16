@@ -376,7 +376,7 @@ export function LandingPage() {
   }, { scope: root });
 
   return (
-    <main ref={root}>
+    <main ref={root} className="landing-page">
       <Navbar />
       <Hero />
       <RateTicker />
