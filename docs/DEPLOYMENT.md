@@ -5,7 +5,7 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 ## Architecture
 
 - Next.js 15 App Router deploys as Vercel Node.js functions.
-- Prisma Client uses the `PrismaPg` adapter with a direct PostgreSQL connection.
+- Prisma Client uses the `PrismaPg` adapter with a server-only PostgreSQL connection supplied as `DATABASE_URL` for the running environment.
 - Public API routes are read-only. The refresh route is a Node.js-only, authenticated internal mutation boundary.
 - Vercel Cron invokes only `/api/internal/cron/refresh` on production deployments.
 
@@ -13,14 +13,14 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 | Name | Production | Secret | Purpose |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Required | Yes | Direct PostgreSQL connection for runtime and Prisma CLI. |
+| `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
 
-`DATABASE_URL` must be a `postgres://` or `postgresql://` URL. Prisma 7 configuration uses it for both the CLI and the `PrismaPg` runtime adapter; `DIRECT_URL` is not used. Do not expose either variable through `NEXT_PUBLIC_*`.
+`DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
 ## Migration strategy
 
-1. Provision the managed PostgreSQL database and set only production-scoped `DATABASE_URL` in the deployment/CI environment.
+1. Configure the server-only runtime `DATABASE_URL` for the production deployment, and separately configure the protected GitHub Actions `production` environment's direct Prisma Postgres credential as its `DATABASE_URL` secret.
 2. From a protected CI/release step, run `npx prisma migrate deploy` once against that environment.
 3. Confirm `npx prisma migrate status` is current.
 4. Deploy the application with `npm run build`.
@@ -134,9 +134,9 @@ Running the bootstrap:
 
 ## Scheduler
 
-`vercel.json` schedules the single production-only refresh route every ten minutes (`*/10 * * * *`). Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
+`vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
 
-The locally verified run took about ten seconds. This MVP has one reviewed source and three anchors, so one Node.js function invocation is currently acceptable. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
+The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 
 ## First production cycle
 
@@ -146,7 +146,7 @@ The locally verified run took about ten seconds. This MVP has one reviewed sourc
    workflow (`.github/workflows/bootstrap-production-registry.yml`) and resolve
    any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
-4. Let the scheduled refresh ingest indicative rates, then evaluate reputations.
+4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
 5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
 
 ## Rollback

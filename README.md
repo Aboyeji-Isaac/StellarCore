@@ -2,7 +2,7 @@
 
 **The intelligence layer for Stellar anchors.**
 
-Real-time rate aggregation, reputation scoring, and corridor discovery — all in one open-source dashboard.
+Read-only anchor, corridor, rate, and reputation visibility for Stellar.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Built on Stellar](https://img.shields.io/badge/Built%20on-Stellar-7C3AED)](https://stellar.org)
@@ -17,17 +17,23 @@ Real-time rate aggregation, reputation scoring, and corridor discovery — all i
 The Stellar network has dozens of anchors — companies like MoneyGram, Cowrie, and others that handle USDC off-ramps to local currencies across Nigeria, Kenya, Ghana, Mexico, and more. But there is no single source of truth for:
 
 - Which anchors support a given corridor
-- What rate each anchor is offering right now
-- Which anchors have strong historical performance
+- What reviewed rate observations are currently available
+- Whether enough independently verifiable evidence exists to publish a reputation score
 - Which anchors are live, degraded, or down
 
-Developers and users are left checking anchor websites one at a time. StellarCore solves this.
+Developers and users are left checking anchor websites one at a time. StellarCore provides a reviewed, read-only view of the data it has actually persisted.
 
 ---
 
 ## What StellarCore Does
 
-StellarCore continuously reads the Stellar network, aggregates anchor data from SEP-1 TOML files, fetches live SEP-38 quotes, tracks historical transfer outcomes, computes reputation scores, and serves everything through a public API and a real-time dashboard.
+StellarCore synchronizes a reviewed anchor and corridor registry, discovers anchor metadata through SEP-1, stores reviewed SEP-38 indicative-rate observations, calculates reputation from persisted evidence, and exposes read-only APIs plus a public dashboard.
+
+The implementation separates architectural behavior from current production state:
+
+- **Architectural invariants:** rate medians require `MIN_FRESH_SOURCES=2`; reputation uses the documented fixed weights and requires at least 30 outcomes in 90 days before publishing a score.
+- **Current production state:** the reviewed USDC → BRL rate source is Zeam only, so it is insufficient for a median. The `TransferOutcome` model and scoring logic exist, but there is no trusted production outcome-ingestion source; reputation therefore remains sparse with null scores.
+- **Planned/Future:** outcome ingestion is contingent on a legitimate, authorized source with durable provenance. StellarCore does not execute transfers, use customer authentication contexts, or create firm production quotes.
 
 > Think of it as **Google Flights for Stellar anchors** — pick a corridor, see every option, trust the data.
 
@@ -38,9 +44,7 @@ StellarCore continuously reads the Stellar network, aggregates anchor data from 
 ```mermaid
 graph TB
     subgraph FE["StellarCore Frontend (Next.js)"]
-        UI["Dashboard / Anchor Directory\nCorridor Explorer · Rate Comparison"]
-        SWR["SWR Client\n60s polling"]
-        REPVIEW["Reputation Leaderboard"]
+        UI["Public /dashboard\nAnchors · Corridors · Rates · Reputation"]
     end
 
     subgraph BROWSER["Browser / API Consumer"]
@@ -49,10 +53,10 @@ graph TB
     end
 
     subgraph BACKEND["Backend Services"]
-        SYNC["Sync Engine\ndaily · TOML fetch · anchor upsert"]
-        RATESNAP["Rate Snapshot\n60s · SEP-38 poll per anchor"]
-        REPENG["Reputation Engine\nhourly · fill rate · speed · slippage"]
-        MEDIAN["Median Pricing\nstaleness-aware · fallback chain"]
+        BOOTSTRAP["Manual registry bootstrap\nSEP-1 discovery · registry upsert"]
+        REFRESH["Authenticated daily refresh\nreviewed SEP-38 indicative rates"]
+        REPENG["Reputation engine\npersisted evidence only"]
+        MEDIAN["Median pricing\nfresh independent sources only"]
         ROUTES["Next.js Route Handlers\n/api/anchors · /api/rates · /api/reputation"]
     end
 
@@ -69,74 +73,27 @@ graph TB
         PA1["GET /api/anchors"]
         PA2["GET /api/rates"]
         PA3["GET /api/corridors"]
-        PA4["GET /api/reputation/:id"]
-        PA5["POST /api/outcomes"]
+        PA4["GET /api/reputation and /api/reputation/:slug"]
     end
 
     subgraph STELLAR["Stellar Network"]
         TOML["SEP-1 TOML Files\nanchor.homeDomain/.well-known"]
-        SEP38["SEP-38 Quote Endpoints\nPOST /sep38/quote"]
-        HORIZON["Horizon API\nledger · accounts · tx history"]
+        SEP38["SEP-38 Quote Endpoints\npublic indicative prices only"]
     end
 
     USER -->|renders| UI
-    UI --> SWR
-    SWR -->|60s poll| ROUTES
+    UI --> ROUTES
     CLIENT -->|REST calls| PUBAPI
     ROUTES -->|Prisma queries| DB
     PUBAPI -->|query results| DB
-    SYNC -->|fetch TOML| TOML
-    RATESNAP -->|POST /quote| SEP38
+    BOOTSTRAP -->|fetch TOML| TOML
+    REFRESH -->|fetch indicative prices| SEP38
     REPENG -->|read outcomes| OUTCOMES
     REPENG -->|write scores| SCORES
     MEDIAN -->|read snapshots| RATES
-    SYNC -->|upsert| ANCHORS
-    HORIZON -->|tx history| REPENG
+    BOOTSTRAP -->|upsert| ANCHORS
     BACKEND --> DB
 ```
-
----
-
-## System Overview
-
-```
-                         ┌───────────────────────────────────────┐
-                         │         STELLAR NETWORK               │
-                         │  SEP-1 TOML   SEP-38 API   Horizon   │
-                         └──────────────┬────────────────────────┘
-                                        │
-                               ┌────────▼────────┐
-                               │   SYNC ENGINE    │
-                               │  TOML parser     │
-                               │  SEP-38 poller   │
-                               │  Uptime monitor  │
-                               └────────┬────────┘
-                                        │
-                         ┌──────────────▼──────────────┐
-                         │         POSTGRESQL            │
-                         │  anchors  corridors  rates   │
-                         │  outcomes  reputation_scores  │
-                         └──────────────┬──────────────┘
-                                        │
-              ┌─────────────────────────┼─────────────────────┐
-              │                         │                     │
-    ┌─────────▼────────┐    ┌──────────▼──────┐    ┌────────▼──────┐
-    │  REPUTATION       │    │  RATE ENGINE    │    │  PUBLIC API   │
-    │  ENGINE           │    │                 │    │               │
-    │  fill rate        │    │  staleness      │    │  /anchors     │
-    │  settlement speed │    │  detection      │    │  /rates       │
-    │  slippage         │    │  median pricing │    │  /corridors   │
-    │  score bands      │    │  fallback chain │    │  /reputation  │
-    └──────────────────┘    └────────────────┘    └──────────────┘
-                                        │
-                         ┌──────────────▼──────────────┐
-                         │      NEXT.JS FRONTEND        │
-                         │  Anchors · Corridors · Rates │
-                         │  Reputation · Live Dashboard  │
-                         └─────────────────────────────┘
-```
-
----
 
 ## How It Works
 
@@ -148,14 +105,14 @@ StellarCore reads the Stellar network's TOML files. Every Stellar anchor publish
 GET https://anchor.example.com/.well-known/stellar.toml
 ```
 
-The sync engine parses every TOML file and extracts:
+The bootstrap synchronization parses the reviewed registry's TOML files and extracts:
 
 - Supported SEPs (`SEP_6`, `SEP_24`, `SEP_31`, `SEP_38`)
 - Supported currencies and asset codes
 - API endpoints for rate quotes
 - Transfer instruction URLs
 
-Anchors that declare only `SEP_1` without any transfer SEPs are classified as **issuer-only** and excluded from corridor results. Only anchors with at least one of `SEP_6`, `SEP_24`, or `SEP_31` appear in the dashboard.
+`isTransferCapable` is derived from `SEP_6`, `SEP_24`, or `SEP_31`. It is stored metadata, not proof that StellarCore can execute or observe transfers. The public dashboard shows persisted anchors and reviewed corridor associations; it does not infer new corridors from a TOML file.
 
 ```typescript
 // lib/stellar/anchors.ts
@@ -169,25 +126,22 @@ export function transferCapable(anchor: Anchor): boolean {
 
 ### 2. Live Rate Aggregation (SEP-38)
 
-Every 60 seconds, the rate engine polls every active anchor's SEP-38 endpoint for live quotes across all corridors they support.
+The rate engine stores individual observations from explicitly reviewed SEP-38 indicative-price candidates. It does not call firm-quote endpoints and does not execute transfers.
 
-```
-POST https://anchor.example.com/sep38/quote
-{
-  "sell_asset":   "stellar:USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-  "buy_asset":    "iso4217:NGN",
-  "sell_amount":  "100"
-}
-```
+**Current production state:** the reviewed source list contains one Zeam USDC → BRL candidate. This is an observation about the current reviewed configuration, not a requirement of the architecture.
+
+For each reviewed candidate, StellarCore first validates the pair through the
+anchor's SEP-38 `/prices` endpoint, then reads an indicative price from
+`/price`. It does not call the firm `/quote` lifecycle.
 
 Rates are stored as timestamped snapshots. A rate is considered **stale** when it is older than `RATE_FRESHNESS_THRESHOLD_MS` (default: 120 seconds).
 
 #### Staleness-Aware Median
 
-The rate engine computes a median across fresh sources to produce a robust, outlier-resistant price for each corridor:
+The rate engine computes a median across fresh, independent sources when the architectural minimum is met:
 
 ```
-All sources for USDC → NGN:
+Illustrative sources for one corridor:
 
   Anchor A:  ₦1,612  (fresh · 18s old)
   Anchor B:  ₦1,608  (fresh · 41s old)
@@ -198,7 +152,7 @@ Fresh sources:  [1608, 1612, 1615]
 Sorted median:   1612
 ```
 
-If fewer than `MIN_FRESH_SOURCES` (default: 2) are available, the fallback chain walks through priority groups, marks `fallbackEngaged: true` in the response, and annotates which sources were excluded and why.
+`MIN_FRESH_SOURCES=2` is an architectural invariant. With fewer than two fresh independent sources, the API returns `insufficient_fresh_sources` and a null median. The current single reviewed Zeam source therefore remains insufficient even when fresh.
 
 ### 3. Reputation Scoring
 
@@ -235,27 +189,17 @@ calculation upserts the current row and advances `computedAt`; it does not appen
 historical scores. The engine is run by the authenticated scheduled-refresh
 boundary and remains independent of the public, read-only reputation API.
 
+`TransferOutcome` is implemented data modeling, not a production evidence feed. StellarCore has no trusted production outcome-ingestion source today and does not infer outcomes from Horizon or a successful on-chain payment. SEP-6 and SEP-24 history is customer-scoped where authentication applies; SEP-31 lifecycle access is scoped to authorized participants and partner anchors. Until a legitimate, authorized source with provenance exists, sparse reputation is the intended result and established scores are not supported by sufficient evidence.
+
+**Planned/Future:** a transfer-outcome ingestion boundary may be considered only after a trusted source, authorization model, privacy review, and durable provenance design are available. It will not be a promised public write API.
+
 ### 4. The Public API
 
-Every piece of data StellarCore collects is available through a public REST API. Third-party dApps can query anchor data and reputation scores without building their own aggregation layer.
-
-All endpoints return a standard envelope:
-
-```json
-{
-  "data": { },
-  "meta": {
-    "computedAt": "2026-08-12T10:30:00Z",
-    "freshSources": 3,
-    "staleSources": 1,
-    "fallbackEngaged": false
-  }
-}
-```
+StellarCore exposes persisted anchors, corridors, rates, and reputation through public read-only JSON endpoints. These endpoints do not synchronize anchors, request customer authorization, create transfers, or write outcome evidence.
 
 ### 5. The Dashboard
 
-The Next.js frontend consumes the API and presents data in real time. SWR polls rate endpoints every 60 seconds. The interface handles the bootstrap state gracefully — anchors without enough data show a progress indicator instead of a misleading score.
+The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse.
 
 ---
 
@@ -264,17 +208,17 @@ The Next.js frontend consumes the API and presents data in real time. SWR polls 
 ### Anchor Sync Flow
 
 ```
-Every 24 hours via GitHub Actions cron:
+The manual, protected registry-bootstrap workflow runs `npm run bootstrap:registry`:
 
   1. Read anchor registry (constants/anchors.ts)
   2. For each anchor:
        → Fetch stellar.toml from homeDomain
-       → Parse SEPs, assets, endpoints
+       → Parse SEPs, assets, and endpoints
        → Run transferCapable() → true / false
        → Upsert into anchors table
   3. For each anchor + corridor pair:
        → Upsert into anchor_corridors table
-  4. Log sync result to console
+  4. Exit nonzero if discovery or persistence fails
 ```
 
 ### Rate Snapshot Flow
@@ -318,81 +262,15 @@ For one persisted anchor at one evaluation timestamp:
 
 ## Database Schema
 
-```sql
--- Anchors: the core entity
-CREATE TABLE anchors (
-  id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug                TEXT UNIQUE NOT NULL,
-  name                TEXT NOT NULL,
-  home_domain         TEXT NOT NULL,
-  toml_url            TEXT NOT NULL,
-  seps                INTEGER[] NOT NULL DEFAULT '{}',
-  is_transfer_capable BOOLEAN NOT NULL DEFAULT false,
-  status              TEXT NOT NULL DEFAULT 'UNKNOWN',
-  created_at          TIMESTAMPTZ DEFAULT now(),
-  updated_at          TIMESTAMPTZ DEFAULT now()
-);
+The source of truth is [prisma/schema.prisma](prisma/schema.prisma). It models
+anchors, corridors, reviewed anchor–corridor associations, individual rate
+snapshots, transfer-outcome evidence, and one current reputation score per
+anchor. Freshness is calculated at read time; it is not stored on a snapshot.
 
--- Corridors: asset pair + country pair
-CREATE TABLE corridors (
-  id              TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-  asset_code_from TEXT NOT NULL,   -- e.g. 'USDC'
-  country_from    TEXT NOT NULL,   -- e.g. 'US'
-  asset_code_to   TEXT NOT NULL,   -- e.g. 'NGN'
-  country_to      TEXT NOT NULL,   -- e.g. 'NG'
-  slug            TEXT UNIQUE NOT NULL  -- e.g. 'usdc-ng'
-);
-
--- Junction: which anchors serve which corridors
-CREATE TABLE anchor_corridors (
-  anchor_id   TEXT REFERENCES anchors(id),
-  corridor_id TEXT REFERENCES corridors(id),
-  PRIMARY KEY (anchor_id, corridor_id)
-);
-
--- Rate snapshots: one row per anchor per corridor per poll
-CREATE TABLE rate_snapshots (
-  id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-  anchor_id           TEXT REFERENCES anchors(id),
-  corridor_id         TEXT REFERENCES corridors(id),
-  rate                FLOAT NOT NULL,
-  source_amount       FLOAT NOT NULL,
-  destination_amount  FLOAT NOT NULL,
-  fee                 FLOAT NOT NULL DEFAULT 0,
-  is_stale            BOOLEAN NOT NULL DEFAULT false,
-  captured_at         TIMESTAMPTZ DEFAULT now()
-);
-
--- Transfer outcomes: the reputation signal source
-CREATE TABLE transfer_outcomes (
-  id            TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-  anchor_id     TEXT REFERENCES anchors(id),
-  corridor_id   TEXT REFERENCES corridors(id),
-  status        TEXT NOT NULL,  -- COMPLETED|PARTIAL|REFUNDED|EXPIRED|ERROR
-  fill_rate     FLOAT NOT NULL,
-  settlement_ms INTEGER NOT NULL,
-  slippage      FLOAT NOT NULL,
-  recorded_at   TIMESTAMPTZ DEFAULT now()
-);
-
--- Reputation scores: precomputed per anchor, updated hourly
-CREATE TABLE reputation_scores (
-  id              TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
-  anchor_id       TEXT UNIQUE REFERENCES anchors(id),
-  composite_score FLOAT,
-  score_band      TEXT,          -- 'green' | 'amber' | 'red' | null
-  fill_rate_7d    FLOAT,
-  fill_rate_30d   FLOAT,
-  fill_rate_90d   FLOAT,
-  settle_p50_ms   INTEGER,
-  settle_p95_ms   INTEGER,
-  slippage_p50    FLOAT,
-  slippage_p95    FLOAT,
-  sample_size     INTEGER NOT NULL DEFAULT 0,
-  state           TEXT NOT NULL DEFAULT 'insufficient_data',
-  computed_at     TIMESTAMPTZ DEFAULT now()
-);
-```
+`TransferOutcome` supports the scoring model but has no production writer. Its
+presence in the schema must not be read as a claim that StellarCore collects
+customer transfers, independently verifies off-chain settlement, or has
+established reputation evidence.
 
 ---
 
@@ -400,138 +278,18 @@ CREATE TABLE reputation_scores (
 
 ```
 stellarcore/
-│
-├── app/                                   # Next.js App Router
-│   ├── layout.tsx                         # Root layout
-│   ├── page.tsx                           # Landing page
-│   ├── anchors/
-│   │   ├── page.tsx                       # Anchor directory
-│   │   └── [id]/page.tsx                  # Anchor profile
-│   ├── corridors/
-│   │   ├── page.tsx                       # Corridor explorer + world map
-│   │   └── [corridorId]/page.tsx          # Corridor detail + rate table
-│   ├── rates/
-│   │   └── page.tsx                       # Live rate dashboard
-│   ├── reputation/
-│   │   └── page.tsx                       # Reputation leaderboard
-│   └── api/
-│       ├── anchors/
-│       │   ├── route.ts                   # GET /api/anchors
-│       │   └── [id]/route.ts              # GET /api/anchors/:id
-│       ├── corridors/
-│       │   ├── route.ts                   # GET /api/corridors
-│       │   └── [id]/rates/route.ts        # GET /api/corridors/:id/rates
-│       ├── rates/
-│       │   └── route.ts                   # GET /api/rates?corridor=
-│       ├── reputation/
-│       │   └── [anchorId]/route.ts        # GET /api/reputation/:anchorId
-│       └── outcomes/
-│           └── route.ts                   # POST /api/outcomes
-│
-├── components/
-│   ├── landing/
-│   │   ├── Hero.tsx                       # Hero section
-│   │   ├── LiveRatesTicker.tsx            # Scrolling rate marquee
-│   │   ├── HowItWorks.tsx                 # 3-step explainer
-│   │   └── StatsCounter.tsx               # Animated stat counters
-│   ├── anchors/
-│   │   ├── AnchorGrid.tsx                 # Filterable anchor card grid
-│   │   ├── AnchorCard.tsx                 # Single anchor card
-│   │   └── AnchorProfile.tsx              # Full anchor detail view
-│   ├── corridors/
-│   │   ├── CorridorSelector.tsx           # Source + destination picker
-│   │   ├── WorldMapSVG.tsx                # Interactive SVG world map
-│   │   └── RateComparisonTable.tsx        # Side-by-side rate table
-│   ├── reputation/
-│   │   ├── ReputationGauge.tsx            # Circular score gauge
-│   │   ├── ReputationLeaderboard.tsx      # Ranked anchor list
-│   │   └── HistorySparkline.tsx           # 30-day score chart
-│   └── ui/
-│       ├── Navbar.tsx
-│       ├── StatusBadge.tsx                # Live / Stale / Down
-│       ├── ScoreBandBadge.tsx             # Green / Amber / Red
-│       ├── CountUp.tsx                    # Animated number
-│       └── MedianPriceDisplay.tsx         # Median + source breakdown
-│
+├── app/                    # Landing page, /dashboard, public read APIs, internal cron route
+├── components/dashboard/   # Dashboard sections and bounded state views
+├── constants/              # Reviewed anchor, corridor, rate-source, and scoring configuration
 ├── lib/
-│   ├── stellar/
-│   │   ├── client.ts                      # Stellar SDK setup
-│   │   ├── anchors.ts                     # TOML parsing + classification
-│   │   ├── sep38.ts                       # Live SEP-38 quote fetching
-│   │   └── sep1.ts                        # TOML resolution
-│   ├── reputation/
-│   │   ├── score.ts                       # Composite score formula
-│   │   ├── bands.ts                       # Score band classification
-│   │   ├── aggregate.ts                   # Rolling window aggregation
-│   │   └── thresholds.ts                  # MIN_OUTCOMES and config
-│   ├── rates/
-│   │   ├── median.ts                      # Staleness-aware median
-│   │   ├── freshness.ts                   # Stale detection
-│   │   └── normalize.ts                   # Cross-anchor normalization
-│   └── db/
-│       ├── client.ts                      # Prisma singleton
-│       └── queries/
-│           ├── anchors.ts
-│           ├── rates.ts
-│           └── reputation.ts
-│
-├── hooks/
-│   ├── useLiveRates.ts                    # SWR polling hook
-│   ├── useAnchorFilter.ts                 # Filter + sort state
-│   └── useCountUp.ts                      # Animated number hook
-│
-├── types/
-│   ├── anchor.ts                          # Anchor + SEP types
-│   ├── corridor.ts                        # Corridor types
-│   ├── rate.ts                            # Rate + freshness types
-│   └── reputation.ts                      # Score + band types
-│
-├── constants/
-│   ├── anchors.ts                         # Anchor registry with seps data
-│   ├── corridors.ts                       # Supported corridor definitions
-│   └── seps.ts                            # SEP number constants
-│
-├── prisma/
-│   ├── schema.prisma                      # Full database schema
-│   └── migrations/                        # Migration history
-│
-├── scripts/
-│   ├── sync-anchors.ts                    # Daily: sync anchor TOMLs
-│   ├── snapshot-rates.ts                  # 60s: snapshot live rates
-│   └── compute-reputation.ts              # Hourly: recompute scores
-│
-├── tests/
-│   ├── unit/
-│   │   ├── reputation/                    # Score computation tests
-│   │   └── rates/                         # Median + staleness tests
-│   ├── integration/
-│   │   └── api/                           # Route handler tests
-│   └── e2e/
-│       └── corridor-flow.spec.ts          # End-to-end corridor test
-│
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml                         # Test on every PR
-│   │   ├── deploy.yml                     # Deploy on main merge
-│   │   └── sync-anchors.yml               # Daily anchor sync cron
-│   └── ISSUE_TEMPLATE/
-│       ├── add-anchor.md
-│       ├── add-corridor.md
-│       └── bug-report.md
-│
-├── docs/
-│   ├── architecture.md                    # Full architecture detail
-│   ├── api-reference.md                   # API endpoint reference
-│   ├── adding-anchors.md                  # Contributor guide
-│   └── reputation-methodology.md          # Score formula in depth
-│
-├── .env.example
-├── next.config.ts
-├── tailwind.config.ts
-├── tsconfig.json
-├── vitest.config.ts
-├── playwright.config.ts
-└── README.md
+│   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
+│   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
+│   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
+│   └── scheduled/          # Internal cron authorization and orchestration
+├── prisma/                 # Schema and committed migration history
+├── scripts/                # Bootstrap, snapshot, and verification utilities
+├── tests/                  # Unit and controlled integration coverage
+└── .github/workflows/      # Manual production migration and registry-bootstrap workflows
 ```
 
 ---
@@ -543,13 +301,13 @@ stellarcore/
 | Framework | Next.js 15 (App Router) | Full-stack React with API routes and SSR |
 | Language | TypeScript (strict) | Type safety across the full stack |
 | Styling | Tailwind CSS v4 | Utility-first, consistent design tokens |
-| Database | PostgreSQL (Supabase) | Relational structure for rates and reputation |
+| Database | Prisma Postgres via Vercel (production) | Relational data for rates and reputation; local development may use a compatible PostgreSQL database |
 | ORM | Prisma | Type-safe database queries |
-| Data Fetching | SWR | Client-side polling with stale-while-revalidate |
-| Blockchain | @stellar/stellar-sdk | SEP-1 TOML parsing, SEP-38 quotes |
-| Testing | Vitest + Playwright | Unit, integration, and E2E coverage |
+| Data Fetching | Server-rendered read models | Dashboard and public APIs read persisted data |
+| Blockchain | @stellar/stellar-sdk | SEP-1 parsing, SEP-10 authentication boundary, SEP-38 indicative prices |
+| Testing | Node test runner via `tsx` | Unit and controlled integration coverage |
 | Deployment | Vercel | Zero-config Next.js hosting with cron support |
-| CI/CD | GitHub Actions | Test, build, deploy, and anchor sync |
+| Production operations | GitHub Actions + Vercel | Manual migrations/bootstrap and authenticated daily refresh |
 
 ---
 
@@ -558,29 +316,19 @@ stellarcore/
 ```bash
 # .env.example
 
-# Stellar Network
-NEXT_PUBLIC_STELLAR_NETWORK=mainnet
-NEXT_PUBLIC_HORIZON_URL=https://horizon.stellar.org
+# Server-only application/runtime PostgreSQL connection for this environment.
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# Database (Supabase or local Postgres)
-DATABASE_URL=postgresql://user:password@localhost:5432/stellarcore
-
-# Rate Engine
-RATE_FRESHNESS_THRESHOLD_MS=120000
-MIN_FRESH_SOURCES=2
-RATE_SYNC_INTERVAL_MS=60000
-
-# Reputation Engine
-MIN_OUTCOMES_THRESHOLD=30
-REPUTATION_WINDOW_DAYS=30
-
-# Optional: Alerts
-RESEND_API_KEY=
-WEBHOOK_SECRET=
-
-# Optional: Cron auth
-CRON_SECRET=
+# Required in production when Vercel Cron is enabled; never expose to the client.
+CRON_SECRET="replace-with-a-random-server-only-secret"
 ```
+
+`DATABASE_URL` is server-only. The application runtime uses the connection
+appropriate to its deployment environment; local development may use a
+compatible PostgreSQL database. Separately, the protected production migration
+workflow supplies its direct Prisma Postgres credential through its GitHub
+Actions `DATABASE_URL` secret. Neither credential belongs in client code,
+repository files, or logs.
 
 ---
 
@@ -588,9 +336,8 @@ CRON_SECRET=
 
 ### Prerequisites
 
-- Node.js 20+
-- PostgreSQL 15+ (or a Supabase project)
-- A Stellar account on testnet for development
+- Node.js 22.x
+- PostgreSQL accessible through a direct connection URL
 
 ### Installation
 
@@ -604,18 +351,15 @@ npm install
 
 # 3. Set up environment variables
 cp .env.example .env.local
-# Fill in DATABASE_URL and Stellar config
+# Fill in DATABASE_URL. CRON_SECRET is needed only when exercising the refresh route.
 
 # 4. Run database migrations
 npx prisma migrate dev
 
-# 5. Seed initial anchor data
-npm run db:seed
+# 5. Bootstrap the reviewed anchor and corridor registry
+npm run bootstrap:registry
 
-# 6. Run the first anchor sync
-npm run sync:anchors
-
-# 7. Start the development server
+# 6. Start the development server
 npm run dev
 ```
 
@@ -624,8 +368,8 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Running Sync Jobs Locally
 
 ```bash
-# Sync anchors from the Stellar network
-npm run sync:anchors
+# Bootstrap the reviewed anchor and corridor registry
+npm run bootstrap:registry
 
 # Manually verify reviewed live SEP-38 sources and append snapshots
 npm run snapshot:rates
@@ -649,11 +393,9 @@ npx tsc --noEmit
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 
-# E2E tests
-npm run test:e2e
 ```
 
-`snapshot:rates` is an opt-in production network check; it discovers only reviewed
+`snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
 registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
@@ -680,14 +422,14 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 - Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
 - Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- Vercel Cron calls the authenticated refresh route every ten minutes.
+- The Hobby-compatible Vercel Cron calls the authenticated refresh route daily at `0 0 * * *`.
 - Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
 
 ---
 
 ## API Reference
 
-All endpoints return JSON. Rate-limited to 100 requests per minute per IP.
+All public endpoints return JSON and are read-only.
 
 ### `GET /api/anchors`
 
@@ -760,7 +502,9 @@ Returns the latest persisted rate observation per independent anchor for the
 requested stable corridor slug. The endpoint reads existing snapshots only and
 never performs live SEP-38 requests.
 
-A healthy aggregation returns HTTP 200:
+When two or more fresh independent observations are persisted, a healthy
+aggregation returns HTTP 200. The following is illustrative, not current
+production state:
 
 ```json
 {
@@ -782,8 +526,8 @@ A healthy aggregation returns HTTP 200:
 
 A valid corridor with fewer than two fresh independent sources also returns
 HTTP 200, with `state: "insufficient_fresh_sources"` and `medianRate: null`.
-The current real USDC/US → BRL/BR result has one Zeam source and zero fresh
-sources, so it correctly returns that insufficient state with a null median.
+The current reviewed USDC/US → BRL/BR source configuration contains only Zeam,
+so it cannot produce a median even when that observation is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.
@@ -888,10 +632,6 @@ with `{"error":{"code":"internal_error","message":"Unable to load corridors."}}`
 The route is dynamic and sends `Cache-Control: no-store`, so directory changes
 are visible without relying on accidental Next.js caching.
 
-### `POST /api/outcomes`
-
-Records a transfer outcome to contribute to an anchor's reputation. Requires `WEBHOOK_SECRET` header authentication.
-
 ---
 
 ## Contributing
@@ -900,19 +640,15 @@ StellarCore is community-maintained. Every anchor, corridor, and feature additio
 
 ### Adding an Anchor
 
-1. Open an issue using the `add-anchor` template
-2. Fork the repo and create a branch: `feat/add-anchor-[slug]`
-3. Add the anchor to `constants/anchors.ts` with its `seps` array
-4. Open a PR — CI will verify the TOML is reachable and the anchor classifies correctly
-
-See [docs/adding-anchors.md](docs/adding-anchors.md) for the full guide.
+1. Fork the repository and create a branch.
+2. Propose a reviewed registry change in `constants/anchors.ts` and, when needed, `constants/corridors.ts`.
+3. Include tests appropriate to the change and open a PR with the source used for the review.
 
 ### Adding a Corridor
 
-1. Open an issue using the `add-corridor` template
-2. Add the corridor definition to `constants/corridors.ts`
-3. Confirm at least one active anchor supports the asset pair
-4. Open a PR
+1. Add the corridor definition to `constants/corridors.ts`.
+2. Associate it only with reviewed anchor support.
+3. Open a PR with evidence for the association.
 
 ### Code Contributions
 
@@ -942,26 +678,22 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 
 ## Roadmap
 
-- [x] Project architecture and database schema
-- [x] README and documentation
-- [ ] Prisma schema and initial migrations
-- [ ] Anchor registry (`constants/anchors.ts`) with SEP data
-- [ ] Anchor sync engine (SEP-1 TOML parser)
-- [ ] SEP-38 rate polling and snapshot storage
-- [ ] Staleness-aware median pricing (`lib/rates/median.ts`)
-- [ ] `transferCapable()` classifier (`lib/stellar/anchors.ts`)
-- [ ] Public REST API — `/api/anchors`, `/api/rates`, `/api/corridors`
-- [ ] Reputation scoring engine (`lib/reputation/score.ts`)
-- [ ] Reputation API — `/api/reputation/:anchorId`
-- [ ] Next.js frontend — anchor directory
-- [ ] Next.js frontend — corridor explorer
-- [ ] Next.js frontend — live rate dashboard
-- [ ] Next.js frontend — reputation leaderboard
-- [ ] GitHub Actions cron for anchor sync
-- [ ] GitHub Actions cron for rate snapshots
-- [ ] Unit and E2E test suite
-- [ ] Email and webhook alerts
-- [ ] SCF application
+### Implemented
+
+- [x] Prisma schema and committed migrations
+- [x] Reviewed anchor and corridor registry with SEP-1 discovery/bootstrap
+- [x] Reviewed SEP-38 indicative-rate snapshot support and latest-rate read model
+- [x] Staleness-aware median pricing with `MIN_FRESH_SOURCES=2`
+- [x] SEP-10 authentication boundary/harness
+- [x] Deterministic reputation scoring and public read-only reputation APIs
+- [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
+- [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
+
+### Planned/Future
+
+- [ ] Additional independently reviewed rate sources; a second source is required before a median can be produced
+- [ ] A trusted, authorized, provenance-preserving TransferOutcome source, if one becomes available
+- [ ] Alerts and other product capabilities supported by verified operational requirements
 
 ---
 
