@@ -46,7 +46,9 @@ test("persisted anchor records and junctions compose without registry or history
   assert.equal(registryOnly.status, 404);
   if (list.status !== 200 || detail.status !== 200) return;
   assert.equal(list.body.anchors[0]?.corridorCount, 1);
+  assert.equal(list.body.anchors[0]?.isTransferCapable, false);
   assert.equal(detail.body.anchor.corridors[0]?.slug, "usdc-us-brl-br");
+  assert.equal(detail.body.anchor.isTransferCapable, false);
   assert.deepEqual(calls, [
     "findAll",
     "findBySlug:persisted-anchor",

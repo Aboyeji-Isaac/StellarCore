@@ -6,6 +6,7 @@ export type PublicAnchorSummary = Readonly<{
   homeDomain: string;
   status: PublicAnchorStatus;
   seps: readonly number[];
+  isTransferCapable: boolean;
   corridorCount: number;
 }>;
 
@@ -23,6 +24,7 @@ export type PublicAnchorDetail = Readonly<{
   homeDomain: string;
   status: PublicAnchorStatus;
   seps: readonly number[];
+  isTransferCapable: boolean;
   corridors: readonly PublicAnchorCorridor[];
 }>;
 

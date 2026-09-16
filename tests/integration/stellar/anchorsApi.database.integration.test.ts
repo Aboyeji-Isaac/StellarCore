@@ -53,7 +53,9 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
     const listed = list.body.anchors.find(({ slug }) => slug === anchorSlug);
     assert.equal(listed?.corridorCount, 1);
     assert.deepEqual(listed?.seps, [1, 24, 38]);
+    assert.equal(listed?.isTransferCapable, true);
     assert.equal(detail.body.anchor.status, "DEGRADED");
+    assert.equal(detail.body.anchor.isTransferCapable, true);
     assert.deepEqual(detail.body.anchor.corridors, [{
       slug: corridorSlug,
       sourceAsset: "USDC",

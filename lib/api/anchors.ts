@@ -4,6 +4,7 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
+import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   AnchorApiResult,
   AnchorsApiResult,
@@ -87,14 +88,18 @@ export function serializeAnchors(
 ): PublicAnchorsResponse {
   const anchors = Object.freeze([...records]
     .sort((left, right) => left.slug.localeCompare(right.slug))
-    .map((record) => Object.freeze({
-      slug: record.slug,
-      name: record.name,
-      homeDomain: record.homeDomain,
-      status: record.status,
-      seps: sortedSeps(record.seps),
-      corridorCount: record.corridorCount,
-    }) satisfies PublicAnchorSummary));
+    .map((record) => {
+      const seps = sortedSeps(record.seps);
+      return Object.freeze({
+        slug: record.slug,
+        name: record.name,
+        homeDomain: record.homeDomain,
+        status: record.status,
+        seps,
+        isTransferCapable: transferCapable(seps),
+        corridorCount: record.corridorCount,
+      }) satisfies PublicAnchorSummary;
+    }));
 
   return Object.freeze({ anchors, count: anchors.length });
 }
@@ -102,6 +107,7 @@ export function serializeAnchors(
 export function serializeAnchorDetail(
   record: AnchorDetailRecord,
 ): PublicAnchorDetail {
+  const seps = sortedSeps(record.seps);
   const corridors = Object.freeze([...record.corridors]
     .sort((left, right) => left.slug.localeCompare(right.slug))
     .map((corridor) => Object.freeze({
@@ -117,7 +123,8 @@ export function serializeAnchorDetail(
     name: record.name,
     homeDomain: record.homeDomain,
     status: record.status,
-    seps: sortedSeps(record.seps),
+    seps,
+    isTransferCapable: transferCapable(seps),
     corridors,
   });
 }

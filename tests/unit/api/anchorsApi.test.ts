@@ -33,6 +33,7 @@ test("one anchor serializes sorted SEPs and corridor count without UUIDs", () =>
       homeDomain: "zeam.example",
       status: "LIVE",
       seps: [1, 10, 24, 31, 38],
+      isTransferCapable: true,
       corridorCount: 1,
     }],
     count: 1,
@@ -83,6 +84,7 @@ test("valid detail serializes bounded sorted corridors with no internal data", a
     "usdc-us-brl-br",
   ]);
   assert.deepEqual(result.body.anchor.seps, [1, 10, 24, 31, 38]);
+  assert.equal(result.body.anchor.isTransferCapable, true);
   const serialized = JSON.stringify(result.body);
   for (const forbidden of ["anchorId", "corridorId", "rateSnapshots", "reputationScore"]) {
     assert.equal(serialized.includes(forbidden), false);
@@ -96,6 +98,29 @@ test("detail serializer is immutable and JSON-safe", () => {
   assert.equal(Object.isFrozen(anchor.corridors), true);
   assert.equal(Object.isFrozen(anchor.corridors[0]), true);
   assert.doesNotThrow(() => JSON.stringify(anchor));
+});
+
+test("public transfer capability is derived only from persisted SEP numbers", () => {
+  const cases: readonly Readonly<{
+    name: string;
+    seps: readonly number[];
+    isTransferCapable: boolean;
+  }>[] = [
+    { name: "SEP-6", seps: [6], isTransferCapable: true },
+    { name: "SEP-24", seps: [24], isTransferCapable: true },
+    { name: "SEP-31", seps: [31], isTransferCapable: true },
+    { name: "transfer SEP combination", seps: [31, 10, 24, 6], isTransferCapable: true },
+    { name: "SEP-10", seps: [10], isTransferCapable: false },
+    { name: "SEP-38", seps: [38], isTransferCapable: false },
+    { name: "SEP-10 and SEP-38", seps: [38, 10], isTransferCapable: false },
+    { name: "empty set", seps: [], isTransferCapable: false },
+    { name: "unknown SEP", seps: [999], isTransferCapable: false },
+  ];
+
+  for (const value of cases) {
+    const body = serializeAnchors([summary("zeam", value.seps, 1)]);
+    assert.equal(body.anchors[0]?.isTransferCapable, value.isTransferCapable, value.name);
+  }
 });
 
 test("malformed slugs return 400 before repository access", async () => {

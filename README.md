@@ -446,6 +446,7 @@ only; a registry entry that has never been synchronized does not appear here.
       "homeDomain": "zeam.money",
       "status": "LIVE",
       "seps": [1, 10, 24, 31, 38],
+      "isTransferCapable": true,
       "corridorCount": 1
     }
   ],
@@ -455,9 +456,13 @@ only; a registry entry that has never been synchronized does not appear here.
 
 `status` is the stored result of the last synchronization/discovery condition;
 it is not a guarantee of current quote health. GET requests do not refresh it.
-`seps` contains only stored discovered SEP numbers, sorted numerically; no
-capability is inferred from other fields. `corridorCount` counts persisted
-`AnchorCorridor` associations, not live quotes or fresh rate sources.
+`seps` contains only stored discovered SEP numbers, sorted numerically.
+`isTransferCapable` is an advertised-interface classification derived from that
+persisted SEP list: it is true only when SEP-6, SEP-24, or SEP-31 appears in
+the list from StellarCore's last successful SEP-1 synchronization. It does not
+verify current operation, authorize StellarCore to use an interface, or provide
+transfer-outcome evidence. `corridorCount` counts persisted `AnchorCorridor`
+associations, not live quotes or fresh rate sources.
 
 An empty database returns HTTP 200 with `{"anchors":[],"count":0}`.
 
@@ -475,6 +480,7 @@ snapshots, transfer outcomes, reputation history, or registry-only mappings.
     "homeDomain": "zeam.money",
     "status": "LIVE",
     "seps": [1, 10, 24, 31, 38],
+    "isTransferCapable": true,
     "corridors": [
       {
         "slug": "usdc-us-brl-br",
