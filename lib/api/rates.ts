@@ -1,5 +1,3 @@
-import { ANCHOR_REGISTRY } from "@/constants/anchors";
-import { CORRIDOR_REGISTRY } from "@/constants/corridors";
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
@@ -54,15 +52,11 @@ export async function getRatesApiResult(
 }
 
 export function serializeRates(result: LatestCorridorRate): PublicRatesResponse {
-  const corridor = CORRIDOR_REGISTRY.find(({ slug }) => slug === result.corridorSlug);
-  if (!corridor) throw new Error("Corridor is not in the public registry");
-
   const observations = Object.freeze(result.observations.map((observation) => {
-    const anchor = ANCHOR_REGISTRY.find(({ slug }) => slug === observation.anchorSlug);
     const serialized = Object.freeze({
       anchor: Object.freeze({
         slug: observation.anchorSlug,
-        name: anchor?.name ?? observation.anchorSlug,
+        name: observation.anchorName,
       }),
       rate: observation.rate,
       sourceAmount: observation.sourceAmount,
@@ -80,15 +74,17 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
     }) satisfies PublicRateObservation;
     return serialized;
   }));
-  const reviewedCandidateConfiguration = getReviewedCandidateConfiguration(result.corridorSlug);
+  const reviewedCandidateConfiguration = getReviewedCandidateConfiguration(
+    result.corridor.slug,
+  );
 
   return Object.freeze({
     corridor: Object.freeze({
-      slug: corridor.slug,
-      sourceAsset: corridor.assetCodeFrom,
-      sourceCountry: corridor.countryFrom,
-      destinationAsset: corridor.assetCodeTo,
-      destinationCountry: corridor.countryTo,
+      slug: result.corridor.slug,
+      sourceAsset: result.corridor.assetCodeFrom,
+      sourceCountry: result.corridor.countryFrom,
+      destinationAsset: result.corridor.assetCodeTo,
+      destinationCountry: result.corridor.countryTo,
     }),
     evaluatedAt: result.evaluatedAt,
     state: result.state,

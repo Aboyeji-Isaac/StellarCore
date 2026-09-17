@@ -13,6 +13,14 @@ import type {
 
 const CORRIDOR = "usdc-us-brl-br";
 const NOW = new Date("2026-08-27T12:00:00.000Z");
+const CORRIDOR_RECORD = Object.freeze({
+  id: "corridor-id",
+  slug: CORRIDOR,
+  assetCodeFrom: "USDC",
+  countryFrom: "US",
+  assetCodeTo: "BRL",
+  countryTo: "BR",
+});
 
 test("missing corridor and empty history return safe typed states", async () => {
   assert.deepEqual(await readLatestCorridorRate("missing", {
@@ -34,6 +42,14 @@ test("one fresh anchor remains one independent source and has no median", async 
   assert.equal(result.ok && result.totalIndependentSources, 1);
   assert.equal(result.ok && result.freshSourceCount, 1);
   assert.equal(result.ok && result.median, null);
+  assert.equal(result.ok && result.observations[0]?.anchorName, "One Persisted");
+  assert.deepEqual(result.ok && result.corridor, {
+    slug: CORRIDOR,
+    assetCodeFrom: "USDC",
+    countryFrom: "US",
+    assetCodeTo: "BRL",
+    countryTo: "BR",
+  });
 });
 
 test("same-anchor history selects latest first and never falls back to an older row", async () => {
@@ -130,7 +146,7 @@ function repository(
   exists = true,
 ): LatestRateRepository {
   return {
-    findCorridorBySlug: async (slug) => exists ? { id: "corridor-id", slug } : null,
+    findCorridorBySlug: async () => exists ? CORRIDOR_RECORD : null,
     findLatestObservations: async () => history,
   };
 }
@@ -144,6 +160,7 @@ function row(
   return Object.freeze({
     id,
     anchorSlug,
+    anchorName: `${anchorSlug[0]!.toUpperCase()}${anchorSlug.slice(1)} Persisted`,
     rate,
     sourceAmount: "100",
     destinationAmount: "10",

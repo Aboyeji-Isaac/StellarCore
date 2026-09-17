@@ -508,6 +508,12 @@ Returns the latest persisted rate observation per independent anchor for the
 requested stable corridor slug. The endpoint reads existing snapshots only and
 never performs live SEP-38 requests.
 
+Corridor labels and observation anchor identity come from the persisted
+`Corridor` and `Anchor` rows related to that evidence. Current reviewed
+candidate counts remain independently derived from static reviewed rate-source
+configuration, while freshness, eligibility, counts, and the median are
+evaluated from persisted observations at request time.
+
 When two or more fresh independent observations are persisted, a healthy
 aggregation returns HTTP 200. The following is illustrative, not current
 production state:

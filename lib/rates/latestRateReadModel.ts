@@ -41,6 +41,7 @@ export async function readLatestCorridorRate(
       return Object.freeze({
         snapshotId: observation.id,
         anchorSlug: observation.anchorSlug,
+        anchorName: observation.anchorName,
         rate: observation.rate,
         sourceAmount: observation.sourceAmount,
         destinationAmount: observation.destinationAmount,
@@ -57,7 +58,13 @@ export async function readLatestCorridorRate(
 
     return Object.freeze({
       ok: true,
-      corridorSlug: corridor.slug,
+      corridor: Object.freeze({
+        slug: corridor.slug,
+        assetCodeFrom: corridor.assetCodeFrom,
+        countryFrom: corridor.countryFrom,
+        assetCodeTo: corridor.assetCodeTo,
+        countryTo: corridor.countryTo,
+      }),
       evaluatedAt: evaluatedAt.toISOString(),
       state: median.state,
       median: median.median,

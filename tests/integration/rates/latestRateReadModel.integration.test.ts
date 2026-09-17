@@ -17,7 +17,14 @@ test("controlled history composes latest-per-anchor, freshness, and median offli
     observation("anchor-c", "c-stale", "9999", 120_001),
   ];
   const repository: LatestRateRepository = {
-    findCorridorBySlug: async (slug) => ({ id: "corridor-id", slug }),
+    findCorridorBySlug: async (slug) => ({
+      id: "corridor-id",
+      slug,
+      assetCodeFrom: "USDC",
+      countryFrom: "US",
+      assetCodeTo: "NGN",
+      countryTo: "NG",
+    }),
     findLatestObservations: async () => history,
   };
 
@@ -47,6 +54,7 @@ function observation(
   return {
     id,
     anchorSlug,
+    anchorName: `${anchorSlug} persisted`,
     rate,
     sourceAmount: "1",
     destinationAmount: rate,

@@ -70,7 +70,15 @@ test("one source is a successful insufficient response with string decimals", as
         median: null,
         totalIndependentSources: 1,
         freshSourceCount: 1,
-        observations: [observation("zeam", "0.170000000000000001", "fresh", 1_000, true)],
+        observations: [observation(
+          "zeam",
+          "0.170000000000000001",
+          "fresh",
+          1_000,
+          true,
+          undefined,
+          "Persisted Zeam Name",
+        )],
       });
     },
   });
@@ -80,7 +88,7 @@ test("one source is a successful insufficient response with string decimals", as
   if (result.status !== 200) return;
   assert.equal(result.body.state, "insufficient_fresh_sources");
   assert.equal(result.body.medianRate, null);
-  assert.equal(result.body.observations[0]?.anchor.name, "Zeam");
+  assert.equal(result.body.observations[0]?.anchor.name, "Persisted Zeam Name");
   assert.equal(result.body.observations[0]?.rate, "0.170000000000000001");
   assert.equal(typeof result.body.observations[0]?.rate, "string");
   assert.equal(result.body.evaluatedAt, NOW.toISOString());
@@ -91,6 +99,80 @@ test("one source is a successful insufficient response with string decimals", as
   assert.deepEqual(result.body.medianRequirement, {
     minimumFreshIndependentSources: MIN_FRESH_SOURCES,
   });
+});
+
+test("persisted corridor and anchor identity do not require static registry entries", async () => {
+  const corridorSlug = "persisted-asset-aa-fiat-bb";
+  const result = await getRatesApiResult(corridorSlug, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({
+      corridor: Object.freeze({
+        slug: corridorSlug,
+        assetCodeFrom: "PERSISTED",
+        countryFrom: "AA",
+        assetCodeTo: "FIAT",
+        countryTo: "BB",
+      }),
+      totalIndependentSources: 1,
+      freshSourceCount: 1,
+      observations: [observation(
+        "persisted-anchor",
+        "1.250000000000000001",
+        "fresh",
+        1_000,
+        true,
+        undefined,
+        "Persisted Anchor Name",
+      )],
+    }),
+  });
+
+  assert.equal(result.status, 200);
+  if (result.status !== 200) return;
+  assert.deepEqual(result.body.corridor, {
+    slug: corridorSlug,
+    sourceAsset: "PERSISTED",
+    sourceCountry: "AA",
+    destinationAsset: "FIAT",
+    destinationCountry: "BB",
+  });
+  assert.deepEqual(result.body.observations[0]?.anchor, {
+    slug: "persisted-anchor",
+    name: "Persisted Anchor Name",
+  });
+  assert.deepEqual(result.body.reviewedCandidateConfiguration, {
+    candidateCount: 0,
+    uniqueAnchorCount: 0,
+  });
+  assert.equal(result.body.sourceCount, 1);
+  assert.equal(result.body.freshSourceCount, 1);
+  assert.equal(result.body.medianRate, null);
+});
+
+test("configured candidates without observations do not become persisted evidence", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({ observations: Object.freeze([]) }),
+  });
+
+  assert.equal(result.status, 200);
+  if (result.status !== 200) return;
+  assert.deepEqual(result.body.reviewedCandidateConfiguration, {
+    candidateCount: 1,
+    uniqueAnchorCount: 1,
+  });
+  assert.equal(result.body.sourceCount, 0);
+  assert.equal(result.body.freshSourceCount, 0);
+  assert.deepEqual(result.body.observations, []);
+  assert.deepEqual(result.body.corridor, {
+    slug: CORRIDOR,
+    sourceAsset: "USDC",
+    sourceCountry: "US",
+    destinationAsset: "BRL",
+    destinationCountry: "BR",
+  });
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
 });
 
 test("serializer exposes an exact healthy median and normalized exclusions", () => {
@@ -130,6 +212,34 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   assert.equal(Object.isFrozen(body.observations[0]), true);
   assert.equal(Object.isFrozen(body.reviewedCandidateConfiguration), true);
   assert.equal(Object.isFrozen(body.medianRequirement), true);
+  assert.deepEqual(Object.keys(body).sort(), [
+    "corridor",
+    "evaluatedAt",
+    "freshSourceCount",
+    "medianRate",
+    "medianRequirement",
+    "observations",
+    "reviewedCandidateConfiguration",
+    "sourceCount",
+    "state",
+  ]);
+  assert.deepEqual(Object.keys(body.corridor).sort(), [
+    "destinationAsset",
+    "destinationCountry",
+    "slug",
+    "sourceAsset",
+    "sourceCountry",
+  ]);
+  assert.deepEqual(Object.keys(body.observations[0]!).sort(), [
+    "anchor",
+    "capturedAt",
+    "destinationAmount",
+    "eligibleForMedian",
+    "fee",
+    "freshness",
+    "rate",
+    "sourceAmount",
+  ]);
   assert.doesNotThrow(() => JSON.stringify(body));
   assert.equal(JSON.stringify(body).includes("bigint"), false);
 });
@@ -139,7 +249,13 @@ function readResult(
 ): LatestCorridorRate {
   return Object.freeze({
     ok: true,
-    corridorSlug: CORRIDOR,
+    corridor: Object.freeze({
+      slug: CORRIDOR,
+      assetCodeFrom: "USDC",
+      countryFrom: "US",
+      assetCodeTo: "BRL",
+      countryTo: "BR",
+    }),
     evaluatedAt: NOW.toISOString(),
     state: "insufficient_fresh_sources",
     median: null,
@@ -158,10 +274,12 @@ function observation(
   ageMs: number | null,
   included: boolean,
   exclusionReason?: "stale" | "future_timestamp" | "invalid_timestamp" | "invalid_rate",
+  anchorName = `${anchorSlug} persisted`,
 ) {
   return Object.freeze({
     snapshotId: `${anchorSlug}-snapshot`,
     anchorSlug,
+    anchorName,
     rate,
     sourceAmount: "100.000000000000000001",
     destinationAmount: "17.000000000000000001",

@@ -7,6 +7,7 @@ import type {
 type PrismaLatestRateRow = Readonly<{
   id: string;
   anchorSlug: string;
+  anchorName: string;
   rate: Prisma.Decimal;
   sourceAmount: Prisma.Decimal;
   destinationAmount: Prisma.Decimal;
@@ -19,7 +20,14 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
     const { db } = await import("@/lib/dbClient");
     return db.corridor.findUnique({
       where: { slug },
-      select: { id: true, slug: true },
+      select: {
+        id: true,
+        slug: true,
+        assetCodeFrom: true,
+        countryFrom: true,
+        assetCodeTo: true,
+        countryTo: true,
+      },
     });
   },
 
@@ -29,6 +37,7 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
       SELECT DISTINCT ON (snapshot.anchor_id)
         snapshot.id,
         anchor.slug AS "anchorSlug",
+        anchor.name AS "anchorName",
         snapshot.rate,
         snapshot.source_amount AS "sourceAmount",
         snapshot.destination_amount AS "destinationAmount",
@@ -50,6 +59,7 @@ function toRepositoryObservation(
   return Object.freeze({
     id: row.id,
     anchorSlug: row.anchorSlug,
+    anchorName: row.anchorName,
     rate: row.rate.toString(),
     sourceAmount: row.sourceAmount.toString(),
     destinationAmount: row.destinationAmount.toString(),
