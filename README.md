@@ -657,6 +657,51 @@ with `{"error":{"code":"internal_error","message":"Unable to load corridors."}}`
 The route is dynamic and sends `Cache-Control: no-store`, so directory changes
 are visible without relying on accidental Next.js caching.
 
+### `GET /api/corridors/[slug]`
+
+Returns one persisted corridor and the anchors linked to it through
+StellarCore's persisted reviewed configuration. The bounded read uses only the
+persisted `Corridor`, `AnchorCorridor`, and `Anchor` relationships.
+
+```json
+{
+  "corridor": {
+    "slug": "usdc-us-brl-br",
+    "sourceAsset": "USDC",
+    "sourceCountry": "US",
+    "destinationAsset": "BRL",
+    "destinationCountry": "BR",
+    "anchorCount": 1,
+    "anchors": [
+      {
+        "slug": "zeam",
+        "name": "Zeam",
+        "homeDomain": "zeam.money",
+        "status": "LIVE",
+        "seps": [1, 10, 24, 31, 38],
+        "isTransferCapable": true
+      }
+    ]
+  }
+}
+```
+
+Associated anchors are persisted reviewed relationships, not evidence that an
+anchor is currently reachable, quoting, operational for the corridor, or able
+to provide a firm quote or transfer. `status` is persisted synchronization and
+discovery state. `seps` are persisted synchronized SEP metadata, and
+`isTransferCapable` is derived from that SEP list using SEP-6, SEP-24, or
+SEP-31; it is not current transfer availability or verified transfer success.
+
+The detail route accepts corridor slugs of 1–100 lowercase alphanumeric
+characters and single-hyphen separators. Malformed slugs return HTTP 400 with
+`invalid_corridor_slug`; valid unknown persisted corridors return HTTP 404 with
+`corridor_not_found`; unexpected reads return HTTP 500 with `internal_error`.
+A persisted corridor with no associated anchors remains a successful response
+with `anchorCount: 0` and `anchors: []`. The endpoint is GET-only, dynamic,
+uses `Cache-Control: no-store`, and performs no rate, reputation, transfer,
+authentication, or live Stellar reads.
+
 ---
 
 ## Contributing
