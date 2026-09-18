@@ -2,21 +2,28 @@ import "dotenv/config";
 
 import { pathToFileURL } from "node:url";
 
-import { db } from "@/lib/dbClient";
+import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
 import { syncAnchorRegistry } from "@/lib/stellar/anchorSync";
 import { syncCorridorRegistry } from "@/lib/stellar/corridorSync";
 
 async function main(): Promise<void> {
-  const anchors = await syncAnchorRegistry();
-  const corridors = await syncCorridorRegistry();
+  assertCurrentStellarCoreConfiguration();
+  const { db } = await import("@/lib/dbClient");
 
-  console.log(JSON.stringify({
-    anchors,
-    corridors,
-  }, null, 2));
+  try {
+    const anchors = await syncAnchorRegistry();
+    const corridors = await syncCorridorRegistry();
 
-  if (anchors.failed > 0 || corridors.failures.length > 0) {
-    process.exitCode = 1;
+    console.log(JSON.stringify({
+      anchors,
+      corridors,
+    }, null, 2));
+
+    if (anchors.failed > 0 || corridors.failures.length > 0) {
+      process.exitCode = 1;
+    }
+  } finally {
+    await db.$disconnect();
   }
 }
 
@@ -26,8 +33,5 @@ if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
     .catch(() => {
       console.error(JSON.stringify({ ok: false, code: "BOOTSTRAP_FAILURE" }));
       process.exitCode = 1;
-    })
-    .finally(async () => {
-      await db.$disconnect();
     });
 }

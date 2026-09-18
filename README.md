@@ -387,6 +387,9 @@ npm run verify:reputation
 # Unit and integration tests
 npm test
 
+# Pure offline audit of reviewed registry relationships
+npm run audit:config
+
 # Type check only
 npx tsc --noEmit
 
@@ -398,6 +401,16 @@ npm run verify:sep10
 `snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
 registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
+
+`audit:config` performs a pure, deterministic check of the checked-in anchor,
+corridor, membership, and reviewed rate-source relationships. It requires no
+database, network, or environment secrets. Registry bootstrap and reviewed rate
+snapshot preparation run the same preflight before operational work begins.
+Passing this audit means only that repository-controlled configuration is
+internally coherent; it does not establish current anchor reachability, SEP
+advertisement, quote availability, fresh observations, or transfer support.
+Live discovery, rate-engine validation, and persisted-association checks remain
+independent defense-in-depth boundaries.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the
