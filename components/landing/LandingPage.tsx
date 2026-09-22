@@ -3,127 +3,247 @@
 import { useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ProductHeader } from "@/components/ui/ProductHeader";
 import {
   gsap,
   useGSAP,
 } from "@/lib/gsap";
+import type { CorridorRegistryEntry } from "@/types/corridor";
+import {
+  REVIEWED_COUNTRY_MAP_POINTS,
+  WORLD_GRATICULE_PATH,
+  WORLD_LAND_PATH,
+} from "./worldMapGeometry";
 
-const rates = [
-  ["NGN / USDC", "₦1,531.20", "+0.18%"],
-  ["EUR / USDC", "€0.9231", "−0.04%"],
-  ["KES / USDC", "KSh 129.84", "+0.09%"],
-  ["BRL / USDC", "R$5.472", "+0.12%"],
-  ["ARS / USDC", "$1,338.42", "−0.07%"],
-];
+type ReviewedCorridor = Pick<
+  CorridorRegistryEntry,
+  "slug" | "assetCodeFrom" | "countryFrom" | "assetCodeTo" | "countryTo"
+>;
 
-const anchors = [
-  { name: "MoneyGram", place: "Global cash network", score: 98, rate: "1.0004", tone: "lime" },
-  { name: "ClickPesa", place: "East Africa", score: 96, rate: "1.0021", tone: "cyan" },
-  { name: "Cowrie", place: "Nigeria", score: 94, rate: "1.0058", tone: "violet" },
-  { name: "Settle", place: "Latin America", score: 91, rate: "1.0086", tone: "amber" },
-];
+const INSPECTION_AREAS = Object.freeze([
+  Object.freeze({
+    area: "Anchors",
+    title: "Reviewed identities",
+    detail: "Advertised interfaces",
+  }),
+  Object.freeze({
+    area: "Corridors",
+    title: "Persisted associations",
+    detail: "Anchor relationships",
+  }),
+  Object.freeze({
+    area: "Rate evidence",
+    title: "Stored observations",
+    detail: "Freshness and eligibility",
+  }),
+  Object.freeze({
+    area: "Reputation",
+    title: "Evidence-aware evaluation",
+    detail: "Null when unsupported",
+  }),
+]);
+
+const EVIDENCE_PRINCIPLES = Object.freeze([
+  Object.freeze({
+    kicker: "Reviewed configuration",
+    title: "Known, not assumed.",
+    copy: "Anchor and corridor candidates are deliberately reviewed before they enter StellarCore's observation boundary.",
+    signal: "Configured",
+    boundary: "Not operational proof",
+    tone: "lime",
+  }),
+  Object.freeze({
+    kicker: "Advertised interfaces",
+    title: "Reported, not certified.",
+    copy: "Persisted SEP metadata describes what an anchor advertised during synchronization, not what is reachable now.",
+    signal: "Synchronized",
+    boundary: "Not availability",
+    tone: "cyan",
+  }),
+  Object.freeze({
+    kicker: "Rate observations",
+    title: "Stored with time.",
+    copy: "Indicative observations retain their capture time, freshness, and eligibility instead of becoming an evergreen quote.",
+    signal: "Timestamped",
+    boundary: "Not a firm quote",
+    tone: "violet",
+  }),
+  Object.freeze({
+    kicker: "Reputation evidence",
+    title: "Null until supported.",
+    copy: "Scores remain unpublished when legitimate transfer-outcome evidence is too sparse for the required threshold.",
+    signal: "Evidence-aware",
+    boundary: "No synthetic score",
+    tone: "amber",
+  }),
+]);
+
+const PRODUCT_CONTRACT = Object.freeze([
+  Object.freeze({ title: "Read only", copy: "Inspect intelligence without initiating transfers." }),
+  Object.freeze({ title: "Persisted first", copy: "Public views reflect evidence StellarCore has stored." }),
+  Object.freeze({ title: "Freshness shown", copy: "Recent and stale observations remain distinct." }),
+  Object.freeze({ title: "Null stays null", copy: "Missing evidence never becomes a fabricated zero." }),
+]);
 
 function BrandLogo() {
-  return <Image className="brand-logo" src="/StellarCore-logo.png" alt="" width={135} height={128} priority aria-hidden="true" />;
+  return (
+    <Image
+      className="brand-logo"
+      src="/StellarCore-logo.png"
+      alt=""
+      width={135}
+      height={128}
+      priority
+      aria-hidden="true"
+    />
+  );
 }
 
 function Arrow() {
   return <span aria-hidden="true">↗</span>;
 }
 
-function Navbar() {
-  return (
-    <header className="navbar" data-nav>
-      <a className="brand" href="#top" aria-label="StellarCore home">
-        <BrandLogo />StellarCore
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="#system">System</a>
-        <a href="#anchors">Anchors</a>
-        <a href="#network">Network</a>
-        <Link href="/dashboard">Dashboard</Link>
-      </nav>
-      <a className="nav-cta" href="#anchors">
-        Explore live rates <Arrow />
-      </a>
-    </header>
-  );
+function corridorLabel(corridor: ReviewedCorridor) {
+  return `${corridor.assetCodeFrom} · ${corridor.countryFrom} → ${corridor.assetCodeTo} · ${corridor.countryTo}`;
 }
 
-function NetworkMap() {
+function countryPoint(countryCode: string) {
+  return REVIEWED_COUNTRY_MAP_POINTS[
+    countryCode as keyof typeof REVIEWED_COUNTRY_MAP_POINTS
+  ];
+}
+
+function NetworkMap({ reviewedCorridors }: { reviewedCorridors: readonly ReviewedCorridor[] }) {
+  const mappedCorridors = reviewedCorridors.flatMap((corridor) => {
+    const from = countryPoint(corridor.countryFrom);
+    const to = countryPoint(corridor.countryTo);
+    return from && to ? [{ corridor, from, to }] : [];
+  });
+  const reviewedCountries = Array.from(
+    new Set(reviewedCorridors.flatMap((corridor) => [corridor.countryFrom, corridor.countryTo])),
+  ).flatMap((countryCode) => {
+    const point = countryPoint(countryCode);
+    return point ? [{ countryCode, ...point }] : [];
+  });
+  const accessibleSummary = reviewedCorridors.map(corridorLabel).join("; ");
+
   return (
-    <div className="network-map" aria-label="Animated illustration of active Stellar corridors">
-      <div className="map-glow" />
-      <svg viewBox="0 0 1200 420" role="img" aria-label="Abstract global settlement network">
-        <g className="map-grid" aria-hidden="true">
-          {Array.from({ length: 18 }).map((_, index) => (
-            <line key={`v-${index}`} x1={index * 72} y1="0" x2={index * 72} y2="420" />
-          ))}
-          {Array.from({ length: 7 }).map((_, index) => (
-            <line key={`h-${index}`} x1="0" y1={index * 70} x2="1200" y2={index * 70} />
+    <figure
+      className="network-map"
+      aria-labelledby="reviewed-corridor-map-caption"
+    >
+      <div className="map-glow" aria-hidden="true" />
+      <svg viewBox="0 0 1200 500" aria-hidden="true" focusable="false">
+        <g className="map-graticule">
+          <path d={WORLD_GRATICULE_PATH} />
+        </g>
+        <g className="world-land">
+          <path d={WORLD_LAND_PATH} />
+        </g>
+        <g className="reviewed-corridor-geography">
+          {mappedCorridors.map(({ corridor, from, to }) => {
+            if (corridor.countryFrom === corridor.countryTo) {
+              return (
+                <g className="local-corridor" key={corridor.slug}>
+                  <circle cx={from.x} cy={from.y} r="18" />
+                  <circle cx={from.x} cy={from.y} r="25" />
+                </g>
+              );
+            }
+
+            const controlX = (from.x + to.x) / 2;
+            const controlY = Math.min(from.y, to.y) - 120;
+            return (
+              <path
+                className="corridor corridor-cross-country"
+                d={`M${from.x} ${from.y} Q${controlX} ${controlY} ${to.x} ${to.y}`}
+                key={corridor.slug}
+              />
+            );
+          })}
+          {reviewedCountries.map((country) => (
+            <g className="configuration-country" key={country.countryCode}>
+              <line x1={country.x - 8} y1={country.y} x2={country.x + 8} y2={country.y} />
+              <line x1={country.x} y1={country.y - 8} x2={country.x} y2={country.y + 8} />
+              <circle cx={country.x} cy={country.y} r="5" />
+              <text className="map-country-label" x={country.labelX} y={country.labelY}>
+                {country.label}
+              </text>
+            </g>
           ))}
         </g>
-        <path className="land land-a" d="M58 104l82-37 74 17 38 49-43 27-10 66-52 14-50-38-53-21z" />
-        <path className="land land-b" d="M306 250l54-27 64 22 35 47-30 69-58 35-37-68z" />
-        <path className="land land-c" d="M522 90l72-30 93 20 46 44-23 47-69 12-26 66-53-16-36-69z" />
-        <path className="land land-d" d="M723 94l94-31 127 30 102 57-36 42-78-3-48 61-69-20-31-62-67-26z" />
-        <path className="land land-e" d="M961 281l68-23 72 32 18 61-50 40-90-23z" />
-        <path id="corridor-main" className="corridor corridor-main" d="M205 153 C 398 22, 652 34, 834 151" />
-        <path className="corridor corridor-echo" d="M381 284 C 487 184, 714 159, 1018 316" />
-        <circle className="node node-a" cx="205" cy="153" r="6" />
-        <circle className="node node-b" cx="834" cy="151" r="6" />
-        <circle className="node node-c" cx="381" cy="284" r="5" />
-        <circle className="node node-d" cx="1018" cy="316" r="5" />
-        <circle className="flow-dot" cx="0" cy="0" r="7" />
       </svg>
-      <span className="map-label label-west">United States · USD</span>
-      <span className="map-label label-east">Nigeria · NGN</span>
-      <div className="route-readout">
-        <span>Best route now</span>
-        <strong>0.31% total spread</strong>
+      <div className="map-evidence-key" aria-label="Evidence key">
+        <span><i className="configuration-key" /> Reviewed configuration</span>
+        <span><i className="observation-key" /> Persisted observations: dashboard only</span>
       </div>
-    </div>
+      <ul className="map-corridor-list" aria-label="Reviewed corridor configuration">
+        {reviewedCorridors.map((corridor) => (
+          <li key={corridor.slug}>
+            <span>{corridorLabel(corridor)}</span>
+            <small>{corridor.countryFrom === corridor.countryTo ? "local geography" : "cross-country geography"}</small>
+          </li>
+        ))}
+      </ul>
+      <div className="route-readout">
+        <span>Reviewed configuration geography</span>
+        <strong>Configuration ≠ observation</strong>
+      </div>
+      <figcaption className="map-accessible-summary" id="reviewed-corridor-map-caption">
+        Reviewed corridor configuration: {accessibleSummary}. Same-country corridors use local rings,
+        while cross-country corridors use geographic arcs. Persisted observations are not plotted on
+        this landing-page map and remain available in the dashboard.
+      </figcaption>
+    </figure>
   );
 }
 
-function Hero() {
+function Hero({ reviewedCorridors }: { reviewedCorridors: readonly ReviewedCorridor[] }) {
   return (
     <section className="hero" id="top">
       <div className="hero-kicker reveal-item">
-        <span>Execution intelligence</span>
+        <span>Read-only Stellar intelligence</span>
         <span>Built on Stellar</span>
       </div>
-      <h1 className="hero-title" data-hero-title>
-        STELLARCORE
-      </h1>
+      <h1 className="hero-title">STELLARCORE</h1>
       <div className="hero-bottom reveal-item">
-        <p>Know the route before you move the value.</p>
-        <div className="live-count"><i /> <strong data-count>27</strong> anchors reporting</div>
+        <div className="hero-proposition">
+          <p className="hero-proposition-lead">
+            Inspect anchors, corridors, rate evidence, and reputation.
+          </p>
+          <p className="hero-proposition-detail">
+            See what each stored signal supports—and what it does not prove.
+          </p>
+          <Link className="hero-cta" href="/dashboard">
+            Inspect the dashboard <Arrow />
+          </Link>
+        </div>
+        <div className="evidence-note"><i /> Evidence stays distinct</div>
       </div>
-      <NetworkMap />
-      <a className="scroll-cue reveal-item" href="#rates" aria-label="Scroll to live rates">
-        <span>Scroll to inspect</span>
+      <NetworkMap reviewedCorridors={reviewedCorridors} />
+      <a className="scroll-cue reveal-item" href="#evidence-model" aria-label="Scroll to the evidence model">
+        <span>Inspect the model</span>
         <i />
       </a>
     </section>
   );
 }
 
-function RateTicker() {
-  const stream = [...rates, ...rates];
+function EvidenceTicker() {
+  const stream = [...INSPECTION_AREAS, ...INSPECTION_AREAS];
   return (
-    <section className="rate-section" id="rates" aria-label="Current sample rates">
+    <section className="rate-section" id="evidence-model" aria-label="StellarCore evidence model">
       <div className="section-intro">
-        <span className="eyebrow">Signal, not noise</span>
-        <p>Live corridor pricing, normalized into one legible view.</p>
+        <span className="eyebrow">What you can inspect</span>
+        <p>Four read-only views of persisted Stellar network evidence.</p>
       </div>
       <div className="ticker-window">
         <div className="ticker-track">
-          {stream.map(([pair, value, delta], index) => (
-            <article className="rate-item" key={`${pair}-${index}`}>
-              <span>{pair}</span>
-              <strong>{value}</strong>
-              <small className={delta.startsWith("+") ? "positive" : "negative"}>{delta}</small>
+          {stream.map((item, index) => (
+            <article className="rate-item" key={`${item.area}-${index}`}>
+              <span>{item.area}</span>
+              <strong>{item.title}</strong>
+              <small>{item.detail}</small>
             </article>
           ))}
         </div>
@@ -134,16 +254,16 @@ function RateTicker() {
 
 function SystemSection() {
   const steps = [
-    ["01", "Discover", "Read the network", "We resolve anchor metadata and supported standards into a continuously updated directory."],
-    ["02", "Compare", "See the real price", "Quotes are normalized across currencies, fees and settlement paths so every route is comparable."],
-    ["03", "Decide", "Move with context", "Reputation, freshness and historical behavior sit beside the rate—not hidden behind it."],
+    ["01", "Discover", "Understand anchors and interfaces", "Inspect reviewed Stellar anchors and the interfaces they advertised during synchronization—without treating advertisement as current availability."],
+    ["02", "Observe", "Read stored corridor evidence", "Compare persisted indicative rate observations across reviewed corridors, with capture time and eligibility kept visible."],
+    ["03", "Evaluate", "See whether evidence is sufficient", "Freshness, independent-source requirements, and reputation evidence stay explicit. Missing evidence remains missing."],
   ];
   return (
     <section className="system-section" id="system">
       <div className="system-heading">
-        <span className="eyebrow">One network. Clearer decisions.</span>
-        <h2><span data-scramble>Infrastructure,</span><br /><em data-scramble>made visible.</em></h2>
-        <p>StellarCore turns fragmented anchor signals into a shared execution layer.</p>
+        <span className="eyebrow">How the product works</span>
+        <h2><span>Infrastructure,</span><br /><em>made legible.</em></h2>
+        <p>From reviewed network metadata to stored observations and evidence-aware evaluation.</p>
       </div>
       <div className="system-steps">
         {steps.map(([number, verb, title, copy]) => (
@@ -159,70 +279,66 @@ function SystemSection() {
   );
 }
 
-function Gauge({ score }: { score: number }) {
-  const circumference = 2 * Math.PI * 52;
+function EvidenceBoundariesSection() {
   return (
-    <div className="gauge" style={{ "--score": score } as React.CSSProperties}>
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle className="gauge-track" cx="60" cy="60" r="52" />
-        <circle className="gauge-value" cx="60" cy="60" r="52" strokeDasharray={circumference} strokeDashoffset={circumference * (1 - score / 100)} />
-      </svg>
-      <div><strong>{score}</strong><span>/100</span></div>
-    </div>
-  );
-}
-
-function AnchorsSection() {
-  return (
-    <section className="anchors-section" id="anchors">
+    <section className="anchors-section" id="evidence">
+      <div className="anchors-glass" aria-hidden="true" />
       <div className="anchors-heading">
-        <span className="eyebrow">Reputation in context</span>
-        <h2><span data-scramble>Trust is a</span><br /><span data-scramble>track record.</span></h2>
-        <a href="#network">View the directory <Arrow /></a>
+        <span className="eyebrow">Transparent by design</span>
+        <h2><span>Evidence has</span><br /><span>boundaries.</span></h2>
       </div>
-      <div className="anchor-track">
-        {anchors.map((anchor, index) => (
-          <article className={`anchor-card ${anchor.tone}`} key={anchor.name}>
-            <div className="card-index">0{index + 1}</div>
-            <div className="anchor-symbol" aria-hidden="true"><span /><span /><span /></div>
-            <div className="anchor-copy">
-              <span>{anchor.place}</span>
-              <h3>{anchor.name}</h3>
-            </div>
-            <div className="anchor-metrics">
-              <Gauge score={anchor.score} />
-              <div><span>Best quote</span><strong>{anchor.rate}</strong><small>USDC</small></div>
-            </div>
-            <div className="card-footer"><span><i /> Live</span><span>SEP-24 · SEP-38</span></div>
-          </article>
-        ))}
+      <div className="anchor-viewport">
+        <div className="anchor-track">
+          {EVIDENCE_PRINCIPLES.map((principle, index) => (
+            <article className={`anchor-card ${principle.tone}`} key={principle.title}>
+              <div className="card-index">0{index + 1} · Evidence boundary</div>
+              <div className="anchor-symbol" aria-hidden="true"><span /><span /><span /></div>
+              <div className="anchor-copy">
+                <span>{principle.kicker}</span>
+                <h3>{principle.title}</h3>
+                <p>{principle.copy}</p>
+              </div>
+              <div className="card-footer">
+                <span><i /> {principle.signal}</span>
+                <span>{principle.boundary}</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-function StatsFooter() {
+function ProductContractSection() {
   return (
-    <section className="stats-section" id="network">
+    <section className="stats-section" id="product-contract">
       <div className="stats-copy">
-        <span className="eyebrow">The network at a glance</span>
-        <h2><span data-scramble>Every signal.</span><br /><span data-scramble>One core.</span></h2>
+        <span className="eyebrow">The product contract</span>
+        <h2>Four promises.</h2>
       </div>
-      <div className="stats-grid">
-        <div><strong data-stat="27">0</strong><span>Active anchors</span></div>
-        <div><strong data-stat="84">0</strong><span>Open corridors</span></div>
-        <div><strong data-stat="12.4">0</strong><small>M</small><span>Rate observations</span></div>
-        <div><strong data-stat="99.98">0</strong><small>%</small><span>Data uptime</span></div>
+      <div className="contract-grid">
+        {PRODUCT_CONTRACT.map((item, index) => (
+          <article key={item.title}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <h3>{item.title}</h3>
+            <p>{item.copy}</p>
+          </article>
+        ))}
       </div>
       <div className="closing-cta">
-        <p><span data-scramble>The shortest route starts</span><br /><span data-scramble>with a clearer view.</span></p>
-        <a href="#top">Enter the network <Arrow /></a>
+        <p><span>See what is known.</span><br /><span>See what is not.</span></p>
+        <Link href="/dashboard">Open dashboard <Arrow /></Link>
       </div>
       <footer>
-        <a className="brand" href="#top"><BrandLogo /> StellarCore</a>
-        <p>Open intelligence for an open financial network.</p>
-        <div><a href="#system">Documentation</a><a href="#anchors">GitHub</a><a href="#rates">API</a></div>
-        <span>Concept frontend · 2026</span>
+        <Link className="brand" href="/"><BrandLogo /> StellarCore</Link>
+        <p>Read-only evidence for an open financial network.</p>
+        <div>
+          <Link href="/">Home</Link>
+          <Link href="/dashboard">Dashboard</Link>
+          <Link href="/api/anchors">Anchor API</Link>
+        </div>
+        <span>Stellar intelligence · 2026</span>
       </footer>
     </section>
   );
@@ -232,8 +348,8 @@ function Cursor() {
   return <div className="cursor" aria-hidden="true"><span>View</span></div>;
 }
 
-export function LandingPage() {
-  const root = useRef<HTMLElement>(null);
+export function LandingPage({ reviewedCorridors }: { reviewedCorridors: readonly ReviewedCorridor[] }) {
+  const root = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
     const mm = gsap.matchMedia();
@@ -248,62 +364,79 @@ export function LandingPage() {
         return;
       }
 
-      const scrambleVars = {
-        text: "{original}",
-        chars: "STELLARCORE0123456789",
-        speed: 0.65,
-        revealDelay: 0.08,
-        tweenLength: false,
-      };
-
       const introText = gsap.utils.toArray<HTMLElement>(
-        ".hero h1, .hero-kicker span, .hero-bottom p, .hero-bottom strong, .navbar nav a, .nav-cta",
+        ".hero h1, .hero-kicker span, .hero-bottom p, .hero-bottom a, .evidence-note",
       );
       const intro = gsap.timeline({ defaults: { ease: "power4.out" } });
       intro
-        .to(introText, { duration: 0.95, scrambleText: scrambleVars, stagger: 0.045 })
-        .from(".network-map", { scale: 0.92, autoAlpha: 0, duration: 1.2 }, "-=0.7")
+        .from(introText, { y: 16, autoAlpha: 0, duration: 0.8, stagger: 0.06 })
+        .from(".network-map", { scale: 0.92, autoAlpha: 0, duration: 1.2 }, "-=0.55")
         .from(".reveal-item", { y: 18, autoAlpha: 0, duration: 0.7, stagger: 0.08 }, "-=0.65")
         .from("[data-nav]", { y: -20, autoAlpha: 0, duration: 0.7 }, "-=0.5");
 
       const scrollText = gsap.utils.toArray<HTMLElement>([
-        "[data-scramble]",
         ".rate-section .eyebrow",
         ".section-intro p",
         ".rate-item > *",
         ".system-section .eyebrow",
+        ".system-heading h2 > *",
         ".system-heading p",
         ".step-top span",
         ".system-step h3",
         ".system-step > p",
         ".anchors-section .eyebrow",
+        ".anchors-heading h2 > *",
         ".anchor-copy > *",
-        ".anchor-metrics > div:last-child > *",
         ".card-footer span:last-child",
         ".stats-section .eyebrow",
-        ".stats-grid span",
+        ".stats-copy h2 > *",
+        ".contract-grid article > *",
         "footer p",
         "footer > div a",
         "footer > span",
-      ].join(", ")).filter((element) => element.childElementCount === 0 && !element.matches("[data-stat]"));
+      ].join(", "));
 
       scrollText.forEach((element) => {
-        gsap.to(element, {
-          duration: 0.85,
-          ease: "none",
-          scrambleText: scrambleVars,
+        gsap.from(element, {
+          y: 16,
+          autoAlpha: 0,
+          duration: 0.7,
+          ease: "power3.out",
           scrollTrigger: { trigger: element, start: "top 88%", once: true },
         });
       });
 
-      gsap.fromTo(".corridor-main", { strokeDasharray: 900, strokeDashoffset: 900 }, { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut", delay: 0.65 });
-      gsap.to(".flow-dot", {
-        motionPath: { path: "#corridor-main", align: "#corridor-main", alignOrigin: [0.5, 0.5] },
-        duration: 3.2,
-        ease: "none",
-        repeat: -1,
-        delay: 1.2,
-      });
+      const mapIntro = gsap.timeline({ delay: 0.35 });
+      mapIntro
+        .from(".map-graticule path", { autoAlpha: 0, duration: 0.8, ease: "power2.out" })
+        .from(".world-land path", { y: 4, autoAlpha: 0, duration: 0.9, ease: "power2.out" }, "-=0.5")
+        .from(".configuration-country circle, .configuration-country line", {
+          scale: 0,
+          transformOrigin: "center",
+          duration: 0.5,
+          stagger: 0.06,
+          ease: "back.out(1.4)",
+        }, "-=0.25")
+        .from(".local-corridor", {
+          scale: 0,
+          transformOrigin: "center",
+          duration: 0.55,
+          stagger: 0.08,
+          ease: "back.out(1.35)",
+        }, "-=0.2")
+        .fromTo(
+          ".corridor-cross-country",
+          { strokeDasharray: 420, strokeDashoffset: 420 },
+          { strokeDashoffset: 0, duration: 1.2, ease: "power2.inOut" },
+          "-=0.15",
+        )
+        .from(".map-country-label, .map-evidence-key, .map-corridor-list, .route-readout", {
+          y: 5,
+          autoAlpha: 0,
+          duration: 0.55,
+          stagger: 0.04,
+          ease: "power2.out",
+        }, "-=0.45");
       gsap.to(".ticker-track", { xPercent: -50, duration: 25, repeat: -1, ease: "none" });
 
       gsap.utils.toArray<HTMLElement>(".system-step").forEach((step) => {
@@ -317,24 +450,18 @@ export function LandingPage() {
         });
       });
 
-      gsap.from(".gauge-value", {
-        strokeDashoffset: 327,
-        duration: 1.1,
-        stagger: 0.1,
-        ease: "power3.out",
-        scrollTrigger: { trigger: ".anchors-section", start: "top 58%", once: true },
-      });
-
       if (desktop) {
         const track = document.querySelector<HTMLElement>(".anchor-track");
-        if (track) {
+        const viewport = document.querySelector<HTMLElement>(".anchor-viewport");
+        if (track && viewport) {
+          const travel = () => Math.max(0, track.scrollWidth - viewport.clientWidth);
           gsap.to(track, {
-            x: () => Math.min(0, window.innerWidth - track.scrollWidth - 48),
+            x: () => -travel(),
             ease: "none",
             scrollTrigger: {
               trigger: ".anchors-section",
               start: "top top",
-              end: () => `+=${Math.max(900, track.scrollWidth - window.innerWidth + 550)}`,
+              end: () => `+=${Math.max(850, travel() + 280)}`,
               scrub: 0.8,
               pin: true,
               invalidateOnRefresh: true,
@@ -358,33 +485,23 @@ export function LandingPage() {
           };
         }
       }
-
-      document.querySelectorAll<HTMLElement>("[data-stat]").forEach((element) => {
-        const target = Number(element.dataset.stat);
-        const counter = { value: 0 };
-        gsap.to(counter, {
-          value: target,
-          duration: 1.8,
-          ease: "power3.out",
-          scrollTrigger: { trigger: element, start: "top 86%", once: true },
-          onUpdate: () => { element.textContent = target % 1 ? counter.value.toFixed(target === 99.98 ? 2 : 1) : Math.round(counter.value).toString(); },
-        });
-      });
     });
 
     return () => mm.revert();
   }, { scope: root });
 
   return (
-    <main ref={root} className="landing-page">
-      <Navbar />
-      <Hero />
-      <RateTicker />
-      <SystemSection />
-      <AnchorsSection />
-      <StatsFooter />
+    <div ref={root} className="landing-page">
+      <ProductHeader current="home" variant="overlay" />
+      <main id="main-content">
+        <Hero reviewedCorridors={reviewedCorridors} />
+        <EvidenceTicker />
+        <SystemSection />
+        <EvidenceBoundariesSection />
+        <ProductContractSection />
+      </main>
       <div className="grain" aria-hidden="true" />
       <Cursor />
-    </main>
+    </div>
   );
 }

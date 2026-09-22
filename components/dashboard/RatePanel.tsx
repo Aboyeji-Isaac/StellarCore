@@ -57,9 +57,17 @@ export async function RatePanel() {
       <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-[var(--ghost)] pt-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <div>
           <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median rate</dt>
-          <dd className="mt-1 text-2xl text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-            {medianRate ?? "—"}
+          <dd
+            className={medianRate === null
+              ? "mt-1 text-lg text-[var(--white)]"
+              : "mt-1 text-2xl text-[var(--white)]"}
+            style={{ fontFamily: "var(--display)" }}
+          >
+            {medianRate === null ? "Median unavailable" : medianRate}
           </dd>
+          {medianRate === null ? (
+            <dd className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{medianEvidenceLabel}</dd>
+          ) : null}
         </div>
         <div>
           <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Configuration</dt>
@@ -83,7 +91,7 @@ export async function RatePanel() {
 
       {state === "insufficient_fresh_sources" && (
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Median unavailable: insufficient fresh independent observations.
+          No median is published until the fresh independent-observation requirement is met.
         </p>
       )}
 
