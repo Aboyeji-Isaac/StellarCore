@@ -727,6 +727,8 @@ authentication, or live Stellar reads.
 
 StellarCore is community-maintained. Every anchor, corridor, and feature addition is a welcome contribution.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch protection and pull request workflow.
+
 ### Adding an Anchor
 
 1. Fork the repository and create a branch.
