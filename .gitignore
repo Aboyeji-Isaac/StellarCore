@@ -42,3 +42,6 @@ PROJECT_CONTEXT.md
 skills-lock.json
 
 /app/generated/prisma
+
+create-issues.sh
+issues-to-create*.json
