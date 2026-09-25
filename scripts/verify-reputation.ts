@@ -2,8 +2,11 @@ import "dotenv/config";
 
 import { db } from "@/lib/dbClient";
 import { evaluatePersistedAnchorReputations } from "@/lib/reputation/run";
+import { createStructuredLogger } from "@/lib/scheduled/structuredLog";
 
 const ANCHOR_SLUGS = Object.freeze(["cowrie", "moneygram", "zeam"]);
+
+const logger = createStructuredLogger("verify-reputation");
 
 async function main(): Promise<void> {
   const evaluatedAt = new Date();
@@ -14,16 +17,19 @@ async function main(): Promise<void> {
   });
   const after = await db.reputationScore.count();
 
-  console.log(JSON.stringify({
-    evaluatedAt: evaluatedAt.toISOString(),
-    reputationScoreCount: { before, after },
-    result,
-  }, null, 2));
+  logger.info("Reputation evaluation completed", {
+    anchorSlugs: ANCHOR_SLUGS,
+    summary: {
+      evaluatedAt: evaluatedAt.toISOString(),
+      reputationScoreCount: { before, after },
+      result,
+    },
+  });
 }
 
 main()
   .catch(() => {
-    console.error(JSON.stringify({ ok: false, code: "VERIFICATION_FAILURE" }));
+    logger.error("Reputation evaluation failed", { code: "VERIFICATION_FAILURE" });
     process.exitCode = 1;
   })
   .finally(async () => {

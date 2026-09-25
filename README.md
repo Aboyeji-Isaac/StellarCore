@@ -197,9 +197,11 @@ boundary and remains independent of the public, read-only reputation API.
 
 StellarCore exposes persisted anchors, corridors, rates, and reputation through public read-only JSON endpoints. These endpoints do not synchronize anchors, request customer authorization, create transfers, or write outcome evidence.
 
-### 5. The Dashboard
+### 5. The Dashboard and Detail Pages
 
 The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse.
+
+The read-only `/anchors/[slug]` and `/corridors/[slug]` pages reuse those same persisted APIs for a single anchor or corridor. Both are keyboard-navigable, keep a visible focus state on every interactive element, and present advertised SEP capability, persisted synchronization state, associated corridors, and reputation evidence with the same insufficient-evidence language as the dashboard.
 
 ---
 
@@ -278,8 +280,11 @@ established reputation evidence.
 
 ```
 stellarcore/
-├── app/                    # Landing page, /dashboard, public read APIs, internal cron route
+├── app/                    # Landing page, /dashboard, detail pages, public read APIs, internal cron route
+├── components/anchors/     # Anchor detail presentation and evidence views
+├── components/corridors/   # Corridor rate-evidence views
 ├── components/dashboard/   # Dashboard sections and bounded state views
+├── components/ui/          # Shared header, badge, and evidence-legend views
 ├── constants/              # Reviewed anchor, corridor, rate-source, and scoring configuration
 ├── lib/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
@@ -492,6 +497,15 @@ associations, not live quotes or fresh rate sources.
 
 An empty database returns HTTP 200 with `{"anchors":[],"count":0}`.
 
+The route accepts optional `limit` and `offset` query parameters. `limit` must
+be a positive integer no greater than 100 and `offset` must be a non-negative
+integer. When neither parameter is supplied the full slug-ordered directory is
+returned exactly as before, so existing consumers are unaffected. When a
+parameter is supplied, `anchors` contains only the requested window and `count`
+is the number of items in that window; clients can page until a response
+returns fewer items than `limit`. Invalid values return HTTP 400 with
+`invalid_pagination` before any repository read.
+
 ### `GET /api/anchors/[slug]`
 
 Returns one persisted anchor by its stable slug, with its synchronized corridor
@@ -689,6 +703,12 @@ with `{"error":{"code":"internal_error","message":"Unable to load corridors."}}`
 The route is dynamic and sends `Cache-Control: no-store`, so directory changes
 are visible without relying on accidental Next.js caching.
 
+As with `GET /api/anchors`, the route accepts optional `limit` and `offset`
+query parameters with the same bounds and the same no-parameter default. When
+supplied, `corridors` contains only the requested slug-ordered window and
+`count` is the number of items in that window. Invalid values return HTTP 400
+with `invalid_pagination` before any repository read.
+
 ### `GET /api/corridors/[slug]`
 
 Returns one persisted corridor and the anchors linked to it through
@@ -791,6 +811,9 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] SEP-10 authentication boundary/harness
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
+- [x] Read-only `/anchors/[slug]` and `/corridors/[slug]` detail pages with keyboard-navigation and focus-state coverage
+- [x] Optional `limit`/`offset` pagination on the anchors and corridors directory APIs
+- [x] Structured single-line JSON logging across the registry-bootstrap, rate-snapshot, and reputation scripts
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
 
 ### Planned/Future

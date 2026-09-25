@@ -5,9 +5,17 @@ import {
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
+import {
+  NO_PAGINATION_QUERY,
+  paginate,
+  parsePagination,
+  type PaginationQuery,
+} from "@/lib/api/pagination";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
+  CorridorApiErrorResponse,
   CorridorApiResult,
+  CorridorsApiErrorResponse,
   CorridorsApiResult,
   PublicCorridor,
   PublicCorridorAnchor,
@@ -34,24 +42,25 @@ export function isValidCorridorSlug(slug: string): boolean {
 
 export async function getCorridorsApiResult(
   dependencies: CorridorsApiDependencies = {},
+  pagination: PaginationQuery = NO_PAGINATION_QUERY,
 ): Promise<CorridorsApiResult> {
+  const parsed = parsePagination(pagination);
+  if (!parsed.ok) {
+    return listErrorResult(400, "invalid_pagination", parsed.message);
+  }
+
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
+    const body = serializeCorridors(await repository.findAll());
+    const corridors = paginate(body.corridors, parsed.pagination);
+
     return Object.freeze({
       status: 200,
-      body: serializeCorridors(await repository.findAll()),
+      body: Object.freeze({ corridors, count: corridors.length }),
     });
   } catch {
-    return Object.freeze({
-      status: 500,
-      body: Object.freeze({
-        error: Object.freeze({
-          code: "internal_error",
-          message: "Unable to load corridors.",
-        }),
-      }),
-    });
+    return listErrorResult(500, "internal_error", "Unable to load corridors.");
   }
 }
 
@@ -132,9 +141,22 @@ export function serializeCorridorDetail(
 
 function errorResult(
   status: 400 | 404 | 500,
-  code: "invalid_corridor_slug" | "corridor_not_found" | "internal_error",
+  code: CorridorApiErrorResponse["error"]["code"],
   message: string,
 ): CorridorApiResult {
+  return Object.freeze({
+    status,
+    body: Object.freeze({
+      error: Object.freeze({ code, message }),
+    }),
+  });
+}
+
+function listErrorResult(
+  status: 400 | 500,
+  code: CorridorsApiErrorResponse["error"]["code"],
+  message: string,
+): CorridorsApiResult {
   return Object.freeze({
     status,
     body: Object.freeze({
