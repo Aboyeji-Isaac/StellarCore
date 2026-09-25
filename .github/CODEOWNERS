@@ -1,0 +1,48 @@
+# CODEOWNERS — review requirements for sensitive paths
+#
+# GitHub uses this file to automatically request review from the listed
+# owners when a pull request touches a matching path. Path patterns are
+# case-sensitive and relative to this repository's root; the last matching
+# pattern takes precedence.
+#
+# The `main` branch is protected and already requires at least one approval
+# (see CONTRIBUTING.md); ownership here additionally routes review of these
+# sensitive areas to the maintainer named below.
+#
+# References:
+# - https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# - https://docs.github.com/en/branches-and-branch-releases/branches/configuring-branch-protection-for-your-repository
+
+# Default owner: repository maintainer reviews any change not matched below.
+* @Aboyeji-Isaac
+
+# Registry definitions — reviewed source of anchor, corridor, membership,
+# and live-rate-source relationships (see `npm run audit:config`).
+/constants/ @Aboyeji-Isaac
+
+# Database schema — migrations and any schema change affect production data.
+/prisma/schema.prisma @Aboyeji-Isaac
+
+# Scoring logic — reputation evidence reads, deterministic scoring, and
+# score persistence.
+/lib/reputation/ @Aboyeji-Isaac
+
+# Rate logic — candidate preparation, snapshots, freshness, and the
+# latest-rate read model.
+/lib/rates/ @Aboyeji-Isaac
+
+# Maintenance scripts — bootstrap, snapshot, verification, and registry
+# tooling that can touch databases or external anchors.
+/scripts/ @Aboyeji-Isaac
+
+# Production workflows — manual workflows that apply production migrations
+# and bootstrap the production registry.
+/.github/workflows/ @Aboyeji-Isaac
+
+# Registry validation logic — invariants that guard registry integrity.
+/lib/stellar/anchorRegistry.ts @Aboyeji-Isaac
+/lib/stellar/corridorRegistry.ts @Aboyeji-Isaac
+
+# This CODEOWNERS file itself — review requirement changes should be
+# deliberate and visible.
+/.github/CODEOWNERS @Aboyeji-Isaac
