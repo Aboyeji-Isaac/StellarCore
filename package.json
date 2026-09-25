@@ -2,7 +2,9 @@
   "name": "stellarcore",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": "22.x" },
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -22,6 +24,7 @@
     "@gsap/react": "^2.1.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@prisma/config": "7.9.1",
     "@stellar/stellar-sdk": "^17.0.0",
     "dotenv": "^17.4.2",
     "gsap": "^3.13.0",
@@ -44,5 +47,8 @@
     "tailwindcss": "^4.1.0",
     "tsx": "^4.23.12",
     "typescript": "^5.8.0"
+  },
+  "overrides": {
+    "@prisma/config": "7.9.1"
   }
 }
