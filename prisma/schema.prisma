@@ -110,6 +110,19 @@ model RateSnapshot {
 
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
+  /// Covering index for findLatestObservations
+  /// (lib/rates/latestRateRepository.ts), the per-corridor
+  /// DISTINCT ON (anchor_id) ... ORDER BY anchor_id, captured_at DESC,
+  /// id DESC behind GET /api/rates. The payload columns are index keys only
+  /// because Prisma cannot express INCLUDE; after the unique id they never
+  /// affect ordering. With every selected column in the index, Postgres
+  /// answers the query with an ordered index-only scan — no heap visits and
+  /// no sort of the corridor's whole snapshot history.
+  @@index([corridorId, anchorId, capturedAt(sort: Desc), id(sort: Desc), rate, sourceAmount, destinationAmount, fee], map: "rate_snapshots_latest_observation_idx")
+  /// Serves the reputation evidence read (lib/reputation/repository.ts), the
+  /// per-anchor DISTINCT ON (corridor.slug) latest-quote scan: an index-only
+  /// scan replaces the bitmap heap scan over the anchor's whole history.
+  @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
   @@map("rate_snapshots")
 }
 
