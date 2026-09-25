@@ -13,6 +13,7 @@ import type {
   CorridorDetailRecord,
   CorridorDetailRepository,
   CorridorDirectoryRecord,
+  CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
 
 test("empty persisted directory is a successful immutable response", async () => {
@@ -225,6 +226,63 @@ test("both routes export GET only and explicitly disable caching", async () => {
   );
   assert.equal(malformed.status, 400);
   assert.equal(malformed.headers.get("cache-control"), "no-store");
+});
+
+test("list pagination returns the full directory by default and slices only when asked", async () => {
+  const repository: CorridorDirectoryRepository = Object.freeze({
+    findAll: async () => [
+      corridor("usdc-us-usd-us", 1),
+      corridor("ngnt-ng-ngn-ng", 3),
+      corridor("usdc-us-brl-br", 2),
+    ],
+  });
+
+  const unpaginated = await getCorridorsApiResult({ repository });
+  const limitOnly = await getCorridorsApiResult({ repository }, { limit: "1", offset: null });
+  const offsetOnly = await getCorridorsApiResult({ repository }, { limit: null, offset: "1" });
+  const beyond = await getCorridorsApiResult({ repository }, { limit: "1", offset: "9" });
+
+  if (unpaginated.status !== 200 || limitOnly.status !== 200
+    || offsetOnly.status !== 200 || beyond.status !== 200) {
+    assert.fail("expected every paginated corridor list to succeed");
+  }
+
+  assert.deepEqual(unpaginated.body.corridors.map(({ slug }) => slug), [
+    "ngnt-ng-ngn-ng",
+    "usdc-us-brl-br",
+    "usdc-us-usd-us",
+  ]);
+  assert.equal(unpaginated.body.count, 3);
+  assert.deepEqual(limitOnly.body.corridors.map(({ slug }) => slug), ["ngnt-ng-ngn-ng"]);
+  assert.deepEqual(offsetOnly.body.corridors.map(({ slug }) => slug), [
+    "usdc-us-brl-br",
+    "usdc-us-usd-us",
+  ]);
+  assert.deepEqual(beyond.body, { corridors: [], count: 0 });
+});
+
+test("invalid corridor pagination returns 400 before repository access", async () => {
+  let accessed = false;
+  const repository: CorridorDirectoryRepository = Object.freeze({
+    findAll: async () => {
+      accessed = true;
+      return [];
+    },
+  });
+
+  for (const query of [
+    { limit: "0", offset: null },
+    { limit: "abc", offset: null },
+    { limit: "101", offset: null },
+    { limit: null, offset: "-1" },
+  ] as const) {
+    const result = await getCorridorsApiResult({ repository }, query);
+    assert.deepEqual(result.status, 400, JSON.stringify(query));
+    if (result.status !== 400) continue;
+    assert.equal(result.body.error.code, "invalid_pagination");
+  }
+
+  assert.equal(accessed, false);
 });
 
 function corridor(slug: string, anchorCount: number): CorridorDirectoryRecord {

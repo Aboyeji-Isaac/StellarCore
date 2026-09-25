@@ -36,9 +36,11 @@ export type CorridorApiErrorCode =
   | "corridor_not_found"
   | "internal_error";
 
+export type CorridorsApiErrorCode = "invalid_pagination" | "internal_error";
+
 export type CorridorsApiErrorResponse = Readonly<{
   error: Readonly<{
-    code: "internal_error";
+    code: CorridorsApiErrorCode;
     message: string;
   }>;
 }>;
@@ -52,6 +54,7 @@ export type CorridorApiErrorResponse = Readonly<{
 
 export type CorridorsApiResult =
   | Readonly<{ status: 200; body: PublicCorridorsResponse }>
+  | Readonly<{ status: 400; body: CorridorsApiErrorResponse }>
   | Readonly<{ status: 500; body: CorridorsApiErrorResponse }>;
 
 export type CorridorApiResult =

@@ -9,8 +9,23 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Optional `limit`/`offset` pagination for `GET /api/anchors` and
+  `GET /api/corridors`. Both routes still return the full slug-ordered
+  directory when no parameters are supplied, and invalid values return HTTP 400
+  `invalid_pagination` (#57).
+- A read-only anchor detail page at `/anchors/[slug]` that reuses the persisted
+  anchor and reputation APIs, labels persisted synchronization state as
+  "Synced" rather than live availability, and returns 404 for unknown slugs
+  (#5, #59).
+- Keyboard-navigation and visible-focus coverage for the anchor and corridor
+  detail pages, including a focusable, arrow-key-scrollable rate-observations
+  region (#59, #60).
+- A consistent single-line JSON log format for the registry-bootstrap,
+  rate-snapshot, and reputation scripts — timestamp, level, script name,
+  message, and job-specific IDs — without changing what each script does
+  (#58).
 
 ## [Prior work] — 2026-09-25
 

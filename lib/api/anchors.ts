@@ -4,9 +4,16 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
+import {
+  NO_PAGINATION_QUERY,
+  paginate,
+  parsePagination,
+  type PaginationQuery,
+} from "@/lib/api/pagination";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   AnchorApiResult,
+  AnchorsApiErrorResponse,
   AnchorsApiResult,
   PublicAnchorCorridor,
   PublicAnchorDetail,
@@ -29,13 +36,25 @@ export function isValidAnchorSlug(slug: string): boolean {
 
 export async function getAnchorsApiResult(
   dependencies: AnchorsApiDependencies = {},
+  pagination: PaginationQuery = NO_PAGINATION_QUERY,
 ): Promise<AnchorsApiResult> {
+  const parsed = parsePagination(pagination);
+  if (!parsed.ok) {
+    return Object.freeze({
+      status: 400,
+      body: errorBody("invalid_pagination", parsed.message),
+    });
+  }
+
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
+    const body = serializeAnchors(await repository.findAll());
+    const anchors = paginate(body.anchors, parsed.pagination);
+
     return Object.freeze({
       status: 200,
-      body: serializeAnchors(await repository.findAll()),
+      body: Object.freeze({ anchors, count: anchors.length }),
     });
   } catch {
     return internalError();
@@ -133,19 +152,19 @@ function sortedSeps(seps: readonly number[]): readonly number[] {
   return Object.freeze([...seps].sort((left, right) => left - right));
 }
 
+function errorBody(
+  code: AnchorsApiErrorResponse["error"]["code"],
+  message: string,
+): AnchorsApiErrorResponse {
+  return Object.freeze({ error: Object.freeze({ code, message }) });
+}
+
 function internalError(): Readonly<{
   status: 500;
-  body: Readonly<{
-    error: Readonly<{ code: "internal_error"; message: string }>;
-  }>;
+  body: AnchorsApiErrorResponse;
 }> {
   return Object.freeze({
     status: 500,
-    body: Object.freeze({
-      error: Object.freeze({
-        code: "internal_error",
-        message: "Unable to load anchors.",
-      }),
-    }),
+    body: errorBody("internal_error", "Unable to load anchors."),
   });
 }

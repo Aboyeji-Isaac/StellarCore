@@ -41,7 +41,7 @@ export default async function CorridorPage({ params }: Props) {
           <nav aria-label="Breadcrumb" className="text-xs text-[var(--muted)]">
             <Link href="/dashboard" className="underline underline-offset-4">Dashboard</Link>
             <span aria-hidden="true" className="px-2">/</span>
-            <span>{corridor.slug}</span>
+            <span aria-current="page">{corridor.slug}</span>
           </nav>
 
           <header className="mt-8 max-w-3xl">
@@ -68,7 +68,7 @@ export default async function CorridorPage({ params }: Props) {
                   <Link
                     key={anchor.slug}
                     href={`/anchors/${anchor.slug}`}
-                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)]"
+                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
