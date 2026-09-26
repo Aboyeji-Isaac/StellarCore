@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CorridorRateEvidence } from "@/components/corridors/CorridorRateEvidence";
+import { CorridorRateHistoryChart } from "@/components/corridors/CorridorRateHistoryChart";
 import { ProductHeader } from "@/components/ui/ProductHeader";
 import { getCorridorApiResult } from "@/lib/api/corridors";
 import { getRatesApiResult } from "@/lib/api/rates";
+import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
 
 type Props = Readonly<{ params: Promise<Readonly<{ slug: string }>> }>;
 
@@ -32,6 +34,7 @@ export default async function CorridorPage({ params }: Props) {
 
   const { corridor } = corridorResult.body;
   const ratesResult = await getRatesApiResult(slug);
+  const historyResult = await getRateHistoryApiResult(slug);
 
   return (
     <>
@@ -91,6 +94,13 @@ export default async function CorridorPage({ params }: Props) {
           ) : (
             <ErrorState message={ratesResult.body.error.message} />
           )}
+
+          {historyResult.status === 200 ? (
+            <CorridorRateHistoryChart
+              corridorSlug={corridor.slug}
+              initialHistory={historyResult.body}
+            />
+          ) : null}
         </div>
       </main>
     </>
