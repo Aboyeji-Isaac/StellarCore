@@ -119,6 +119,30 @@ test("rolling metrics use deterministic success ratios and nearest-rank percenti
   assert.equal(result.metrics.slippageP95, 0.03);
 });
 
+test("rolling metrics include outcomes exactly at the 7, 30, and 90 day edges", () => {
+  const result = calculateReputation(establishedEvidence([
+    outcomeAtAge("COMPLETED", 7),
+    outcomeAtAge("COMPLETED", 30),
+    outcomeAtAge("COMPLETED", 90),
+  ]), NOW);
+
+  assert.equal(result.metrics.fillRate7d, 1);
+  assert.equal(result.metrics.fillRate30d, 1);
+  assert.equal(result.metrics.fillRate90d, 1);
+});
+
+test("rolling metrics exclude outcomes one millisecond beyond 7 and 30 day edges", () => {
+  const sevenDayResult = calculateReputation(establishedEvidence([
+    outcomeAtAge("COMPLETED", 7, 1),
+  ]), NOW);
+  const thirtyDayResult = calculateReputation(establishedEvidence([
+    outcomeAtAge("COMPLETED", 30, 1),
+  ]), NOW);
+
+  assert.equal(sevenDayResult.metrics.fillRate7d, null);
+  assert.equal(thirtyDayResult.metrics.fillRate30d, null);
+});
+
 function establishedEvidence(
   transferOutcomes: ReputationEvidence["transferOutcomes"],
 ): ReputationEvidence {
@@ -167,5 +191,20 @@ function outcome(
     settlementMs,
     slippage,
     recordedAt: new Date(NOW.getTime() - index * 1_000),
+  });
+}
+
+function outcomeAtAge(
+  status: ReputationTransferStatus,
+  days: number,
+  extraMilliseconds = 0,
+): ReputationEvidence["transferOutcomes"][number] {
+  return Object.freeze({
+    status,
+    settlementMs: 1_000,
+    slippage: 0,
+    recordedAt: new Date(
+      NOW.getTime() - days * 24 * 60 * 60 * 1_000 - extraMilliseconds,
+    ),
   });
 }
