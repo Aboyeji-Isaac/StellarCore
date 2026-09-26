@@ -21,6 +21,29 @@ Create a focused branch from `main` using one of these prefixes:
 
 Use a short, descriptive name after the prefix, such as `docs/contributing`.
 
+## Pre-commit Hook
+
+`npm install` installs a [Husky](https://typicode.github.io/husky/) pre-commit
+hook (via the `prepare` script) that runs
+[lint-staged](https://github.com/lint-staged/lint-staged). Before each commit it
+runs ESLint on the **staged** `.js`, `.jsx`, `.mjs`, `.ts`, and `.tsx` files
+only, never the whole repository, and aborts the commit if ESLint reports an
+error. Fix the reported problems, `git add` the files again, and re-commit.
+
+The hook checks linting only. The repository has no configured formatter yet,
+so formatting is deliberately not enforced; adding one would reject commits
+that touch any of the existing, unformatted files.
+
+If the hook is broken or blocking urgent work, you can bypass it in a genuine
+emergency:
+
+```bash
+git commit --no-verify -m "fix: ..."
+```
+
+Use this sparingly and say why in the pull request. Bypassed changes must still
+pass `npm run lint` before review.
+
 ## Before Opening a Pull Request
 
 Run these checks from the repository root:

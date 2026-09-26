@@ -9,8 +9,10 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Husky pre-commit hook that runs `lint-staged` (ESLint on staged files only)
+  before every commit, with a documented `--no-verify` emergency bypass (#51).
 
 ## [Prior work] — 2026-09-25
 
