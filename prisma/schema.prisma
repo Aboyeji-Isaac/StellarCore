@@ -46,6 +46,13 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+enum AlertDeliveryMethod {
+  WEBHOOK @map("webhook")
+  EMAIL   @map("email")
+
+  @@map("alert_delivery_method")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -74,9 +81,10 @@ model Corridor {
   countryTo     String @map("country_to")
   slug          String @unique
 
-  anchors          AnchorCorridor[]
-  rateSnapshots    RateSnapshot[]
-  transferOutcomes TransferOutcome[]
+  anchors                AnchorCorridor[]
+  rateSnapshots          RateSnapshot[]
+  transferOutcomes       TransferOutcome[]
+  rateAlertSubscriptions RateAlertSubscription[]
 
   @@map("corridors")
 }
@@ -163,3 +171,22 @@ model ReputationScore {
 
   @@map("reputation_scores")
 }
+
+model RateAlertSubscription {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  corridorId       String              @map("corridor_id") @db.Uuid
+  deliveryMethod   AlertDeliveryMethod @default(WEBHOOK) @map("delivery_method")
+  destination      String
+  secret           String
+  thresholdPercent Float               @default(1.0) @map("threshold_percent")
+  isActive         Boolean             @default(true) @map("is_active")
+  lastNotifiedAt   DateTime?           @map("last_notified_at") @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([corridorId, isActive], map: "rate_alert_subscriptions_corridor_active_idx")
+  @@map("rate_alert_subscriptions")
+}
+
