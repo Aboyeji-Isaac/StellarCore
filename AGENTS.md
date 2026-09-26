@@ -11,6 +11,7 @@ StellarCore is planned as a Next.js 15 App Router application. Keep routes and A
 After `package.json` is introduced, use the documented npm workflow:
 
 - `npm install` installs locked dependencies.
+- `npm install` also runs the `prepare` script, which installs the Husky pre-commit hook; the hook runs `lint-staged` (ESLint on staged files only). Bypass it only in a genuine emergency with `git commit --no-verify`; see `CONTRIBUTING.md`.
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
 - `npm test` runs Vitest unit and integration tests.

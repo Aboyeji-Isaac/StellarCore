@@ -16,7 +16,8 @@
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
-    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
+    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -40,9 +41,14 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prisma": "^7.9.1",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.23.12",
     "typescript": "^5.8.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,mjs,ts,tsx}": "eslint --no-warn-ignored"
   }
 }
