@@ -1,4 +1,5 @@
 import { getAnchorsApiResult } from "@/lib/api/anchors";
+import { publicApiHeaders } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,6 @@ export async function GET(): Promise<Response> {
 
   return Response.json(result.body, {
     status: result.status,
-    headers: { "Cache-Control": "no-store" },
+    headers: publicApiHeaders({ "Cache-Control": "no-store" }),
   });
 }
