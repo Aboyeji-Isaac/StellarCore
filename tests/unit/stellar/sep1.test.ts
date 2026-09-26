@@ -94,6 +94,29 @@ test("fetchSep1Toml returns a typed non-2xx error without reading the body", asy
   );
 });
 
+test("fetchSep1Toml rejects an oversized response before parsing it", async () => {
+  await assert.rejects(
+    fetchSep1Toml("anchor.example", {
+      fetcher: async () => new Response("", {
+        headers: { "content-length": "100001" },
+      }),
+    }),
+    (error) =>
+      error instanceof Sep1DiscoveryError &&
+      error.code === "RESPONSE_TOO_LARGE",
+  );
+});
+
+test("fetchSep1Toml rejects a non-UTF-8 body as invalid TOML", async () => {
+  await assert.rejects(
+    fetchSep1Toml("anchor.example", {
+      fetcher: async () => new Response(new Uint8Array([0xff, 0xfe])),
+    }),
+    (error) =>
+      error instanceof Sep1DiscoveryError && error.code === "INVALID_TOML",
+  );
+});
+
 test("SEP-1 tolerates an empty optional currency anchor_asset", () => {
   const data = parseSep1Toml(`
 NETWORK_PASSPHRASE = "Public Global Stellar Network ; September 2015"
