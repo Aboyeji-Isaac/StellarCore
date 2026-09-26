@@ -19,6 +19,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${corridor.sourceAsset} → ${corridor.destinationAsset} — StellarCore`,
     description: `Read-only evidence for the ${corridor.sourceCountry} to ${corridor.destinationCountry} corridor.`,
+    openGraph: {
+      title: `${corridor.sourceAsset} → ${corridor.destinationAsset} — StellarCore`,
+      description: `Read-only evidence for the ${corridor.sourceCountry} to ${corridor.destinationCountry} corridor.`,
+      type: "website",
+    },
   };
 }
 
@@ -32,11 +37,22 @@ export default async function CorridorPage({ params }: Props) {
 
   const { corridor } = corridorResult.body;
   const ratesResult = await getRatesApiResult(slug);
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `${corridor.sourceAsset} → ${corridor.destinationAsset} — StellarCore`,
+    description: `Read-only evidence for the ${corridor.sourceCountry} to ${corridor.destinationCountry} corridor.`,
+    about: {
+      "@type": "Thing",
+      name: `${corridor.sourceCountry} to ${corridor.destinationCountry} corridor`,
+    },
+  };
 
   return (
     <>
       <ProductHeader current="dashboard" />
       <main id="main-content" className="min-h-screen bg-[var(--black)] px-4 py-8 text-[var(--white)] sm:px-8 sm:py-10 lg:px-12">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         <div className="mx-auto max-w-6xl">
           <nav aria-label="Breadcrumb" className="text-xs text-[var(--muted)]">
             <Link href="/dashboard" className="underline underline-offset-4">Dashboard</Link>
