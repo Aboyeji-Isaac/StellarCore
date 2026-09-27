@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",
-    "test": "tsx --test tests/**/*.test.ts",
+    "test": "tsx scripts/run-tests.ts",
     "audit:config": "node --import tsx scripts/audit-configuration.ts",
     "registry:print": "node --import tsx scripts/registry-print.ts",
     "verify:sep10": "tsx scripts/verify-sep10.ts",
