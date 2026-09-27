@@ -4,9 +4,16 @@ import test from "node:test";
 import * as route from "@/app/api/internal/cron/refresh/route";
 import { hasValidCronAuthorization } from "@/lib/scheduled/cronAuth";
 import { getScheduledRefreshResponse } from "@/lib/scheduled/http";
+import type { CronFailureAlert } from "@/lib/scheduled/alert";
 import type { ScheduledRefreshResult } from "@/types/scheduled";
 
 const SECRET = "local-test-cron-secret";
+
+function authorizedRequest(): Request {
+  return new Request("http://localhost/api/internal/cron/refresh", {
+    headers: { authorization: `Bearer ${SECRET}` },
+  });
+}
 
 test("cron authorization rejects missing, malformed, and incorrect bearer values", () => {
   assert.equal(hasValidCronAuthorization(null, SECRET), false);
@@ -78,6 +85,87 @@ test("fatal job failures are a safe 500 and the route stays GET-only dynamic", a
   }
   const missing = await route.GET(new Request("http://localhost/api/internal/cron/refresh"));
   assert.equal(missing.status, 401);
+});
+
+test("a successful scheduled run does not trigger a failure alert", async () => {
+  const alerts: CronFailureAlert[] = [];
+  const response = await getScheduledRefreshResponse(
+    authorizedRequest(),
+    {
+      cronSecret: SECRET,
+      run: async () => successfulRun(),
+      alert: async (alert) => { alerts.push(alert); },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(alerts.length, 0);
+});
+
+test("a partial-failure run returns 200 but triggers exactly one failure alert", async () => {
+  const alerts: CronFailureAlert[] = [];
+  const result = successfulRun({ ok: false, rates: {
+    attempted: 1,
+    succeeded: 0,
+    failed: 1,
+    skipped: 0,
+    failures: [{ phase: "PREPARATION", code: "LIVE_RATE_PREPARATION_FAILURE" }],
+  } });
+  const response = await getScheduledRefreshResponse(
+    authorizedRequest(),
+    {
+      cronSecret: SECRET,
+      run: async () => result,
+      alert: async (alert) => { alerts.push(alert); },
+      now: () => new Date("2026-08-31T16:00:00.000Z"),
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0]?.step, "scheduled refresh");
+  assert.match(alerts[0]?.error ?? "", /rate snapshot failed for 1 source/);
+  assert.equal(alerts[0]?.timestamp, "2026-08-31T16:00:00.000Z");
+});
+
+test("a fatal failure alerts once and still returns the safe 500 contract", async () => {
+  const alerts: CronFailureAlert[] = [];
+  const response = await getScheduledRefreshResponse(
+    authorizedRequest(),
+    {
+      cronSecret: SECRET,
+      run: async () => { throw new Error("database unavailable"); },
+      alert: async (alert) => { alerts.push(alert); },
+      now: () => new Date("2026-08-31T16:00:00.000Z"),
+    },
+  );
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    error: { code: "internal_error", message: "Unable to run scheduled refresh." },
+  });
+  assert.equal(alerts.length, 1);
+  assert.deepEqual(alerts[0], {
+    step: "scheduled refresh",
+    error: "database unavailable",
+    timestamp: "2026-08-31T16:00:00.000Z",
+  });
+});
+
+test("a failing webhook delivery does not hide the original fatal failure", async () => {
+  const response = await getScheduledRefreshResponse(
+    authorizedRequest(),
+    {
+      cronSecret: SECRET,
+      run: async () => { throw new Error("database unavailable"); },
+      alert: async () => { throw new Error("webhook down"); },
+    },
+  );
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    error: { code: "internal_error", message: "Unable to run scheduled refresh." },
+  });
 });
 
 function successfulRun(overrides: Partial<ScheduledRefreshResult> = {}): ScheduledRefreshResult {
