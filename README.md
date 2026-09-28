@@ -31,8 +31,8 @@ StellarCore synchronizes a reviewed anchor and corridor registry, discovers anch
 
 The implementation separates architectural behavior from current production state:
 
-- **Architectural invariants:** rate medians require `MIN_FRESH_SOURCES=2`; reputation uses the documented fixed weights and requires at least 30 outcomes in 90 days before publishing a score.
-- **Current production state:** the reviewed USDC → BRL rate source is Zeam only, so it is insufficient for a median. The `TransferOutcome` model and scoring logic exist, but there is no trusted production outcome-ingestion source; reputation therefore remains sparse with null scores.
+- **Architectural invariants:** rate medians require `MIN_FRESH_SOURCES=2` fresh independent reviewed authorities, counting at most one observation per authority; reputation uses the documented fixed weights and requires at least 30 outcomes in 90 days before publishing a score.
+- **Current production state:** the reviewed USDC → BRL rate source is Zeam only under a single reviewed authority, so it is insufficient for a median. The `TransferOutcome` model and scoring logic exist, but there is no trusted production outcome-ingestion source; reputation therefore remains sparse with null scores.
 - **Planned/Future:** outcome ingestion is contingent on a legitimate, authorized source with durable provenance. StellarCore does not execute transfers, use customer authentication contexts, or create firm production quotes.
 
 > Think of it as **Google Flights for Stellar anchors** — pick a corridor, see every option, trust the data.
@@ -56,7 +56,7 @@ graph TB
         BOOTSTRAP["Manual registry bootstrap\nSEP-1 discovery · registry upsert"]
         REFRESH["Authenticated daily refresh\nreviewed SEP-38 indicative rates"]
         REPENG["Reputation engine\npersisted evidence only"]
-        MEDIAN["Median pricing\nfresh independent sources only"]
+        MEDIAN["Median pricing\nfresh independent authorities only"]
         ROUTES["Next.js Route Handlers\n/api/anchors · /api/rates · /api/reputation"]
     end
 
@@ -128,7 +128,7 @@ export function transferCapable(anchor: Anchor): boolean {
 
 The rate engine stores individual observations from explicitly reviewed SEP-38 indicative-price candidates. It does not call firm-quote endpoints and does not execute transfers.
 
-**Current production state:** the reviewed source list contains one Zeam USDC → BRL candidate. This is an observation about the current reviewed configuration, not a requirement of the architecture.
+**Current production state:** the reviewed source list contains one Zeam USDC → BRL candidate under one reviewed source authority. This is an observation about the current reviewed configuration, not a requirement of the architecture.
 
 For each reviewed candidate, StellarCore first validates the pair through the
 anchor's SEP-38 `/prices` endpoint, then reads an indicative price from
@@ -138,21 +138,36 @@ Rates are stored as timestamped snapshots. A rate is considered **stale** when i
 
 #### Staleness-Aware Median
 
-The rate engine computes a median across fresh, independent sources when the architectural minimum is met:
+The rate engine computes a median across fresh, independent reviewed authorities when the architectural minimum is met:
 
 ```
 Illustrative sources for one corridor:
 
-  Anchor A:  ₦1,612  (fresh · 18s old)
-  Anchor B:  ₦1,608  (fresh · 41s old)
-  Anchor C:  ₦1,590  (stale · 140s old)  ← excluded
-  Anchor D:  ₦1,615  (fresh · 12s old)
+  Authority 1 · Anchor A:   ₦1,612  (fresh · 18s old)
+  Authority 2 · Anchor B:   ₦1,608  (fresh · 41s old)
+  Authority 2 · Anchor B':  ₦1,604  (fresh · 30s old)  ← excluded: one value per authority
+  Authority 3 · Anchor D:   ₦1,615  (fresh · 12s old)
+  Legacy row  · Anchor E:   ₦1,599  (fresh · 20s old)  ← excluded: authority unknown
 
-Fresh sources:  [1608, 1612, 1615]
-Sorted median:   1612
+Eligible independent values:  [1608, 1612, 1615]
+Sorted median:                 1612
 ```
 
-`MIN_FRESH_SOURCES=2` is an architectural invariant. With fewer than two fresh independent sources, the API returns `insufficient_fresh_sources` and a null median. The current single reviewed Zeam source therefore remains insufficient even when fresh.
+Independence is decided by the reviewed source-authority registry in
+`constants/sourceAuthorities.ts`, not by anchor slug, issuer account, or
+endpoint hostname. Every reviewed rate source carries a stable opaque
+`authorityId` that is persisted with each captured observation, and the
+latest-rate read model keeps at most one deterministic observation per reviewed
+authority for a corridor. Additional observations from the same authority stay
+visible as evidence but are marked `correlated_same_authority`; observations
+whose persisted authority is unknown (including snapshots captured before the
+authority identity existed) are marked `unknown_authority`. Missing or
+ambiguous authority evidence reduces the eligible count instead of being
+guessed, and correlated observations are never averaged to manufacture
+independence. Selection is deterministic: freshness first, then capture order,
+then the stable snapshot id.
+
+`MIN_FRESH_SOURCES=2` is an architectural invariant. With fewer than two fresh independent authorities, the API returns `insufficient_fresh_sources` and a null median. The current single reviewed Zeam source is one authority (`auth-0001`) and therefore remains insufficient even when fresh.
 
 ### 3. Reputation Scoring
 
@@ -374,7 +389,7 @@ npm run bootstrap:registry
 # Manually verify reviewed live SEP-38 sources and append snapshots
 npm run snapshot:rates
 
-# Read the latest persisted rate per independent anchor without writing
+# Read the latest persisted rate per anchor, counted once per reviewed authority
 npm run verify:latest-rates
 
 # Recompute current reputation rows from the local database
@@ -409,25 +424,32 @@ registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
 `audit:config` performs a pure, deterministic check of the checked-in anchor,
-corridor, membership, and reviewed rate-source relationships. It requires no
-database, network, or environment secrets. Registry bootstrap and reviewed rate
-snapshot preparation run the same preflight before operational work begins.
-Passing this audit means only that repository-controlled configuration is
-internally coherent; it does not establish current anchor reachability, SEP
+corridor, membership, reviewed rate-source, and reviewed source-authority
+relationships. It requires no database, network, or environment secrets. It
+rejects a missing, malformed, duplicate, or unreviewed `authorityId`, a
+malformed authority registry entry, and a contradictory mapping where one
+anchor is assigned two different authorities. Registry bootstrap and reviewed
+rate snapshot preparation run the same preflight before operational work
+begins. Passing this audit means only that repository-controlled configuration
+is internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
-independent defense-in-depth boundaries.
+independent defense-in-depth boundaries. Reviewed authority is a governance
+classification, not proof that quotes are accurate or that transfers can
+execute.
 
 `registry:print` is a read-only companion to `audit:config`. It prints the
 checked-in anchors with their home domains, the corridors mapped to each anchor,
-and which corridors have a reviewed live rate source. It requires no database,
-network, or environment secrets and writes nothing. The registry does not store
-SEP support — that is discovered from each anchor's `stellar.toml` during
-`bootstrap:registry` — so the script says so rather than guessing.
+which corridors have a reviewed live rate source, and the reviewed source
+authorities with their configuration versions and anchors. It requires no
+database, network, or environment secrets and writes nothing. The registry does
+not store SEP support — that is discovered from each anchor's `stellar.toml`
+during `bootstrap:registry` — so the script says so rather than guessing.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
-snapshot per independent anchor, evaluates freshness at read time, computes the
-exact median when enough sources exist, and verifies the snapshot count is
+snapshot per anchor, counts at most one fresh observation per reviewed source
+authority, evaluates freshness at read time, computes the exact median when
+enough independent authorities exist, and verifies the snapshot count is
 unchanged. It performs no SEP-38 request or database write.
 
 `verify:reputation` is a local-database-only calculation for Cowrie,
@@ -530,15 +552,18 @@ live SEP calls, authentication, or writes.
 
 ### `GET /api/rates?corridor=<slug>`
 
-Returns the latest persisted rate observation per independent anchor for the
-requested stable corridor slug. The endpoint reads existing snapshots only and
-never performs live SEP-38 requests.
+Returns the latest persisted rate observation per persisted anchor for the
+requested stable corridor slug, then counts at most one fresh eligible
+observation per reviewed source authority. The endpoint reads existing
+snapshots only and never performs live SEP-38 requests.
 
 Corridor labels and observation anchor identity come from the persisted
-`Corridor` and `Anchor` rows related to that evidence. Current reviewed
-candidate counts remain independently derived from static reviewed rate-source
-configuration, while freshness, eligibility, counts, and the median are
-evaluated from persisted observations at request time.
+`Corridor` and `Anchor` rows related to that evidence, and the reviewed
+authority identity of each observation comes from the authority persisted with
+that snapshot — never from current configuration. Current reviewed candidate
+and authority counts remain independently derived from static reviewed
+rate-source configuration, while freshness, eligibility, counts, and the median
+are evaluated from persisted observations at request time.
 
 When two or more fresh independent observations are persisted, a healthy
 aggregation returns HTTP 200. The following is illustrative, not current
@@ -558,33 +583,61 @@ production state:
   "medianRate": "0.175",
   "sourceCount": 2,
   "freshSourceCount": 2,
+  "totalObservationCount": 2,
+  "freshObservationCount": 2,
+  "independentAuthorityCount": 2,
   "reviewedCandidateConfiguration": {
     "candidateCount": 2,
-    "uniqueAnchorCount": 2
+    "uniqueAnchorCount": 2,
+    "uniqueAuthorityCount": 2
   },
   "medianRequirement": {
     "minimumFreshIndependentSources": 2
   },
-  "observations": []
+  "observations": [
+    {
+      "anchor": { "slug": "zeam", "name": "Zeam" },
+      "authority": {
+        "id": "auth-0001",
+        "displayName": "Zeam",
+        "configurationVersion": 1
+      },
+      "rate": "0.175",
+      "sourceAmount": "100",
+      "destinationAmount": "17.5",
+      "fee": "0",
+      "capturedAt": "2026-08-28T11:59:59.000Z",
+      "freshness": { "state": "fresh", "ageMs": 1000 },
+      "eligibleForMedian": true
+    }
+  ]
 }
 ```
 
-A valid corridor with fewer than two fresh independent sources also returns
+A valid corridor with fewer than two fresh independent authorities also returns
 HTTP 200, with `state: "insufficient_fresh_sources"` and `medianRate: null`.
 `reviewedCandidateConfiguration` describes only reviewed static configuration
 for the requested corridor: `candidateCount` is the number of matching reviewed
-entries, while `uniqueAnchorCount` counts the distinct anchor slugs represented
-by those entries. It is not evidence that a source is operational, has returned
-a price, or is eligible for a median. `medianRequirement` reports the
+entries, `uniqueAnchorCount` counts the distinct anchor slugs represented by
+those entries, and `uniqueAuthorityCount` counts the distinct reviewed
+authorities behind them. It is not evidence that a source is operational, has
+returned a price, or is eligible for a median. `medianRequirement` reports the
 architectural minimum fresh independent observations required for a median.
 
 The response distinguishes reviewed configuration from persisted observations:
-`sourceCount` is the number of anchors represented by the latest persisted
-observations, `freshSourceCount` is the number of those observations currently
-eligible for the median, and `state` / `medianRate` are calculated exclusively
-from that persisted freshness evidence. The current reviewed USDC/US → BRL/BR
-configuration contains one Zeam candidate, so it cannot produce a median even
-when that observation is fresh.
+`sourceCount`/`totalObservationCount` is the number of latest persisted
+observations, `freshObservationCount` is how many of those are inside the
+freshness window before correlation is collapsed, `independentAuthorityCount`
+is the number of distinct reviewed authorities they represent, and
+`freshSourceCount` is the number of fresh eligible observations after keeping at
+most one per authority. `state` / `medianRate` are calculated exclusively from
+that persisted evidence. Each observation carries its persisted `authority`;
+observations share an authority without contributing extra median inputs and
+are marked `excluded — correlated same authority`, while legacy observations
+with no persisted authority are marked `excluded — unknown authority`. The
+current reviewed USDC/US → BRL/BR configuration contains one Zeam candidate
+under one authority, so it cannot produce a median even when that observation
+is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.
@@ -787,6 +840,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] Prisma schema and committed migrations
 - [x] Reviewed anchor and corridor registry with SEP-1 discovery/bootstrap
 - [x] Reviewed SEP-38 indicative-rate snapshot support and latest-rate read model
+- [x] Reviewed source-authority identity so correlated observations count once
 - [x] Staleness-aware median pricing with `MIN_FRESH_SOURCES=2`
 - [x] SEP-10 authentication boundary/harness
 - [x] Deterministic reputation scoring and public read-only reputation APIs
@@ -795,7 +849,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 
 ### Planned/Future
 
-- [ ] Additional independently reviewed rate sources; a second source is required before a median can be produced
+- [ ] Additional independently reviewed rate sources; a second independent reviewed authority is required before a median can be produced
 - [ ] A trusted, authorized, provenance-preserving TransferOutcome source, if one becomes available
 - [ ] Alerts and other product capabilities supported by verified operational requirements
 

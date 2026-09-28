@@ -4,12 +4,14 @@ import {
   CORRIDOR_REGISTRY,
 } from "@/constants/corridors";
 import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
+import { SOURCE_AUTHORITY_REGISTRY } from "@/constants/sourceAuthorities";
 import type { AnchorRegistryEntry } from "@/types/anchor";
 import type {
   AnchorCorridorRegistryEntry,
   CorridorRegistryEntry,
 } from "@/types/corridor";
 import type { ReviewedLiveRateSource } from "@/types/liveRateSource";
+import type { SourceAuthorityRegistryEntry } from "@/types/sourceAuthority";
 
 /**
  * The reviewed static registry deliberately does not store SEP support; it is
@@ -31,12 +33,21 @@ export type RegistryCorridorSummary = Readonly<{
   hasReviewedRateSource: boolean;
 }>;
 
+export type RegistryAuthoritySummary = Readonly<{
+  authorityId: string;
+  displayName: string;
+  configurationVersion: number;
+  anchorSlugs: readonly string[];
+}>;
+
 export type RegistrySummary = Readonly<{
   anchors: readonly RegistryAnchorSummary[];
   corridors: readonly RegistryCorridorSummary[];
+  sourceAuthorities: readonly RegistryAuthoritySummary[];
   reviewedRateSources: readonly Readonly<{
     anchorSlug: string;
     corridorSlug: string;
+    authorityId: string;
     sellAsset: string;
     buyAsset: string;
     context: string;
@@ -48,6 +59,7 @@ export type RegistrySummaryInput = Readonly<{
   corridors: readonly CorridorRegistryEntry[];
   anchorCorridorMappings: readonly AnchorCorridorRegistryEntry[];
   reviewedLiveRateSources: readonly ReviewedLiveRateSource[];
+  sourceAuthorities: readonly SourceAuthorityRegistryEntry[];
 }>;
 
 /**
@@ -93,13 +105,29 @@ export function buildRegistrySummary(
     });
   });
 
+  const sourceAuthorities = input.sourceAuthorities.map((authority) => {
+    const anchorSlugs = new Set<string>();
+    for (const source of input.reviewedLiveRateSources) {
+      if (source.authorityId === authority.authorityId) anchorSlugs.add(source.anchorSlug);
+    }
+
+    return Object.freeze({
+      authorityId: authority.authorityId,
+      displayName: authority.displayName,
+      configurationVersion: authority.configurationVersion,
+      anchorSlugs: Object.freeze([...anchorSlugs]),
+    });
+  });
+
   return Object.freeze({
     anchors: Object.freeze(anchors),
     corridors: Object.freeze(corridors),
+    sourceAuthorities: Object.freeze(sourceAuthorities),
     reviewedRateSources: Object.freeze(
       input.reviewedLiveRateSources.map((source) => Object.freeze({
         anchorSlug: source.anchorSlug,
         corridorSlug: source.corridorSlug,
+        authorityId: source.authorityId,
         sellAsset: source.sellAsset,
         buyAsset: source.buyAsset,
         context: source.context,
@@ -120,6 +148,7 @@ export function formatRegistrySummary(summary: RegistrySummary): string {
   lines.push(
     `${summary.anchors.length} anchor(s), ` +
       `${summary.corridors.length} corridor(s), ` +
+      `${summary.sourceAuthorities.length} source authority(ies), ` +
       `${summary.reviewedRateSources.length} reviewed live rate source(s).`,
   );
 
@@ -154,6 +183,24 @@ export function formatRegistrySummary(summary: RegistrySummary): string {
   }
 
   lines.push("");
+  lines.push("Source authorities");
+  lines.push("------------------");
+  if (summary.sourceAuthorities.length === 0) {
+    lines.push("(none)");
+  }
+  for (const authority of summary.sourceAuthorities) {
+    lines.push(`${authority.displayName} (${authority.authorityId})`);
+    lines.push(`  configuration version: ${authority.configurationVersion}`);
+    lines.push(`  anchors:               ${joinList(authority.anchorSlugs)}`);
+  }
+  lines.push(
+    "  Reviewed authority is a maintainer governance classification: it is",
+  );
+  lines.push(
+    "  never inferred from anchor slugs, domains, hosts, or price similarity.",
+  );
+
+  lines.push("");
   lines.push("Known SEPs");
   lines.push("----------");
   lines.push(
@@ -182,6 +229,7 @@ export function currentRegistrySummary(): RegistrySummary {
     corridors: CORRIDOR_REGISTRY,
     anchorCorridorMappings: ANCHOR_CORRIDOR_REGISTRY,
     reviewedLiveRateSources: REVIEWED_LIVE_RATE_SOURCES,
+    sourceAuthorities: SOURCE_AUTHORITY_REGISTRY,
   });
 }
 

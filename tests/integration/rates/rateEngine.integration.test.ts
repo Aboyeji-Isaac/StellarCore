@@ -21,7 +21,10 @@ test("controlled quote to normalization to persistence to median composition sta
       return row;
     },
   };
-  const candidates = [source("anchor-a"), source("anchor-b")];
+  const candidates = [
+    source("anchor-a", "auth-0001"),
+    source("anchor-b", "auth-0002"),
+  ];
   const result = await runRateEngine(candidates, {
     quote: async (candidate) => ({
       sellAsset: USDC,
@@ -44,14 +47,21 @@ test("controlled quote to normalization to persistence to median composition sta
 
   assert.equal(result.snapshotsPersisted, 2);
   assert.equal(rows.length, 2);
+  assert.deepEqual(
+    result.snapshots.map(({ authorityId }) => authorityId),
+    ["auth-0001", "auth-0002"],
+  );
+  assert.deepEqual(rows.map(({ authorityId }) => authorityId), ["auth-0001", "auth-0002"]);
   assert.equal(median.state, "healthy");
   assert.equal(median.median, "1605");
 });
 
-function source(anchorSlug: string): RateCandidate {
+function source(anchorSlug: string, authorityId: string): RateCandidate {
   return {
     anchorSlug,
     corridor: { slug: "usdc-us-ngn-ng", assetCodeFrom: "USDC", countryFrom: "US", assetCodeTo: "NGN", countryTo: "NG" },
+    authorityId,
+    authorityConfigurationVersion: 1,
     request: { sellAsset: USDC, buyAsset: NGN, sellAmount: "1", context: "sep31" },
   };
 }

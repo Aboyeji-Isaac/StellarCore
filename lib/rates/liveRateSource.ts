@@ -1,7 +1,9 @@
 import { ANCHOR_REGISTRY } from "@/constants/anchors";
 import { CORRIDOR_REGISTRY } from "@/constants/corridors";
 import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
+import { SOURCE_AUTHORITY_REGISTRY } from "@/constants/sourceAuthorities";
 import { parseDatabaseDecimal } from "@/lib/rates/decimal";
+import { isValidSourceAuthorityId } from "@/lib/rates/sourceAuthority";
 import { discoverAnchor } from "@/lib/stellar/sep1";
 import {
   getSep38IndicativePrice,
@@ -42,6 +44,10 @@ export async function buildReviewedLiveRateCandidates(
     if (!anchor) throw new LiveRateSourceError("ANCHOR_NOT_REGISTERED");
     const corridor = CORRIDOR_REGISTRY.find(({ slug }) => slug === source.corridorSlug);
     if (!corridor) throw new LiveRateSourceError("CORRIDOR_NOT_REGISTERED");
+    const authority = isValidSourceAuthorityId(source.authorityId)
+      ? SOURCE_AUTHORITY_REGISTRY.find(({ authorityId }) => authorityId === source.authorityId)
+      : undefined;
+    if (!authority) throw new LiveRateSourceError("AUTHORITY_NOT_REVIEWED");
     validateSourceCorrelation(source, corridor);
     parseDatabaseDecimal(source.sellAmount);
 
@@ -60,6 +66,8 @@ export async function buildReviewedLiveRateCandidates(
     candidates.push(Object.freeze({
       anchorSlug: source.anchorSlug,
       corridor,
+      authorityId: authority.authorityId,
+      authorityConfigurationVersion: authority.configurationVersion,
       quoteServer,
       request: Object.freeze({
         sellAsset: source.sellAsset,
@@ -101,6 +109,8 @@ export function formatLiveRateRunSummary(
       id: snapshot.id,
       anchorSlug: snapshot.anchorSlug,
       corridorSlug: snapshot.corridorSlug,
+      authorityId: snapshot.authorityId,
+      authorityConfigurationVersion: snapshot.authorityConfigurationVersion,
       rate: snapshot.rate,
       capturedAt: snapshot.capturedAt.toISOString(),
     }))),

@@ -73,6 +73,8 @@ test("candidate construction correlates the exact issuer-bearing SEP-38 pair", a
     dependencies(),
   );
   assert.equal(candidate?.quoteServer, QUOTE_SERVER);
+  assert.equal(candidate?.authorityId, "auth-0001");
+  assert.equal(candidate?.authorityConfigurationVersion, 1);
   assert.deepEqual(candidate?.request, {
     sellAsset: ZEAM_USDC_ASSET,
     buyAsset: ZEAM_BRL_ASSET,
@@ -87,6 +89,23 @@ test("candidate construction rejects a live /prices response without the reviewe
   await assert.rejects(
     buildReviewedLiveRateCandidates(REVIEWED_LIVE_RATE_SOURCES, dependencies(false)),
     (error) => error instanceof LiveRateSourceError && error.code === "PAIR_NOT_ADVERTISED",
+  );
+});
+
+test("candidate construction rejects an authority id that is not reviewed", async () => {
+  await assert.rejects(
+    buildReviewedLiveRateCandidates(
+      [Object.freeze({ ...REVIEWED_LIVE_RATE_SOURCES[0], authorityId: "auth-0099" })],
+      dependencies(),
+    ),
+    (error) => error instanceof LiveRateSourceError && error.code === "AUTHORITY_NOT_REVIEWED",
+  );
+  await assert.rejects(
+    buildReviewedLiveRateCandidates(
+      [Object.freeze({ ...REVIEWED_LIVE_RATE_SOURCES[0], authorityId: "zeam" })],
+      dependencies(),
+    ),
+    (error) => error instanceof LiveRateSourceError && error.code === "AUTHORITY_NOT_REVIEWED",
   );
 });
 
@@ -125,6 +144,8 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
       id: "snapshot-1",
       anchorSlug: "zeam",
       corridorSlug: "usdc-us-brl-br",
+      authorityId: "auth-0001",
+      authorityConfigurationVersion: 1,
       rate: "0.17",
       sourceAmount: "100",
       destinationAmount: "17",
@@ -139,6 +160,8 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
     id: "snapshot-1",
     anchorSlug: "zeam",
     corridorSlug: "usdc-us-brl-br",
+    authorityId: "auth-0001",
+    authorityConfigurationVersion: 1,
     rate: "0.17",
     capturedAt: "2026-08-27T12:00:00.000Z",
   }]);

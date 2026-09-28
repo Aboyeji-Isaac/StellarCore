@@ -8,6 +8,9 @@ const reviewedLiveRateSources = [
   Object.freeze({
     anchorSlug: "zeam",
     corridorSlug: "usdc-us-brl-br",
+    // Reviewed authority from constants/sourceAuthorities.ts. The anchor slug
+    // and quote-server hostname do not, by themselves, prove independence.
+    authorityId: "auth-0001",
     sellAsset: ZEAM_USDC_ASSET,
     buyAsset: ZEAM_BRL_ASSET,
     sellAmount: "100",

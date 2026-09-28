@@ -1,12 +1,14 @@
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
+import { selectIndependentAuthorityObservations } from "@/lib/rates/sourceAuthority";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
   LatestRateRepositoryObservation,
   LatestRateSourceObservation,
 } from "@/types/latestRates";
+import type { MedianSourceResult } from "@/types/rates";
 
 export async function readLatestCorridorRate(
   corridorSlug: string,
@@ -28,20 +30,48 @@ export async function readLatestCorridorRate(
     const latest = selectLatestPerAnchor(
       await repository.findLatestObservations(corridor.id),
     );
-    const median = computeFreshMedian(latest.map((observation) => ({
-      anchorSlug: observation.anchorSlug,
-      corridorSlug: corridor.slug,
-      rate: observation.rate,
-      capturedAt: observation.capturedAt,
-    })), evaluatedAt);
+    // At most one deterministic observation per reviewed authority. Correlated
+    // observations stay visible as evidence but never add a median input.
+    const selection = selectIndependentAuthorityObservations(latest, evaluatedAt);
+    const median = computeFreshMedian(
+      selection.selected.map((observation) => ({
+        anchorSlug: observation.anchorSlug,
+        corridorSlug: corridor.slug,
+        rate: observation.rate,
+        capturedAt: observation.capturedAt,
+      })),
+      evaluatedAt,
+    );
 
-    const observations = Object.freeze(latest.map((observation, index) => {
-      const medianSource = median.sources[index]!;
+    // computeFreshMedian preserves input order, so the selected observations
+    // and median.sources stay aligned by index.
+    const medianBySnapshotId = new Map<string, MedianSourceResult>();
+    selection.selected.forEach((observation, index) => {
+      medianBySnapshotId.set(observation.id, median.sources[index]!);
+    });
+    const authorityExclusionBySnapshotId = new Map<
+      string,
+      LatestRateSourceObservation["exclusionReason"]
+    >();
+    for (const { observation, reason } of selection.exclusions) {
+      authorityExclusionBySnapshotId.set(observation.id, reason);
+    }
+
+    let freshObservationCount = 0;
+    const observations = Object.freeze(latest.map((observation) => {
       const freshness = getRateFreshness(observation.capturedAt, evaluatedAt);
+      if (freshness.state === "fresh") freshObservationCount += 1;
+      const authorityReason = authorityExclusionBySnapshotId.get(observation.id);
+      const medianSource = medianBySnapshotId.get(observation.id);
+      const included = medianSource?.included ?? false;
+      const exclusionReason = authorityReason ?? medianSource?.exclusionReason;
+
       return Object.freeze({
         snapshotId: observation.id,
         anchorSlug: observation.anchorSlug,
         anchorName: observation.anchorName,
+        authorityId: observation.authorityId,
+        authorityConfigurationVersion: observation.authorityConfigurationVersion,
         rate: observation.rate,
         sourceAmount: observation.sourceAmount,
         destinationAmount: observation.destinationAmount,
@@ -49,10 +79,8 @@ export async function readLatestCorridorRate(
         capturedAt: formatTimestamp(observation.capturedAt),
         freshnessState: freshness.state,
         ageMs: freshness.ageMs,
-        included: medianSource.included,
-        ...(medianSource.exclusionReason
-          ? { exclusionReason: medianSource.exclusionReason }
-          : {}),
+        included,
+        ...(exclusionReason ? { exclusionReason } : {}),
       }) satisfies LatestRateSourceObservation;
     }));
 
@@ -68,8 +96,10 @@ export async function readLatestCorridorRate(
       evaluatedAt: evaluatedAt.toISOString(),
       state: median.state,
       median: median.median,
-      totalIndependentSources: observations.length,
-      freshSourceCount: median.freshSourceCount,
+      totalObservationCount: observations.length,
+      freshObservationCount,
+      independentAuthorityCount: selection.independentAuthorityCount,
+      freshIndependentSourceCount: median.freshSourceCount,
       observations,
       exclusions: Object.freeze(observations.filter(({ included }) => !included)),
     });

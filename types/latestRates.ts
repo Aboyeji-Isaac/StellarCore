@@ -13,6 +13,13 @@ export type LatestRateRepositoryObservation = Readonly<{
   id: string;
   anchorSlug: string;
   anchorName: string;
+  /**
+   * Reviewed authority persisted with the observation. `null` means the
+   * authority is unknown, which is how legacy snapshots are migrated: the
+   * reviewed mapping is never reconstructed from current configuration.
+   */
+  authorityId: string | null;
+  authorityConfigurationVersion: number | null;
   rate: string;
   sourceAmount: string;
   destinationAmount: string;
@@ -33,6 +40,8 @@ export type LatestRateSourceObservation = Readonly<{
   snapshotId: string;
   anchorSlug: string;
   anchorName: string;
+  authorityId: string | null;
+  authorityConfigurationVersion: number | null;
   rate: string;
   sourceAmount: string;
   destinationAmount: string;
@@ -56,8 +65,14 @@ export type LatestCorridorRate = Readonly<{
   evaluatedAt: string;
   state: "healthy" | "insufficient_fresh_sources";
   median: string | null;
-  totalIndependentSources: number;
-  freshSourceCount: number;
+  /** Every latest persisted observation for the corridor. */
+  totalObservationCount: number;
+  /** Observations inside the freshness window, before correlation collapse. */
+  freshObservationCount: number;
+  /** Distinct reviewed authorities represented by the observations. */
+  independentAuthorityCount: number;
+  /** Fresh eligible observations after at most one per authority. */
+  freshIndependentSourceCount: number;
   observations: readonly LatestRateSourceObservation[];
   exclusions: readonly LatestRateSourceObservation[];
 }>;

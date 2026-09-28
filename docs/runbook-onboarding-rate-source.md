@@ -59,14 +59,41 @@ Open or update the issue with:
 - TOML URL and the advertised quote-server URL;
 - exact issuer-bearing pair found in `/prices`;
 - `/price` request shape, timestamp, and bounded response evidence;
-- any authentication, freshness, or reproducibility limitations; and
+- any authentication, freshness, or reproducibility limitations;
+- any publicly documented operator, ownership, or upstream-dependency evidence
+  that may bear on whether the candidate is commonly controlled with an
+  already-reviewed source; and
 - a clear recommendation: verified, needs follow-up, or rejected.
 
 The maintainer decides whether the candidate is reviewed and eligible for the
 registry. A contributor must not edit `constants/liveRateSources.ts` or add an
 entry directly to `REVIEWED_LIVE_RATE_SOURCES` as part of this investigation.
 
-## 7. Reference investigation set
+## 7. Record the reviewed source authority
+
+The maintainer — not the contributor — records which reviewed operator is
+behind the candidate:
+
+1. Decide whether the candidate belongs to an existing reviewed authority. A
+   different anchor slug, host, issuer account, or brand is not by itself
+   evidence of independent control, and neither is price similarity.
+2. If it is a new independent operator, add one entry to
+   `constants/sourceAuthorities.ts` with a newly assigned opaque `authorityId`
+   of the form `auth-NNNN`, a display name, and configuration version `1`.
+   Identifiers are assigned once and never derived from display text, anchor
+   slugs, home domains, or endpoint hostnames.
+3. If it shares an operator with an existing reviewed source, reuse that
+   existing `authorityId` in `constants/liveRateSources.ts`.
+4. If only the reviewed label changed, keep the existing `authorityId` and
+   update `displayName`, bumping `configurationVersion` only when the reviewed
+   identity itself changed.
+5. Run `npm run audit:config` and `npm run registry:print`, then open the pull
+   request with the authority decision and its supporting public evidence.
+
+Two reviewed anchors under one authority remain valid configuration, but they
+contribute at most one value toward the median requirement.
+
+## 8. Reference investigation set
 
 Use the same evidence standard used while investigating nTokens, Settle,
 Transfero, BlindPay, Bitso, and VANK for issue #7: reachable production TOML,

@@ -15,8 +15,21 @@ import type {
   CorridorRegistryEntry,
 } from "@/types/corridor";
 import type { ReviewedLiveRateSource } from "@/types/liveRateSource";
+import type { SourceAuthorityRegistryEntry } from "@/types/sourceAuthority";
 
 const ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
+const AUTHORITY_A = Object.freeze({
+  authorityId: "auth-0001",
+  displayName: "Anchor A Operator",
+  configurationVersion: 1,
+}) satisfies SourceAuthorityRegistryEntry;
+
+const AUTHORITY_B = Object.freeze({
+  authorityId: "auth-0002",
+  displayName: "Anchor B Operator",
+  configurationVersion: 3,
+}) satisfies SourceAuthorityRegistryEntry;
 
 const ANCHOR_A = Object.freeze({
   slug: "anchor-a",
@@ -215,6 +228,94 @@ test("unsupported indicative context fails", () => {
   assert.ok(codes(result).includes("SOURCE_CONTEXT_INVALID"));
 });
 
+test("missing, malformed, and unreviewed source authority ids fail", () => {
+  const missing = audit(configuration({
+    sources: [source(BRL_CORRIDOR, { authorityId: "" })],
+  }));
+  const malformed = audit(configuration({
+    sources: [source(BRL_CORRIDOR, { authorityId: "zeam" })],
+  }));
+  const unreviewed = audit(configuration({
+    sources: [source(BRL_CORRIDOR, { authorityId: "auth-0099" })],
+  }));
+
+  assert.deepEqual(codes(missing), ["SOURCE_AUTHORITY_MISSING"]);
+  assert.deepEqual(codes(malformed), ["SOURCE_AUTHORITY_MALFORMED"]);
+  assert.deepEqual(codes(unreviewed), ["SOURCE_AUTHORITY_NOT_FOUND"]);
+});
+
+test("authority ids are never inferred from the anchor slug", () => {
+  const result = audit(configuration({
+    sources: [source(BRL_CORRIDOR, { authorityId: ANCHOR_A.slug })],
+  }));
+
+  assert.deepEqual(codes(result), ["SOURCE_AUTHORITY_MALFORMED"]);
+});
+
+test("malformed, unnamed, and unversioned authority entries fail", () => {
+  const malformed = audit(configuration({
+    authorities: [{ authorityId: "zeam", displayName: "Zeam", configurationVersion: 1 }],
+  }));
+  const unnamed = audit(configuration({
+    authorities: [{ ...AUTHORITY_A, displayName: "   " }],
+  }));
+  const unversioned = audit(configuration({
+    authorities: [{ ...AUTHORITY_A, configurationVersion: 0 }],
+  }));
+
+  assert.ok(codes(malformed).includes("AUTHORITY_ID_MALFORMED"));
+  assert.deepEqual(codes(unnamed), ["AUTHORITY_DISPLAY_NAME_INVALID"]);
+  assert.deepEqual(codes(unversioned), ["AUTHORITY_CONFIGURATION_VERSION_INVALID"]);
+});
+
+test("duplicate reviewed authority identity fails", () => {
+  const result = audit(configuration({
+    authorities: [AUTHORITY_A, AUTHORITY_A],
+  }));
+
+  assert.deepEqual(codes(result), ["DUPLICATE_AUTHORITY_IDENTITY"]);
+});
+
+test("one anchor cannot be assigned to two reviewed authorities", () => {
+  const result = audit(configuration({
+    corridors: [BRL_CORRIDOR, USD_CORRIDOR],
+    mappings: [mapping(ANCHOR_A.slug, [BRL_CORRIDOR.slug, USD_CORRIDOR.slug])],
+    authorities: [AUTHORITY_A, AUTHORITY_B],
+    sources: [
+      source(BRL_CORRIDOR, { authorityId: AUTHORITY_A.authorityId }),
+      source(USD_CORRIDOR, { authorityId: AUTHORITY_B.authorityId }),
+    ],
+  }));
+
+  assert.deepEqual(codes(result), ["CONTRADICTORY_AUTHORITY_ASSIGNMENT"]);
+});
+
+test("renaming an authority display name keeps the same reviewed identity", () => {
+  const renamed = Object.freeze({
+    ...AUTHORITY_A,
+    displayName: "Renamed Operator Label",
+  });
+  const result = audit(configuration({ authorities: [renamed] }));
+
+  assert.deepEqual(result, { ok: true, issues: [] });
+});
+
+test("two reviewed anchors under one authority remain valid configuration", () => {
+  const result = audit(configuration({
+    anchors: [ANCHOR_A, ANCHOR_B],
+    mappings: [
+      mapping(ANCHOR_A.slug, [BRL_CORRIDOR.slug]),
+      mapping(ANCHOR_B.slug, [BRL_CORRIDOR.slug]),
+    ],
+    sources: [
+      source(BRL_CORRIDOR),
+      source(BRL_CORRIDOR, { anchorSlug: ANCHOR_B.slug }),
+    ],
+  }));
+
+  assert.deepEqual(result, { ok: true, issues: [] });
+});
+
 test("audit results, issue collections, and issues are immutable", () => {
   const result = audit(configuration({ mappings: [] }));
 
@@ -246,6 +347,7 @@ test("audit results and assertion errors never reflect unsafe supplied values", 
   const safeLookingSecret = "sentinel-secret-token";
   const malicious = source(BRL_CORRIDOR, {
     anchorSlug: safeLookingSecret,
+    authorityId: sentinel,
     buyAsset: `iso4217:${sentinel}` as ReviewedLiveRateSource["buyAsset"],
     buyDeliveryMethod: `${sentinel}\n`,
     context: sentinel as never,
@@ -254,7 +356,15 @@ test("audit results and assertion errors never reflect unsafe supplied values", 
     sellAmount: sentinel,
     sellAsset: `stellar:USDC:${sentinel}` as ReviewedLiveRateSource["sellAsset"],
   });
-  const input = configuration({ sources: [malicious] });
+  const maliceAuthority = Object.freeze({
+    authorityId: sentinel,
+    displayName: safeLookingSecret,
+    configurationVersion: Number.NaN,
+  });
+  const input = configuration({
+    authorities: [AUTHORITY_A, maliceAuthority],
+    sources: [malicious],
+  });
   const result = audit(input);
 
   assert.equal(JSON.stringify(result).includes(sentinel), false);
@@ -274,6 +384,7 @@ test("audit results and assertion errors never reflect unsafe supplied values", 
 
 function configuration(overrides: Readonly<{
   anchors?: readonly AnchorRegistryEntry[];
+  authorities?: readonly SourceAuthorityRegistryEntry[];
   corridors?: readonly CorridorRegistryEntry[];
   mappings?: readonly AnchorCorridorRegistryEntry[];
   sources?: readonly ReviewedLiveRateSource[];
@@ -285,6 +396,8 @@ function configuration(overrides: Readonly<{
       ?? Object.freeze([mapping(ANCHOR_A.slug, [BRL_CORRIDOR.slug])]),
     reviewedLiveRateSources: overrides.sources
       ?? Object.freeze([source(BRL_CORRIDOR)]),
+    sourceAuthorities: overrides.authorities
+      ?? Object.freeze([AUTHORITY_A]),
   });
 }
 
@@ -302,6 +415,7 @@ function source(
   return Object.freeze({
     anchorSlug: ANCHOR_A.slug,
     corridorSlug: corridor.slug,
+    authorityId: AUTHORITY_A.authorityId,
     sellAsset: `stellar:${corridor.assetCodeFrom}:${ISSUER}`,
     buyAsset: `iso4217:${corridor.assetCodeTo}`,
     sellAmount: "100",

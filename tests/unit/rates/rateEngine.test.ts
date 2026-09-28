@@ -12,10 +12,12 @@ const USDC = "stellar:USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4K
 const USD = "iso4217:USD" as const;
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 
-function candidate(anchorSlug: string): RateCandidate {
+function candidate(anchorSlug: string, authorityId = "auth-0001"): RateCandidate {
   return Object.freeze({
     anchorSlug,
     corridor: Object.freeze({ slug: "usdc-us-usd-us", assetCodeFrom: "USDC", countryFrom: "US", assetCodeTo: "USD", countryTo: "US" }),
+    authorityId,
+    authorityConfigurationVersion: 1,
     request: Object.freeze({ sellAsset: USDC, buyAsset: USD, sellAmount: "100", context: "sep31" }),
   });
 }

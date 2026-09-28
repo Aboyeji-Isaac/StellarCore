@@ -4,6 +4,12 @@ import type { Sep38AssetIdentifier } from "@/types/sep38";
 export type ReviewedLiveRateSource = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
+  /**
+   * Reviewed source-authority id from `SOURCE_AUTHORITY_REGISTRY`. It is
+   * separate from the anchor slug and endpoint hostname so commonly controlled
+   * or upstream-dependent observations cannot be presented as independent.
+   */
+  authorityId: string;
   sellAsset: Sep38AssetIdentifier;
   buyAsset: Sep38AssetIdentifier;
   sellAmount: string;
@@ -27,6 +33,8 @@ export type SafeLiveRateRunSummary = Readonly<{
     id: string;
     anchorSlug: string;
     corridorSlug: string;
+    authorityId: string;
+    authorityConfigurationVersion: number;
     rate: string;
     capturedAt: string;
   }>[];

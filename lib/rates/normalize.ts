@@ -2,6 +2,10 @@ import {
   isZeroDecimal,
   parseDatabaseDecimal,
 } from "@/lib/rates/decimal";
+import {
+  isValidAuthorityConfigurationVersion,
+  isValidSourceAuthorityId,
+} from "@/lib/rates/sourceAuthority";
 import { parseSep38AssetIdentifier } from "@/lib/stellar/sep38";
 import type { CorridorRegistryEntry } from "@/types/corridor";
 import type { NormalizedRateObservation } from "@/types/rates";
@@ -16,6 +20,7 @@ export type RateNormalizationCode =
   | "INVALID_DESTINATION_AMOUNT"
   | "INVALID_FEE"
   | "UNSUPPORTED_FEE_ASSET"
+  | "INVALID_AUTHORITY"
   | "INVALID_TIMESTAMP";
 
 export class RateNormalizationError extends Error {
@@ -28,11 +33,17 @@ export class RateNormalizationError extends Error {
 export function normalizeIndicativeRate(input: Readonly<{
   anchorSlug: string;
   corridor: CorridorRegistryEntry;
+  authorityId: string;
+  authorityConfigurationVersion: number;
   quote: Sep38IndicativePrice;
   capturedAt: Date | string;
 }>): NormalizedRateObservation {
   if (!isStableSlug(input.anchorSlug)) fail("INVALID_ANCHOR");
   if (!isStableSlug(input.corridor.slug)) fail("INVALID_CORRIDOR");
+  if (
+    !isValidSourceAuthorityId(input.authorityId) ||
+    !isValidAuthorityConfigurationVersion(input.authorityConfigurationVersion)
+  ) fail("INVALID_AUTHORITY");
 
   let sellCode: string | undefined;
   let buyCode: string | undefined;
@@ -71,6 +82,8 @@ export function normalizeIndicativeRate(input: Readonly<{
   return Object.freeze({
     anchorSlug: input.anchorSlug,
     corridorSlug: input.corridor.slug,
+    authorityId: input.authorityId,
+    authorityConfigurationVersion: input.authorityConfigurationVersion,
     rate,
     sourceAmount,
     destinationAmount,

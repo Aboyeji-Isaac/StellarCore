@@ -2,6 +2,11 @@ import {
   isZeroDecimal,
   parseDatabaseDecimal,
 } from "@/lib/rates/decimal";
+import {
+  isValidAuthorityConfigurationVersion,
+  isValidAuthorityDisplayName,
+  isValidSourceAuthorityId,
+} from "@/lib/rates/sourceAuthority";
 import { parseSep38AssetIdentifier } from "@/lib/stellar/sep38";
 import type { AnchorRegistryEntry } from "@/types/anchor";
 import type {
@@ -9,19 +14,29 @@ import type {
   CorridorRegistryEntry,
 } from "@/types/corridor";
 import type { ReviewedLiveRateSource } from "@/types/liveRateSource";
+import type { SourceAuthorityRegistryEntry } from "@/types/sourceAuthority";
 
 export type StellarCoreConfigurationInput = Readonly<{
   anchors: readonly AnchorRegistryEntry[];
   corridors: readonly CorridorRegistryEntry[];
   anchorCorridorMappings: readonly AnchorCorridorRegistryEntry[];
   reviewedLiveRateSources: readonly ReviewedLiveRateSource[];
+  sourceAuthorities: readonly SourceAuthorityRegistryEntry[];
 }>;
 
 export type ConfigurationAuditIssueCode =
+  | "AUTHORITY_CONFIGURATION_VERSION_INVALID"
+  | "AUTHORITY_DISPLAY_NAME_INVALID"
+  | "AUTHORITY_ID_MALFORMED"
+  | "CONTRADICTORY_AUTHORITY_ASSIGNMENT"
+  | "DUPLICATE_AUTHORITY_IDENTITY"
   | "DUPLICATE_CORRIDOR_IDENTITY"
   | "DUPLICATE_REVIEWED_SOURCE"
   | "NON_CANONICAL_CORRIDOR_SLUG"
   | "SOURCE_ANCHOR_NOT_FOUND"
+  | "SOURCE_AUTHORITY_MALFORMED"
+  | "SOURCE_AUTHORITY_MISSING"
+  | "SOURCE_AUTHORITY_NOT_FOUND"
   | "SOURCE_BUY_ASSET_CODE_MISMATCH"
   | "SOURCE_BUY_ASSET_FORM_INVALID"
   | "SOURCE_BUY_ASSET_INVALID"
@@ -38,15 +53,19 @@ export type ConfigurationAuditIssueCode =
 
 export type ConfigurationAuditIssue = Readonly<{
   code: ConfigurationAuditIssueCode;
-  registry: "corridors" | "reviewedLiveRateSources";
+  registry: "corridors" | "reviewedLiveRateSources" | "sourceAuthorities";
   entryIndex: number;
   anchorSlug?: string;
+  authorityId?: string;
   corridorSlug?: string;
   field?:
+    | "authorityId"
     | "buyAsset"
     | "buyDeliveryMethod"
+    | "configurationVersion"
     | "context"
     | "countryCode"
+    | "displayName"
     | "sellAmount"
     | "sellAsset"
     | "slug";
@@ -79,11 +98,16 @@ export function auditStellarCoreConfiguration(
       candidateIdentity(mapping.anchorSlug, corridorSlug))));
 
   auditCorridors(input.corridors, issues);
+  const reviewedAuthorities = auditSourceAuthorities(
+    input.sourceAuthorities,
+    issues,
+  );
   auditReviewedSources(
     input.reviewedLiveRateSources,
     anchors,
     corridors,
     memberships,
+    reviewedAuthorities,
     issues,
   );
 
@@ -135,14 +159,71 @@ function auditCorridors(
   });
 }
 
+/**
+ * Audits the reviewed source-authority registry itself: identifiers must be
+ * well-formed opaque ids, unique, and carry a reviewed display name and
+ * positive configuration version. Nothing here infers authority from anchor
+ * slugs, domains, hosts, or accounts.
+ */
+function auditSourceAuthorities(
+  authorities: readonly SourceAuthorityRegistryEntry[],
+  issues: ConfigurationAuditIssue[],
+): ReadonlySet<string> {
+  const reviewed = new Set<string>();
+
+  authorities.forEach((authority, entryIndex) => {
+    const validId = isValidSourceAuthorityId(authority.authorityId);
+    const base = {
+      registry: "sourceAuthorities" as const,
+      entryIndex,
+      ...(validId ? { authorityId: authority.authorityId } : {}),
+    };
+
+    if (!validId) {
+      issues.push(issue({ ...base, code: "AUTHORITY_ID_MALFORMED", field: "authorityId" }));
+      return;
+    }
+
+    if (reviewed.has(authority.authorityId)) {
+      issues.push(issue({
+        ...base,
+        code: "DUPLICATE_AUTHORITY_IDENTITY",
+        field: "authorityId",
+      }));
+      return;
+    }
+    reviewed.add(authority.authorityId);
+
+    if (!isValidAuthorityDisplayName(authority.displayName)) {
+      issues.push(issue({
+        ...base,
+        code: "AUTHORITY_DISPLAY_NAME_INVALID",
+        field: "displayName",
+      }));
+    }
+
+    if (!isValidAuthorityConfigurationVersion(authority.configurationVersion)) {
+      issues.push(issue({
+        ...base,
+        code: "AUTHORITY_CONFIGURATION_VERSION_INVALID",
+        field: "configurationVersion",
+      }));
+    }
+  });
+
+  return reviewed;
+}
+
 function auditReviewedSources(
   sources: readonly ReviewedLiveRateSource[],
   anchors: ReadonlySet<string>,
   corridors: ReadonlyMap<string, CorridorRegistryEntry>,
   memberships: ReadonlySet<string>,
+  reviewedAuthorities: ReadonlySet<string>,
   issues: ConfigurationAuditIssue[],
 ): void {
   const candidates = new Set<string>();
+  const authorityByAnchor = new Map<string, string>();
 
   sources.forEach((source, entryIndex) => {
     const safeAnchorSlug = safeSlug(source.anchorSlug);
@@ -171,6 +252,14 @@ function auditReviewedSources(
     } else {
       candidates.add(identity);
     }
+
+    auditSourceAuthority(
+      source,
+      reviewedAuthorities,
+      authorityByAnchor,
+      base,
+      issues,
+    );
 
     auditSellAsset(source, corridor, base, issues);
     auditBuyAsset(source, corridor, base, issues);
@@ -204,6 +293,37 @@ function auditReviewedSources(
       }));
     }
   });
+}
+
+function auditSourceAuthority(
+  source: ReviewedLiveRateSource,
+  reviewedAuthorities: ReadonlySet<string>,
+  authorityByAnchor: Map<string, string>,
+  base: Omit<ConfigurationAuditIssue, "code" | "field">,
+  issues: ConfigurationAuditIssue[],
+): void {
+  const authorityId = source.authorityId;
+  if (typeof authorityId !== "string" || authorityId.trim().length === 0) {
+    issues.push(issue({ ...base, code: "SOURCE_AUTHORITY_MISSING", field: "authorityId" }));
+    return;
+  }
+
+  if (!isValidSourceAuthorityId(authorityId)) {
+    issues.push(issue({ ...base, code: "SOURCE_AUTHORITY_MALFORMED", field: "authorityId" }));
+    return;
+  }
+
+  const safeBase = { ...base, authorityId };
+  if (!reviewedAuthorities.has(authorityId)) {
+    issues.push(issue({ ...safeBase, code: "SOURCE_AUTHORITY_NOT_FOUND", field: "authorityId" }));
+  }
+
+  const assigned = authorityByAnchor.get(source.anchorSlug);
+  if (assigned !== undefined && assigned !== authorityId) {
+    issues.push(issue({ ...safeBase, code: "CONTRADICTORY_AUTHORITY_ASSIGNMENT", field: "authorityId" }));
+    return;
+  }
+  authorityByAnchor.set(source.anchorSlug, authorityId);
 }
 
 function auditSellAsset(
@@ -339,6 +459,7 @@ function compareIssues(
   return compareText(left.registry, right.registry)
     || compareText(left.code, right.code)
     || compareText(left.anchorSlug ?? "", right.anchorSlug ?? "")
+    || compareText(left.authorityId ?? "", right.authorityId ?? "")
     || compareText(left.corridorSlug ?? "", right.corridorSlug ?? "")
     || compareText(left.field ?? "", right.field ?? "")
     || left.entryIndex - right.entryIndex;

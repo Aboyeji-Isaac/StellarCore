@@ -10,6 +10,8 @@ import type {
 const OBSERVATION: NormalizedRateObservation = Object.freeze({
   anchorSlug: "moneygram",
   corridorSlug: "usdc-us-usd-us",
+  authorityId: "auth-0001",
+  authorityConfigurationVersion: 1,
   rate: "1.01",
   sourceAmount: "100",
   destinationAmount: "101",
@@ -19,8 +21,21 @@ const OBSERVATION: NormalizedRateObservation = Object.freeze({
 
 test("snapshot persistence resolves stable slugs and requires an existing association", async () => {
   const state = repository();
-  await persistRateSnapshot(OBSERVATION, state.value);
+  const persisted = await persistRateSnapshot(OBSERVATION, state.value);
   assert.deepEqual(state.lookups, ["anchor:moneygram", "corridor:usdc-us-usd-us", "association:a:c"]);
+  assert.deepEqual(state.rows[0], {
+    anchorId: "a",
+    corridorId: "c",
+    authorityId: "auth-0001",
+    authorityConfigurationVersion: 1,
+    rate: "1.01",
+    sourceAmount: "100",
+    destinationAmount: "101",
+    fee: "1",
+    capturedAt: OBSERVATION.capturedAt,
+  });
+  assert.equal(persisted.ok && persisted.snapshot.authorityId, "auth-0001");
+  assert.equal(persisted.ok && persisted.snapshot.authorityConfigurationVersion, 1);
 
   state.associated = false;
   assert.deepEqual(await persistRateSnapshot(OBSERVATION, state.value), {

@@ -1,6 +1,9 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
-import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
+import {
+  getReviewedAuthorityDisplayName,
+  getReviewedCandidateConfiguration,
+} from "@/lib/rates/reviewedCandidateConfiguration";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
 import type {
   PublicRateObservation,
@@ -58,6 +61,11 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
         slug: observation.anchorSlug,
         name: observation.anchorName,
       }),
+      authority: Object.freeze({
+        id: observation.authorityId,
+        displayName: getReviewedAuthorityDisplayName(observation.authorityId),
+        configurationVersion: observation.authorityConfigurationVersion,
+      }),
       rate: observation.rate,
       sourceAmount: observation.sourceAmount,
       destinationAmount: observation.destinationAmount,
@@ -89,8 +97,11 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
     evaluatedAt: result.evaluatedAt,
     state: result.state,
     medianRate: result.median,
-    sourceCount: result.totalIndependentSources,
-    freshSourceCount: result.freshSourceCount,
+    sourceCount: result.totalObservationCount,
+    freshSourceCount: result.freshIndependentSourceCount,
+    totalObservationCount: result.totalObservationCount,
+    freshObservationCount: result.freshObservationCount,
+    independentAuthorityCount: result.independentAuthorityCount,
     reviewedCandidateConfiguration,
     medianRequirement: Object.freeze({
       minimumFreshIndependentSources: MIN_FRESH_SOURCES,

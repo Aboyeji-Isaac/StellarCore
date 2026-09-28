@@ -68,8 +68,10 @@ test("one source is a successful insufficient response with string decimals", as
       return readResult({
         state: "insufficient_fresh_sources",
         median: null,
-        totalIndependentSources: 1,
-        freshSourceCount: 1,
+        totalObservationCount: 1,
+        freshObservationCount: 1,
+        independentAuthorityCount: 1,
+        freshIndependentSourceCount: 1,
         observations: [observation(
           "zeam",
           "0.170000000000000001",
@@ -91,10 +93,14 @@ test("one source is a successful insufficient response with string decimals", as
   assert.equal(result.body.observations[0]?.anchor.name, "Persisted Zeam Name");
   assert.equal(result.body.observations[0]?.rate, "0.170000000000000001");
   assert.equal(typeof result.body.observations[0]?.rate, "string");
+  assert.equal(result.body.observations[0]?.authority.id, "auth-0001");
+  assert.equal(result.body.observations[0]?.authority.displayName, "Zeam");
+  assert.equal(result.body.observations[0]?.authority.configurationVersion, 1);
   assert.equal(result.body.evaluatedAt, NOW.toISOString());
   assert.deepEqual(result.body.reviewedCandidateConfiguration, {
     candidateCount: 1,
     uniqueAnchorCount: 1,
+    uniqueAuthorityCount: 1,
   });
   assert.deepEqual(result.body.medianRequirement, {
     minimumFreshIndependentSources: MIN_FRESH_SOURCES,
@@ -113,8 +119,10 @@ test("persisted corridor and anchor identity do not require static registry entr
         assetCodeTo: "FIAT",
         countryTo: "BB",
       }),
-      totalIndependentSources: 1,
-      freshSourceCount: 1,
+      totalObservationCount: 1,
+      freshObservationCount: 1,
+      independentAuthorityCount: 1,
+      freshIndependentSourceCount: 1,
       observations: [observation(
         "persisted-anchor",
         "1.250000000000000001",
@@ -143,6 +151,7 @@ test("persisted corridor and anchor identity do not require static registry entr
   assert.deepEqual(result.body.reviewedCandidateConfiguration, {
     candidateCount: 0,
     uniqueAnchorCount: 0,
+    uniqueAuthorityCount: 0,
   });
   assert.equal(result.body.sourceCount, 1);
   assert.equal(result.body.freshSourceCount, 1);
@@ -160,9 +169,13 @@ test("configured candidates without observations do not become persisted evidenc
   assert.deepEqual(result.body.reviewedCandidateConfiguration, {
     candidateCount: 1,
     uniqueAnchorCount: 1,
+    uniqueAuthorityCount: 1,
   });
   assert.equal(result.body.sourceCount, 0);
   assert.equal(result.body.freshSourceCount, 0);
+  assert.equal(result.body.totalObservationCount, 0);
+  assert.equal(result.body.freshObservationCount, 0);
+  assert.equal(result.body.independentAuthorityCount, 0);
   assert.deepEqual(result.body.observations, []);
   assert.deepEqual(result.body.corridor, {
     slug: CORRIDOR,
@@ -179,24 +192,56 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   const body = serializeRates(readResult({
     state: "healthy",
     median: "0.1000000000000000015",
-    totalIndependentSources: 4,
-    freshSourceCount: 2,
+    totalObservationCount: 4,
+    freshObservationCount: 3,
+    independentAuthorityCount: 2,
+    freshIndependentSourceCount: 2,
     observations: [
       observation("zeam", "0.100000000000000001", "fresh", 1, true),
-      observation("anchor-b", "0.100000000000000002", "fresh", 2, true),
-      observation("anchor-c", "9", "stale", 120_001, false, "stale"),
-      observation("anchor-d", "8", "future", -1, false, "future_timestamp"),
+      observation(
+        "anchor-b",
+        "0.100000000000000002",
+        "fresh",
+        2,
+        true,
+        undefined,
+        "Anchor B Persisted",
+        "auth-0002",
+        null,
+      ),
+      observation(
+        "anchor-c",
+        "9",
+        "fresh",
+        3,
+        false,
+        "correlated_same_authority",
+        "Anchor C Persisted",
+        "auth-0001",
+      ),
+      observation("anchor-d", "8", "stale", 120_001, false, "stale", "Anchor D Persisted", null, null),
     ],
   }));
 
   assert.equal(body.medianRate, "0.1000000000000000015");
-  assert.equal(body.observations[2]?.freshness.state, "stale");
-  assert.equal(body.observations[3]?.exclusionReason, "future_timestamp");
+  assert.equal(body.observations[3]?.freshness.state, "stale");
+  assert.equal(body.observations[2]?.exclusionReason, "correlated_same_authority");
+  assert.equal(body.observations[2]?.authority.id, "auth-0001");
+  assert.equal(body.observations[2]?.authority.displayName, "Zeam");
+  assert.equal(body.observations[1]?.authority.id, "auth-0002");
+  assert.equal(body.observations[1]?.authority.displayName, null);
+  assert.equal(body.observations[3]?.authority.id, null);
+  assert.equal(body.observations[3]?.authority.displayName, null);
+  assert.equal(body.observations[3]?.authority.configurationVersion, null);
   assert.equal(body.sourceCount, 4);
   assert.equal(body.freshSourceCount, 2);
+  assert.equal(body.totalObservationCount, 4);
+  assert.equal(body.freshObservationCount, 3);
+  assert.equal(body.independentAuthorityCount, 2);
   assert.deepEqual(body.reviewedCandidateConfiguration, {
     candidateCount: 1,
     uniqueAnchorCount: 1,
+    uniqueAuthorityCount: 1,
   });
   assert.deepEqual(body.medianRequirement, {
     minimumFreshIndependentSources: MIN_FRESH_SOURCES,
@@ -204,24 +249,30 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   assert.deepEqual(Object.keys(body.reviewedCandidateConfiguration).sort(), [
     "candidateCount",
     "uniqueAnchorCount",
+    "uniqueAuthorityCount",
   ]);
   assert.equal(JSON.stringify(body).includes("sellAsset"), false);
   assert.equal("snapshotId" in body.observations[0]!, false);
+  assert.equal("authorityConfigurationVersion" in body.observations[0]!, false);
   assert.equal(Object.isFrozen(body), true);
   assert.equal(Object.isFrozen(body.observations), true);
   assert.equal(Object.isFrozen(body.observations[0]), true);
+  assert.equal(Object.isFrozen(body.observations[0]?.authority), true);
   assert.equal(Object.isFrozen(body.reviewedCandidateConfiguration), true);
   assert.equal(Object.isFrozen(body.medianRequirement), true);
   assert.deepEqual(Object.keys(body).sort(), [
     "corridor",
     "evaluatedAt",
+    "freshObservationCount",
     "freshSourceCount",
+    "independentAuthorityCount",
     "medianRate",
     "medianRequirement",
     "observations",
     "reviewedCandidateConfiguration",
     "sourceCount",
     "state",
+    "totalObservationCount",
   ]);
   assert.deepEqual(Object.keys(body.corridor).sort(), [
     "destinationAsset",
@@ -232,6 +283,7 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   ]);
   assert.deepEqual(Object.keys(body.observations[0]!).sort(), [
     "anchor",
+    "authority",
     "capturedAt",
     "destinationAmount",
     "eligibleForMedian",
@@ -259,8 +311,10 @@ function readResult(
     evaluatedAt: NOW.toISOString(),
     state: "insufficient_fresh_sources",
     median: null,
-    totalIndependentSources: 0,
-    freshSourceCount: 0,
+    totalObservationCount: 0,
+    freshObservationCount: 0,
+    independentAuthorityCount: 0,
+    freshIndependentSourceCount: 0,
     observations: Object.freeze([]),
     exclusions: Object.freeze([]),
     ...overrides,
@@ -273,13 +327,23 @@ function observation(
   freshnessState: "fresh" | "stale" | "future" | "invalid",
   ageMs: number | null,
   included: boolean,
-  exclusionReason?: "stale" | "future_timestamp" | "invalid_timestamp" | "invalid_rate",
+  exclusionReason?:
+    | "stale"
+    | "future_timestamp"
+    | "invalid_timestamp"
+    | "invalid_rate"
+    | "unknown_authority"
+    | "correlated_same_authority",
   anchorName = `${anchorSlug} persisted`,
+  authorityId: string | null = "auth-0001",
+  authorityConfigurationVersion: number | null = authorityId === null ? null : 1,
 ) {
   return Object.freeze({
     snapshotId: `${anchorSlug}-snapshot`,
     anchorSlug,
     anchorName,
+    authorityId,
+    authorityConfigurationVersion,
     rate,
     sourceAmount: "100.000000000000000001",
     destinationAmount: "17.000000000000000001",

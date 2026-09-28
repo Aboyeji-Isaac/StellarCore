@@ -4,6 +4,7 @@ import {
   CORRIDOR_REGISTRY,
 } from "@/constants/corridors";
 import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
+import { SOURCE_AUTHORITY_REGISTRY } from "@/constants/sourceAuthorities";
 import {
   assertStellarCoreConfiguration,
   auditStellarCoreConfiguration,
@@ -16,6 +17,7 @@ const CURRENT_STELLARCORE_CONFIGURATION = Object.freeze({
   corridors: CORRIDOR_REGISTRY,
   anchorCorridorMappings: ANCHOR_CORRIDOR_REGISTRY,
   reviewedLiveRateSources: REVIEWED_LIVE_RATE_SOURCES,
+  sourceAuthorities: SOURCE_AUTHORITY_REGISTRY,
 }) satisfies StellarCoreConfigurationInput;
 
 export function auditCurrentStellarCoreConfiguration(): ConfigurationAuditResult {

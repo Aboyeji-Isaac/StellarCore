@@ -8,6 +8,8 @@ type PrismaLatestRateRow = Readonly<{
   id: string;
   anchorSlug: string;
   anchorName: string;
+  authorityId: string | null;
+  authorityConfigurationVersion: number | null;
   rate: Prisma.Decimal;
   sourceAmount: Prisma.Decimal;
   destinationAmount: Prisma.Decimal;
@@ -38,6 +40,8 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
         snapshot.id,
         anchor.slug AS "anchorSlug",
         anchor.name AS "anchorName",
+        snapshot.authority_id AS "authorityId",
+        snapshot.authority_configuration_version AS "authorityConfigurationVersion",
         snapshot.rate,
         snapshot.source_amount AS "sourceAmount",
         snapshot.destination_amount AS "destinationAmount",
@@ -53,13 +57,20 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
   },
 });
 
-function toRepositoryObservation(
+/**
+ * Maps one persisted row to a read-model observation. Absent authority
+ * provenance is preserved as `null` (authority unknown) rather than resolved
+ * from current reviewed configuration, which would fabricate history.
+ */
+export function toRepositoryObservation(
   row: PrismaLatestRateRow,
 ): LatestRateRepositoryObservation {
   return Object.freeze({
     id: row.id,
     anchorSlug: row.anchorSlug,
     anchorName: row.anchorName,
+    authorityId: row.authorityId ?? null,
+    authorityConfigurationVersion: row.authorityConfigurationVersion ?? null,
     rate: row.rate.toString(),
     sourceAmount: row.sourceAmount.toString(),
     destinationAmount: row.destinationAmount.toString(),

@@ -25,7 +25,7 @@ export function CorridorRateEvidence({ rates }: Props) {
       </div>
 
       <div className="mt-5 rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5">
-        <dl className="grid gap-5 sm:grid-cols-3">
+        <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median rate</dt>
             <dd className="mt-1 text-2xl text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
@@ -36,6 +36,19 @@ export function CorridorRateEvidence({ rates }: Props) {
             <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Fresh evidence</dt>
             <dd className="mt-1 text-[var(--white)]">
               {rates.freshSourceCount} of {rates.medianRequirement.minimumFreshIndependentSources} required
+            </dd>
+            <dd className="mt-1 text-xs text-[var(--muted)]">
+              Counts at most one observation per reviewed authority.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Independent authorities</dt>
+            <dd className="mt-1 text-[var(--white)]">
+              {rates.independentAuthorityCount} across {rates.totalObservationCount}{" "}
+              {rates.totalObservationCount === 1 ? "observation" : "observations"}
+            </dd>
+            <dd className="mt-1 text-xs text-[var(--muted)]">
+              {rates.freshObservationCount} fresh before correlated observations are collapsed.
             </dd>
           </div>
           <div>
@@ -57,11 +70,12 @@ export function CorridorRateEvidence({ rates }: Props) {
           </p>
         ) : (
           <div className="mt-5 overflow-x-auto border-t border-[var(--ghost)] pt-4">
-            <table className="w-full min-w-[680px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[780px] border-collapse text-left text-sm">
               <caption className="sr-only">Persisted rate observations</caption>
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-[var(--muted)]">
                   <th className="px-3 py-2 font-medium">Anchor</th>
+                  <th className="px-3 py-2 font-medium">Authority</th>
                   <th className="px-3 py-2 font-medium">Rate</th>
                   <th className="px-3 py-2 font-medium">Captured</th>
                   <th className="px-3 py-2 font-medium">Freshness</th>
@@ -72,6 +86,11 @@ export function CorridorRateEvidence({ rates }: Props) {
                 {rates.observations.map((observation) => (
                   <tr key={observation.anchor.slug} className="border-t border-[var(--ghost)] align-top">
                     <td className="px-3 py-3 text-[var(--white)]">{observation.anchor.name}</td>
+                    <td className="px-3 py-3 text-[var(--muted)]">
+                      {observation.authority.displayName
+                        ?? observation.authority.id
+                        ?? "Unknown authority"}
+                    </td>
                     <td className="px-3 py-3 text-[var(--white)]">{observation.rate}</td>
                     <td className="px-3 py-3 text-[var(--muted)]">
                       {new Date(observation.capturedAt).toLocaleString()}

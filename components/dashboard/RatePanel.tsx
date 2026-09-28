@@ -30,14 +30,16 @@ export async function RatePanel() {
     medianRate,
     sourceCount,
     freshSourceCount,
+    freshObservationCount,
+    independentAuthorityCount,
     reviewedCandidateConfiguration,
     medianRequirement,
     observations,
     evaluatedAt,
   } = result.body;
-  const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"} across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"}`;
-  const observationLabel = `${sourceCount} latest persisted anchor ${sourceCount === 1 ? "observation" : "observations"}`;
-  const medianEvidenceLabel = `${freshSourceCount} fresh independent ${freshSourceCount === 1 ? "observation" : "observations"} of ${medianRequirement.minimumFreshIndependentSources} required`;
+  const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"} across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"} and ${reviewedCandidateConfiguration.uniqueAuthorityCount} reviewed ${reviewedCandidateConfiguration.uniqueAuthorityCount === 1 ? "authority" : "authorities"}`;
+  const observationLabel = `${sourceCount} latest persisted anchor ${sourceCount === 1 ? "observation" : "observations"} across ${independentAuthorityCount} independent ${independentAuthorityCount === 1 ? "authority" : "authorities"}`;
+  const medianEvidenceLabel = `${freshSourceCount} fresh independent ${freshSourceCount === 1 ? "observation" : "observations"} of ${medianRequirement.minimumFreshIndependentSources} required (${freshObservationCount} fresh before correlation is collapsed)`;
 
   return (
     <div className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-6">
@@ -101,10 +103,11 @@ export async function RatePanel() {
         </div>
       ) : (
         <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[var(--ghost)] text-xs uppercase tracking-wide text-[var(--muted)]">
                 <th className="px-3 py-2 font-medium">Anchor</th>
+                <th className="px-3 py-2 font-medium">Authority</th>
                 <th className="px-3 py-2 font-medium">Rate</th>
                 <th className="px-3 py-2 font-medium">Fee</th>
                 <th className="px-3 py-2 font-medium">Captured</th>
@@ -119,6 +122,11 @@ export async function RatePanel() {
                   className="border-b border-[var(--ghost)] align-top last:border-0"
                 >
                   <td className="px-3 py-2 text-[var(--white)]">{observation.anchor.name}</td>
+                  <td className="px-3 py-2 text-[var(--muted)]">
+                    {observation.authority.displayName
+                      ?? observation.authority.id
+                      ?? "Unknown authority"}
+                  </td>
                   <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">

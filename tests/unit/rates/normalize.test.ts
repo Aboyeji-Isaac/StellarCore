@@ -18,6 +18,10 @@ const CORRIDOR = Object.freeze({
   countryTo: "US",
 }) satisfies CorridorRegistryEntry;
 const CAPTURED_AT = new Date("2026-08-27T12:00:00.000Z");
+const AUTHORITY = Object.freeze({
+  authorityId: "auth-0001",
+  authorityConfigurationVersion: 1,
+});
 
 function quote(overrides: Partial<Sep38IndicativePrice> = {}): Sep38IndicativePrice {
   return Object.freeze({
@@ -32,15 +36,32 @@ function quote(overrides: Partial<Sep38IndicativePrice> = {}): Sep38IndicativePr
   });
 }
 
-test("normalization explicitly maps SEP-38 fields without losing decimal precision", () => {
-  assert.deepEqual(normalizeIndicativeRate({
-    anchorSlug: "moneygram",
+function normalize(
+  overrides: Readonly<{
+    anchorSlug?: string;
+    authorityId?: string;
+    authorityConfigurationVersion?: number;
+    capturedAt?: Date | string;
+    quote?: Sep38IndicativePrice;
+  }> = {},
+) {
+  return normalizeIndicativeRate({
+    anchorSlug: overrides.anchorSlug ?? "moneygram",
     corridor: CORRIDOR,
-    quote: quote(),
-    capturedAt: CAPTURED_AT,
-  }), {
+    authorityId: overrides.authorityId ?? AUTHORITY.authorityId,
+    authorityConfigurationVersion:
+      overrides.authorityConfigurationVersion ?? AUTHORITY.authorityConfigurationVersion,
+    quote: overrides.quote ?? quote(),
+    capturedAt: overrides.capturedAt ?? CAPTURED_AT,
+  });
+}
+
+test("normalization explicitly maps SEP-38 fields without losing decimal precision", () => {
+  assert.deepEqual(normalize(), {
     anchorSlug: "moneygram",
     corridorSlug: CORRIDOR.slug,
+    authorityId: "auth-0001",
+    authorityConfigurationVersion: 1,
     rate: "1.000000000000000001",
     sourceAmount: "100.000000000000000001",
     destinationAmount: "100.0000000000000001",
@@ -51,15 +72,12 @@ test("normalization explicitly maps SEP-38 fields without losing decimal precisi
 
 test("normalization rejects corridor asset mismatch and unsupported fee denomination", () => {
   assert.throws(
-    () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote({ buyAsset: "iso4217:NGN" }), capturedAt: CAPTURED_AT }),
+    () => normalize({ quote: quote({ buyAsset: "iso4217:NGN" }) }),
     hasCode("ASSET_MISMATCH"),
   );
   assert.throws(
-    () => normalizeIndicativeRate({
-      anchorSlug: "moneygram",
-      corridor: CORRIDOR,
+    () => normalize({
       quote: quote({ fee: { total: "1", asset: USDC, details: [] } }),
-      capturedAt: CAPTURED_AT,
     }),
     hasCode("UNSUPPORTED_FEE_ASSET"),
   );
@@ -74,14 +92,21 @@ test("normalization enforces positivity, timestamps, and Decimal(38,18) bounds",
     [{ price: "123456789012345678901" }, "INVALID_RATE"],
     [{ price: "1.1234567890123456789" }, "INVALID_RATE"],
   ] as const) {
-    assert.throws(
-      () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote(overrides), capturedAt: CAPTURED_AT }),
-      hasCode(code),
-    );
+    assert.throws(() => normalize({ quote: quote(overrides) }), hasCode(code));
   }
+  assert.throws(() => normalize({ capturedAt: "invalid" }), hasCode("INVALID_TIMESTAMP"));
+});
+
+test("normalization requires a reviewed authority identity and version", () => {
+  assert.throws(() => normalize({ authorityId: "zeam" }), hasCode("INVALID_AUTHORITY"));
+  assert.throws(() => normalize({ authorityId: "" }), hasCode("INVALID_AUTHORITY"));
   assert.throws(
-    () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote(), capturedAt: "invalid" }),
-    hasCode("INVALID_TIMESTAMP"),
+    () => normalize({ authorityConfigurationVersion: 0 }),
+    hasCode("INVALID_AUTHORITY"),
+  );
+  assert.throws(
+    () => normalize({ authorityConfigurationVersion: 1.5 }),
+    hasCode("INVALID_AUTHORITY"),
   );
 });
 

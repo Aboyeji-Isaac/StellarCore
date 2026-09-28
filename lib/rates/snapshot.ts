@@ -21,6 +21,8 @@ export async function persistRateSnapshot(
     const row = await repository.createSnapshot({
       anchorId: anchor.id,
       corridorId: corridor.id,
+      authorityId: observation.authorityId,
+      authorityConfigurationVersion: observation.authorityConfigurationVersion,
       rate: observation.rate,
       sourceAmount: observation.sourceAmount,
       destinationAmount: observation.destinationAmount,
@@ -31,6 +33,8 @@ export async function persistRateSnapshot(
       id: row.id,
       anchorSlug: observation.anchorSlug,
       corridorSlug: observation.corridorSlug,
+      authorityId: observation.authorityId,
+      authorityConfigurationVersion: observation.authorityConfigurationVersion,
       rate: row.rate.toString(),
       sourceAmount: row.sourceAmount.toString(),
       destinationAmount: row.destinationAmount.toString(),
@@ -66,6 +70,8 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
       data: input,
       select: {
         id: true,
+        authorityId: true,
+        authorityConfigurationVersion: true,
         rate: true,
         sourceAmount: true,
         destinationAmount: true,

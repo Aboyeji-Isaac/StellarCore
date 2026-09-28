@@ -9,8 +9,45 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Reviewed source-authority identity for reviewed rate sources (#122). Each
+  reviewed source now carries a stable, opaque, versioned `authorityId` from
+  `constants/sourceAuthorities.ts`; the offline configuration audit rejects a
+  missing, malformed, duplicate, unreviewed, or contradictory authority
+  mapping.
+- Persisted authority provenance on `rate_snapshots`
+  (`authority_id`, `authority_configuration_version`) with a database CHECK
+  that keeps the pair all-or-nothing.
+- Authority-aware latest-rate selection: at most one deterministic observation
+  per reviewed authority per corridor, chosen by freshness, then capture order,
+  then stable snapshot id. Correlated observations stay visible as evidence with
+  the `correlated_same_authority` exclusion, and observations with no persisted
+  authority are excluded as `unknown_authority` rather than guessed.
+- Public rate evidence now reports `totalObservationCount`,
+  `freshObservationCount`, `independentAuthorityCount`, and per-observation
+  `authority` metadata, while `reviewedCandidateConfiguration` gains
+  `uniqueAuthorityCount`.
+
+### Changed
+
+- `MIN_FRESH_SOURCES=2` now counts independent reviewed authorities rather than
+  distinct anchor slugs. The single current Zeam authority still yields
+  `insufficient_fresh_sources` and a null median.
+
+### Migration
+
+- `rate_snapshots.authority_id` and `authority_configuration_version` are added
+  as nullable columns. Legacy rows are migrated as authority-unknown and are
+  never counted as independent from a reviewed authority; no historical mapping
+  is fabricated.
+
+### Removed
+
+- `LatestCorridorRate.totalIndependentSources` and `freshSourceCount` were
+  replaced by explicit `totalObservationCount`, `freshObservationCount`,
+  `independentAuthorityCount`, and `freshIndependentSourceCount` fields on the
+  internal read model.
 
 ## [Prior work] — 2026-09-25
 

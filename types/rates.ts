@@ -7,6 +7,9 @@ import type {
 export type NormalizedRateObservation = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
+  /** Reviewed source-authority identity captured with the observation. */
+  authorityId: string;
+  authorityConfigurationVersion: number;
   rate: string;
   sourceAmount: string;
   destinationAmount: string;
@@ -32,7 +35,9 @@ export type MedianExclusionReason =
   | "stale"
   | "future_timestamp"
   | "invalid_timestamp"
-  | "invalid_rate";
+  | "invalid_rate"
+  | "unknown_authority"
+  | "correlated_same_authority";
 
 export type MedianSourceResult = Readonly<{
   anchorSlug: string;
@@ -54,6 +59,8 @@ export type PersistedRateSnapshot = Readonly<{
   id: string;
   anchorSlug: string;
   corridorSlug: string;
+  authorityId: string;
+  authorityConfigurationVersion: number;
   rate: string;
   sourceAmount: string;
   destinationAmount: string;
@@ -78,6 +85,8 @@ export type RateSnapshotRepository = Readonly<{
   createSnapshot: (input: Readonly<{
     anchorId: string;
     corridorId: string;
+    authorityId: string;
+    authorityConfigurationVersion: number;
     rate: string;
     sourceAmount: string;
     destinationAmount: string;
@@ -85,6 +94,8 @@ export type RateSnapshotRepository = Readonly<{
     capturedAt: Date;
   }>) => Promise<Readonly<{
     id: string;
+    authorityId: string | null;
+    authorityConfigurationVersion: number | null;
     rate: { toString(): string } | string;
     sourceAmount: { toString(): string } | string;
     destinationAmount: { toString(): string } | string;
@@ -96,6 +107,9 @@ export type RateSnapshotRepository = Readonly<{
 export type RateCandidate = Readonly<{
   anchorSlug: string;
   corridor: CorridorRegistryEntry;
+  /** Reviewed authority this candidate was prepared under. */
+  authorityId: string;
+  authorityConfigurationVersion: number;
   request: Sep38IndicativePriceRequest;
 }>;
 

@@ -14,9 +14,9 @@ const CORRIDOR = "usdc-us-brl-br";
 
 test("API composition preserves latest-per-anchor selection and exact median offline", async () => {
   const history: readonly LatestRateRepositoryObservation[] = [
-    observation("zeam", "zeam-old", "9", 60_000),
-    observation("zeam", "zeam-latest", "0.100000000000000001", 1_000),
-    observation("anchor-b", "b-latest", "0.100000000000000002", 2_000),
+    observation("zeam", "zeam-old", "9", 60_000, "auth-0001"),
+    observation("zeam", "zeam-latest", "0.100000000000000001", 1_000, "auth-0001"),
+    observation("anchor-b", "b-latest", "0.100000000000000002", 2_000, "auth-0002"),
   ];
   const repository: LatestRateRepository = {
     findCorridorBySlug: async (slug) => ({
@@ -40,11 +40,15 @@ test("API composition preserves latest-per-anchor selection and exact median off
   if (result.status !== 200) return;
   assert.equal(result.body.sourceCount, 2);
   assert.equal(result.body.freshSourceCount, 2);
+  assert.equal(result.body.totalObservationCount, 2);
+  assert.equal(result.body.freshObservationCount, 2);
+  assert.equal(result.body.independentAuthorityCount, 2);
   assert.equal(result.body.state, "healthy");
   assert.equal(result.body.medianRate, "0.1000000000000000015");
   assert.deepEqual(result.body.reviewedCandidateConfiguration, {
     candidateCount: 1,
     uniqueAnchorCount: 1,
+    uniqueAuthorityCount: 1,
   });
   assert.equal(
     result.body.medianRequirement.minimumFreshIndependentSources,
@@ -72,7 +76,14 @@ test("persisted non-registry identity serializes independently from reviewed con
       countryTo: "BB",
     }),
     findLatestObservations: async () => [
-      observation("persisted-anchor", "persisted-snapshot", "1.25", 1_000, "Persisted Anchor"),
+      observation(
+        "persisted-anchor",
+        "persisted-snapshot",
+        "1.25",
+        1_000,
+        "auth-0042",
+        "Persisted Anchor",
+      ),
     ],
   };
 
@@ -97,11 +108,59 @@ test("persisted non-registry identity serializes independently from reviewed con
   });
   assert.equal(result.body.sourceCount, 1);
   assert.equal(result.body.freshSourceCount, 1);
+  assert.equal(result.body.independentAuthorityCount, 1);
   assert.equal(result.body.medianRate, null);
+  assert.deepEqual(result.body.observations[0]?.authority, {
+    id: "auth-0042",
+    displayName: null,
+    configurationVersion: 1,
+  });
   assert.deepEqual(result.body.reviewedCandidateConfiguration, {
     candidateCount: 0,
     uniqueAnchorCount: 0,
+    uniqueAuthorityCount: 0,
   });
+});
+
+test("commonly controlled anchors stay one independent source through the API", async () => {
+  const repository: LatestRateRepository = {
+    findCorridorBySlug: async () => ({
+      id: "shared-authority-corridor",
+      slug: CORRIDOR,
+      assetCodeFrom: "USDC",
+      countryFrom: "US",
+      assetCodeTo: "BRL",
+      countryTo: "BR",
+    }),
+    findLatestObservations: async () => [
+      observation("zeam", "zeam-snapshot", "0.17", 1_000, "auth-0001"),
+      observation("zeam-partner", "partner-snapshot", "0.18", 2_000, "auth-0001"),
+    ],
+  };
+
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: (slug, { evaluatedAt }) =>
+      readLatestCorridorRate(slug, { repository, evaluatedAt }),
+  });
+
+  assert.equal(result.status, 200);
+  if (result.status !== 200) return;
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
+  assert.equal(result.body.totalObservationCount, 2);
+  assert.equal(result.body.freshObservationCount, 2);
+  assert.equal(result.body.independentAuthorityCount, 1);
+  assert.equal(result.body.freshSourceCount, 1);
+  assert.equal(result.body.sourceCount, 2);
+  assert.equal(
+    result.body.observations.filter(({ eligibleForMedian }) => eligibleForMedian).length,
+    1,
+  );
+  assert.equal(
+    result.body.observations.find(({ eligibleForMedian }) => !eligibleForMedian)?.exclusionReason,
+    "correlated_same_authority",
+  );
 });
 
 function observation(
@@ -109,12 +168,15 @@ function observation(
   id: string,
   rate: string,
   ageMs: number,
+  authorityId: string | null = "auth-0001",
   anchorName = `${anchorSlug[0]!.toUpperCase()}${anchorSlug.slice(1).replace(/-([a-z])/g, (_, letter: string) => ` ${letter.toUpperCase()}`)} Persisted`,
 ): LatestRateRepositoryObservation {
   return Object.freeze({
     id,
     anchorSlug,
     anchorName,
+    authorityId,
+    authorityConfigurationVersion: authorityId === null ? null : 1,
     rate,
     sourceAmount: "1",
     destinationAmount: rate,

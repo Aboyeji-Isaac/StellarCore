@@ -13,8 +13,21 @@ import type {
   CorridorRegistryEntry,
 } from "@/types/corridor";
 import type { ReviewedLiveRateSource } from "@/types/liveRateSource";
+import type { SourceAuthorityRegistryEntry } from "@/types/sourceAuthority";
 
 const ISSUER = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
+const AUTHORITY_A = Object.freeze({
+  authorityId: "auth-0001",
+  displayName: "Anchor A Operator",
+  configurationVersion: 2,
+}) satisfies SourceAuthorityRegistryEntry;
+
+const AUTHORITY_B = Object.freeze({
+  authorityId: "auth-0002",
+  displayName: "Anchor B Operator",
+  configurationVersion: 1,
+}) satisfies SourceAuthorityRegistryEntry;
 
 const ANCHOR_A = Object.freeze({
   slug: "anchor-a",
@@ -51,6 +64,7 @@ function sourceFor(
   return Object.freeze({
     anchorSlug: ANCHOR_A.slug,
     corridorSlug: corridor.slug,
+    authorityId: AUTHORITY_A.authorityId,
     sellAsset: `stellar:${corridor.assetCodeFrom}:${ISSUER}`,
     buyAsset: `iso4217:${corridor.assetCodeTo}`,
     sellAmount: "100",
@@ -62,6 +76,7 @@ function sourceFor(
 
 function summaryFrom(overrides: {
   anchors?: readonly AnchorRegistryEntry[];
+  authorities?: readonly SourceAuthorityRegistryEntry[];
   corridors?: readonly CorridorRegistryEntry[];
   mappings?: readonly AnchorCorridorRegistryEntry[];
   sources?: readonly ReviewedLiveRateSource[];
@@ -72,6 +87,7 @@ function summaryFrom(overrides: {
     anchorCorridorMappings: overrides.mappings
       ?? [Object.freeze({ anchorSlug: ANCHOR_A.slug, corridorSlugs: [BRL_CORRIDOR.slug] })],
     reviewedLiveRateSources: overrides.sources ?? [sourceFor(BRL_CORRIDOR)],
+    sourceAuthorities: overrides.authorities ?? [AUTHORITY_A],
   });
 }
 
@@ -133,6 +149,20 @@ test("reviewed rate source counts are per anchor", () => {
   assert.equal(summary.anchors[0].reviewedRateSourceCount, 2);
 });
 
+test("corridor keeps one reviewed authority per reviewed source", () => {
+  const summary = summaryFrom({
+    authorities: [AUTHORITY_A, AUTHORITY_B],
+    sources: [sourceFor(BRL_CORRIDOR), sourceFor(BRL_CORRIDOR)],
+  });
+
+  assert.deepEqual(summary.sourceAuthorities.map((authority) => authority.authorityId), [
+    "auth-0001",
+    "auth-0002",
+  ]);
+  assert.deepEqual(summary.sourceAuthorities[0].anchorSlugs, ["anchor-a"]);
+  assert.deepEqual(summary.sourceAuthorities[1].anchorSlugs, []);
+});
+
 test("current registry summary matches the checked-in registries", () => {
   const summary = currentRegistrySummary();
 
@@ -147,6 +177,13 @@ test("current registry summary matches the checked-in registries", () => {
   );
   assert.equal(summary.reviewedRateSources.length, 1);
   assert.equal(summary.reviewedRateSources[0].anchorSlug, "zeam");
+  assert.equal(summary.reviewedRateSources[0].authorityId, "auth-0001");
+  assert.deepEqual(summary.sourceAuthorities, [{
+    authorityId: "auth-0001",
+    displayName: "Zeam",
+    configurationVersion: 1,
+    anchorSlugs: ["zeam"],
+  }]);
 });
 
 test("formatting renders anchors, corridors, and the SEP evidence note", () => {
@@ -159,7 +196,13 @@ test("formatting renders anchors, corridors, and the SEP evidence note", () => {
   assert.match(text, /route:\s+USDC \(US\) -> BRL \(BR\)/);
   assert.match(text, /reviewed rate source: yes/);
   assert.match(text, /SEP support is discovered|does not store SEP support/);
-  assert.match(text, /1 anchor\(s\), 1 corridor\(s\), 1 reviewed live rate source\(s\)\./);
+  assert.match(text, /Source authorities/);
+  assert.match(text, /Anchor A Operator \(auth-0001\)/);
+  assert.match(text, /configuration version: 2/);
+  assert.match(
+    text,
+    /1 anchor\(s\), 1 corridor\(s\), 1 source authority\(ies\), 1 reviewed live rate source\(s\)\./,
+  );
 });
 
 test("formatting shows (none) for anchors or corridors without mappings", () => {
@@ -179,6 +222,9 @@ test("summary and all nested entries are deeply frozen", () => {
   assert.equal(Object.isFrozen(summary.anchors[0].corridorSlugs), true);
   assert.equal(Object.isFrozen(summary.corridors), true);
   assert.equal(Object.isFrozen(summary.corridors[0]), true);
+  assert.equal(Object.isFrozen(summary.sourceAuthorities), true);
+  assert.equal(Object.isFrozen(summary.sourceAuthorities[0]), true);
+  assert.equal(Object.isFrozen(summary.sourceAuthorities[0].anchorSlugs), true);
   assert.equal(Object.isFrozen(summary.reviewedRateSources[0]), true);
   assert.throws(() => {
     (summary.anchors as unknown as unknown[]).push({});

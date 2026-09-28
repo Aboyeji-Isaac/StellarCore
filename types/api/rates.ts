@@ -5,6 +5,17 @@ export type PublicRateObservation = Readonly<{
     slug: string;
     name: string;
   }>;
+  /**
+   * Reviewed authority persisted with the observation. `id` is `null` when the
+   * authority is unknown, which is how legacy snapshots are migrated. The
+   * display name is resolved from currently reviewed configuration and is
+   * annotated as metadata only; it never changes authority identity.
+   */
+  authority: Readonly<{
+    id: string | null;
+    displayName: string | null;
+    configurationVersion: number | null;
+  }>;
   rate: string;
   sourceAmount: string;
   destinationAmount: string;
@@ -21,6 +32,7 @@ export type PublicRateObservation = Readonly<{
 export type PublicReviewedCandidateConfiguration = Readonly<{
   candidateCount: number;
   uniqueAnchorCount: number;
+  uniqueAuthorityCount: number;
 }>;
 
 export type PublicMedianRequirement = Readonly<{
@@ -38,8 +50,16 @@ export type PublicRatesResponse = Readonly<{
   evaluatedAt: string;
   state: "healthy" | "insufficient_fresh_sources";
   medianRate: string | null;
+  /** Latest persisted observations for the corridor. */
   sourceCount: number;
+  /** Fresh eligible independent sources after the authority collapse. */
   freshSourceCount: number;
+  /** Explicit restatement of `sourceCount` for evidence transparency. */
+  totalObservationCount: number;
+  /** Observations inside the freshness window before correlation collapse. */
+  freshObservationCount: number;
+  /** Distinct reviewed authorities behind those observations. */
+  independentAuthorityCount: number;
   reviewedCandidateConfiguration: PublicReviewedCandidateConfiguration;
   medianRequirement: PublicMedianRequirement;
   observations: readonly PublicRateObservation[];
