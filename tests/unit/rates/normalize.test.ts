@@ -85,6 +85,113 @@ test("normalization enforces positivity, timestamps, and Decimal(38,18) bounds",
   );
 });
 
+test("normalization rejects a negative rate, source amount, or destination amount — not just a negative fee", () => {
+  // `requireDecimal`'s `positive` flag only special-cases *zero* (see
+  // normalize.ts); a negative value is rejected earlier, unconditionally, by
+  // `parseDatabaseDecimal` in lib/rates/decimal.ts, whose `DECIMAL_PATTERN`
+  // has no `-` in it at all. That's why a negative *fee* (positive: false)
+  // is still rejected below, same as a negative rate/amount (positive: true).
+  for (const [overrides, code] of [
+    [{ price: "-1" }, "INVALID_RATE"],
+    [{ sellAmount: "-1" }, "INVALID_SOURCE_AMOUNT"],
+    [{ buyAmount: "-1" }, "INVALID_DESTINATION_AMOUNT"],
+    [{ fee: { total: "-0.01", asset: USD, details: [] } }, "INVALID_FEE"],
+  ] as const) {
+    assert.throws(
+      () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote(overrides), capturedAt: CAPTURED_AT }),
+      hasCode(code),
+    );
+  }
+});
+
+test("normalization accepts a zero fee — fee is the one amount not required to be positive", () => {
+  const result = normalizeIndicativeRate({
+    anchorSlug: "moneygram",
+    corridor: CORRIDOR,
+    quote: quote({ fee: { total: "0", asset: USD, details: [] } }),
+    capturedAt: CAPTURED_AT,
+  });
+  assert.equal(result.fee, "0");
+});
+
+test("normalization rejects malformed numeric strings rather than silently coercing them", () => {
+  const malformed = [
+    "abc",
+    "",
+    "1.2.3",
+    "1e10",
+    "1E10",
+    " 1",
+    "1 ",
+    "+1",
+    "01",
+    "00",
+    "1.",
+    ".1",
+    "1,000",
+    "Infinity",
+    "NaN",
+    "-0",
+    "0x1",
+  ];
+  for (const bad of malformed) {
+    assert.throws(
+      () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote({ price: bad }), capturedAt: CAPTURED_AT }),
+      hasCode("INVALID_RATE"),
+      `expected price ${JSON.stringify(bad)} to be rejected as INVALID_RATE`,
+    );
+  }
+});
+
+test("a malformed source amount, destination amount, or fee is rejected under its own error code", () => {
+  for (const [overrides, code] of [
+    [{ sellAmount: "abc" }, "INVALID_SOURCE_AMOUNT"],
+    [{ buyAmount: "1,000" }, "INVALID_DESTINATION_AMOUNT"],
+    [{ fee: { total: "abc", asset: USD, details: [] } }, "INVALID_FEE"],
+  ] as const) {
+    assert.throws(
+      () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote(overrides), capturedAt: CAPTURED_AT }),
+      hasCode(code),
+    );
+  }
+});
+
+test("normalization's Decimal(38,18) integer-digit bound is inclusive at 20 digits, exclusive at 21", () => {
+  const twentyDigits = "1".repeat(20);
+  const twentyOneDigits = "1".repeat(21);
+
+  const accepted = normalizeIndicativeRate({
+    anchorSlug: "moneygram",
+    corridor: CORRIDOR,
+    quote: quote({ price: twentyDigits }),
+    capturedAt: CAPTURED_AT,
+  });
+  assert.equal(accepted.rate, twentyDigits);
+
+  assert.throws(
+    () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote({ price: twentyOneDigits }), capturedAt: CAPTURED_AT }),
+    hasCode("INVALID_RATE"),
+  );
+});
+
+test("normalization accepts the full Decimal(38,18) precision at once (20 integer + 18 fraction digits)", () => {
+  const atFullPrecision = `${"1".repeat(20)}.${"9".repeat(18)}`;
+  const oneMoreFractionDigit = `${"1".repeat(20)}.${"9".repeat(19)}`;
+
+  const accepted = normalizeIndicativeRate({
+    anchorSlug: "moneygram",
+    corridor: CORRIDOR,
+    quote: quote({ price: atFullPrecision }),
+    capturedAt: CAPTURED_AT,
+  });
+  assert.equal(accepted.rate, atFullPrecision);
+
+  assert.throws(
+    () => normalizeIndicativeRate({ anchorSlug: "moneygram", corridor: CORRIDOR, quote: quote({ price: oneMoreFractionDigit }), capturedAt: CAPTURED_AT }),
+    hasCode("INVALID_RATE"),
+  );
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof RateNormalizationError && error.code === code;
 }
