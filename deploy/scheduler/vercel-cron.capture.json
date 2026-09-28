@@ -1,0 +1,11 @@
+{
+  "provider": "vercel-cron",
+  "route": "/api/internal/cron/capture-rates",
+  "cronSchedule": "* * * * *",
+  "requiredPlan": "pro",
+  "approvalRequired": true,
+  "vercelCron": {
+    "path": "/api/internal/cron/capture-rates",
+    "schedule": "* * * * *"
+  }
+}

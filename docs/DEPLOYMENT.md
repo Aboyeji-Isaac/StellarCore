@@ -6,15 +6,16 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 - Next.js 15 App Router deploys as Vercel Node.js functions.
 - Prisma Client uses the `PrismaPg` adapter with a server-only PostgreSQL connection supplied as `DATABASE_URL` for the running environment.
-- Public API routes are read-only. The refresh route is a Node.js-only, authenticated internal mutation boundary.
-- Vercel Cron invokes only `/api/internal/cron/refresh` on production deployments.
+- Public API routes are read-only. The internal capture, reputation-evaluation, and cadence-health routes are Node.js-only, authenticated boundaries.
+- Vercel Cron invokes `/api/internal/cron/refresh` daily. Reviewed rate capture is a separate, independently authenticated boundary whose schedule is gated on a maintainer-approved provider (see [scheduler-cadence.md](scheduler-cadence.md)).
 
 ## Environment
 
 | Name | Production | Secret | Purpose |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
-| `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
+| `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret the scheduler sends to the internal capture, reputation-evaluation, and cadence-health routes. |
+| `RATE_CAPTURE_SCHEDULER` | Optional; unset means disabled | No | Server-only selection of the approved capture scheduler (`vercel-cron` or `external`). Unset or unrecognised resolves to the explicit `disabled` state, in which the capture route refuses to run. |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
@@ -134,9 +135,52 @@ Running the bootstrap:
 
 ## Scheduler
 
-`vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
+StellarCore runs two independent, individually authenticated schedules. The
+full contract, provider approval process, and operator semantics are in
+[scheduler-cadence.md](scheduler-cadence.md).
 
-The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
+**Reputation evaluation.** `vercel.json` schedules `/api/internal/cron/refresh`
+once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel
+Hobby plan. It reads persisted evidence only and never captures a rate.
+
+**Reviewed rate capture.** `RATE_FRESHNESS_THRESHOLD_MS` is 120 seconds and is
+evaluated at read time, so capture must run on a sub-minute cadence to keep an
+observation fresh. That schedule targets `/api/internal/cron/capture-rates` and
+is **disabled by default**: set `RATE_CAPTURE_SCHEDULER` to `vercel-cron` or
+`external` only after a maintainer records the provider decision, and only
+after applying that provider's checked-in manifest.
+
+| Provider | Schedule | Deployment requirement |
+| --- | --- | --- |
+| `vercel-cron` | `* * * * *` (60 s) | Merge `deploy/scheduler/vercel-cron.capture.json`'s `vercelCron` fragment into `vercel.json` `crons[]`. Requires a plan that supports per-minute cron. |
+| `external` | 60 s | Register the external schedule with the approved provider. `vercel.json` must not schedule the capture route. |
+
+The maximum supported interval is derived, not declared: `120 s` freshness
+threshold minus a documented `30 s` execution safety margin leaves `90 s`.
+Both 60 s options fit.
+
+Repository validation rejects a cadence that cannot fit that budget:
+
+```bash
+npm run audit:scheduling
+```
+
+It is offline and deterministic and exits nonzero on an incompatible cadence,
+an unbounded cron expression, a manifest/deployment disagreement, two
+schedulers pointed at the capture route, or a missing daily reputation entry.
+Run it before deploying and in CI; the application also re-checks the deployed
+schedule at request time and refuses to capture rather than running at a
+cadence the freshness rule cannot support.
+
+Vercel sends `CRON_SECRET` as a Bearer authorization header; every internal
+route uses constant-time validation, accepts GET only, returns bounded
+`no-store` JSON, and does not accept query-string credentials. Vercel does not
+retry failed cron invocations automatically, which is why overlap, delayed
+dispatch, and missed runs are handled as ordinary states rather than errors:
+capture writes durable run lineage before doing work, holds a PostgreSQL
+advisory lock for the whole invocation, and stops at a bounded execution
+budget. A delayed or missed run leaves the persisted evidence stale rather than
+backfilling an observation.
 
 ## First production cycle
 
@@ -146,8 +190,12 @@ The locally verified run took about ten seconds. At the current reviewed scope o
    workflow (`.github/workflows/bootstrap-production-registry.yml`) and resolve
    any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
-4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
+4. Verify the checked-in schedule with `npm run audit:scheduling`, enable the approved capture provider, and let capture ingest indicative rates. The daily reputation job then evaluates the currently sparse persisted evidence. Neither job ingests transfer outcomes.
 5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
+6. Verify the operator signal `GET /api/internal/capture-health`. A `missed`
+   state means the capture process did not run; it is not anchor downtime. With
+   the single reviewed Zeam source, expect `insufficient_fresh_sources` and a
+   null median even when the cadence is healthy.
 
 ## Rollback
 

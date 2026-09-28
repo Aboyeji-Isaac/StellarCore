@@ -103,6 +103,7 @@ export function formatLiveRateRunSummary(
       corridorSlug: snapshot.corridorSlug,
       rate: snapshot.rate,
       capturedAt: snapshot.capturedAt.toISOString(),
+      captureRunId: snapshot.captureRunId,
     }))),
     failures: result.failures,
     skippedSources: result.skippedSources,

@@ -6,6 +6,7 @@ import type {
   RateEngineResult,
   RateEngineSkippedSource,
   RateQuoteProvider,
+  RateSnapshotLineage,
   RateSnapshotRepository,
 } from "@/types/rates";
 
@@ -15,6 +16,16 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
+    /**
+     * Capture-run lineage for every observation written by this run.
+     */
+    lineage?: RateSnapshotLineage;
+    /**
+     * Bounded-execution gate, checked before each reviewed source is attempted.
+     * Returning false stops attempting further sources without failing them and
+     * without touching observations already persisted.
+     */
+    shouldContinue?: () => boolean;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
@@ -34,6 +45,14 @@ export async function runRateEngine(
       continue;
     }
     seen.add(key);
+    if (dependencies.shouldContinue && !dependencies.shouldContinue()) {
+      skippedSources.push(Object.freeze({
+        anchorSlug: candidate.anchorSlug,
+        corridorSlug: candidate.corridor.slug,
+        reason: "EXECUTION_BUDGET_EXHAUSTED",
+      }));
+      continue;
+    }
     totalAttempted += 1;
 
     let quote;
@@ -61,7 +80,11 @@ export async function runRateEngine(
       continue;
     }
 
-    const persisted = await persistRateSnapshot(observation, dependencies.repository);
+    const persisted = await persistRateSnapshot(
+      observation,
+      dependencies.repository,
+      dependencies.lineage ?? {},
+    );
     if (!persisted.ok) {
       failures.push(engineFailure(candidate, "PERSISTENCE", persisted.code));
       continue;

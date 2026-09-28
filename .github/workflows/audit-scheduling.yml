@@ -1,0 +1,48 @@
+name: Audit scheduling contract
+
+on:
+  pull_request:
+    paths:
+      - "constants/**"
+      - "lib/scheduling/**"
+      - "lib/scheduled/**"
+      - "deploy/scheduler/**"
+      - "app/api/internal/**"
+      - "scripts/audit-scheduling.ts"
+      - "vercel.json"
+      - "docs/scheduler-cadence.md"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit capture cadence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # The checked-in default is the explicit disabled state: capture must not
+      # run until a maintainer approves a provider and applies its manifest.
+      - name: Audit the checked-in (disabled) capture schedule
+        run: npm run audit:scheduling
+
+      # An approved external scheduler is the provider-agnostic option and must
+      # validate against the checked-in manifest and deployment config.
+      - name: Audit the approved external capture schedule
+        run: npm run audit:scheduling
+        env:
+          RATE_CAPTURE_SCHEDULER: external

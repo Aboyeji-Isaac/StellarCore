@@ -1,0 +1,10 @@
+{
+  "provider": "external",
+  "route": "/api/internal/cron/capture-rates",
+  "intervalSeconds": 60,
+  "approvalRequired": true,
+  "dispatch": {
+    "method": "GET",
+    "authorization": "bearer_cron_secret"
+  }
+}

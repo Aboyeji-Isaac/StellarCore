@@ -130,6 +130,7 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
       destinationAmount: "17",
       fee: "1",
       capturedAt: new Date("2026-08-27T12:00:00.000Z"),
+      captureRunId: "run-1",
     })]),
     failures: Object.freeze([]),
     skippedSources: Object.freeze([]),
@@ -141,6 +142,7 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
     corridorSlug: "usdc-us-brl-br",
     rate: "0.17",
     capturedAt: "2026-08-27T12:00:00.000Z",
+    captureRunId: "run-1",
   }]);
   assert.equal(JSON.stringify(summary).includes("sourceAmount"), false);
   assert.equal(JSON.stringify(summary).includes("quoteServer"), false);

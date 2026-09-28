@@ -4,7 +4,7 @@
 
 ## Project Structure & Module Organization
 
-StellarCore is planned as a Next.js 15 App Router application. Keep routes and API handlers in `app/`; reusable UI in `components/`; browser-side behavior in `hooks/`; and domain logic in `lib/stellar`, `lib/rates`, and `lib/reputation`. Shared types belong in `types/`, constants in `constants/`, Prisma files in `prisma/`, maintenance jobs in `scripts/`, and static assets in `public/`. Place unit, integration, and Playwright tests under `tests/unit`, `tests/integration`, and `tests/e2e`. Until scaffolding is complete, treat `README.md` as the product and architecture specification.
+StellarCore is planned as a Next.js 15 App Router application. Keep routes and API handlers in `app/`; reusable UI in `components/`; browser-side behavior in `hooks/`; and domain logic in `lib/stellar`, `lib/rates`, and `lib/reputation`. Shared types belong in `types/`, constants in `constants/`, Prisma files in `prisma/`, maintenance jobs in `scripts/`, and static assets in `public/`. Place unit, integration, and Playwright tests under `tests/unit`, `tests/integration`, and `tests/e2e`. Approved scheduler manifests belong in `deploy/scheduler/`. Until scaffolding is complete, treat `README.md` as the product and architecture specification.
 
 ## Build, Test, and Development Commands
 
@@ -15,6 +15,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run build` creates a production build and catches route/type failures.
 - `npm test` runs Vitest unit and integration tests.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
+- `npm run audit:scheduling` checks the checked-in capture cadence against the versioned freshness contract offline; run it for scheduler, deployment-configuration, or cadence changes. It fails rather than accepting a cadence the freshness rule cannot support.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.

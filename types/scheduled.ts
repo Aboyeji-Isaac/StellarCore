@@ -1,26 +1,21 @@
-import type { RateEngineFailure } from "@/types/rates";
-
-export type ScheduledRateFailure = RateEngineFailure | Readonly<{
-  phase: "PREPARATION";
-  code: "LIVE_RATE_PREPARATION_FAILURE";
-}>;
-
 export type ScheduledReputationFailure = Readonly<{
   anchorSlug: string;
   code: string;
 }>;
 
-export type ScheduledRefreshResult = Readonly<{
+/**
+ * Result of the reputation-evaluation job.
+ *
+ * Reputation evaluation is its own authenticated boundary and its own,
+ * slower schedule. It reads persisted evidence only: it never captures a rate,
+ * never labels a last known value fresh, and never fabricates an observation or
+ * an outcome to cover a capture gap.
+ */
+export type ScheduledReputationEvaluationResult = Readonly<{
+  job: "reputation-evaluation";
   ok: boolean;
   startedAt: string;
   completedAt: string;
-  rates: Readonly<{
-    attempted: number;
-    succeeded: number;
-    failed: number;
-    skipped: number;
-    failures: readonly ScheduledRateFailure[];
-  }>;
   reputation: Readonly<{
     attempted: number;
     succeeded: number;

@@ -29,6 +29,8 @@ export type SafeLiveRateRunSummary = Readonly<{
     corridorSlug: string;
     rate: string;
     capturedAt: string;
+    /** Durable capture-run identity for the observation, when scheduled. */
+    captureRunId: string | null;
   }>[];
   failures: RateEngineResult["failures"];
   skippedSources: RateEngineResult["skippedSources"];

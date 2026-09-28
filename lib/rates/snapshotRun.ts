@@ -10,12 +10,25 @@ import type {
   PreparedLiveRateCandidate,
   SafeLiveRateRunSummary,
 } from "@/types/liveRateSource";
+import type { RateSnapshotLineage } from "@/types/rates";
+
+/**
+ * Per-invocation knobs for the shared boundary. The CLI leaves `lineage` unset
+ * because a manual snapshot is not a scheduled capture; the authenticated
+ * capture boundary always supplies one.
+ */
+export type SnapshotReviewedLiveRatesOptions = Readonly<{
+  lineage?: RateSnapshotLineage;
+  shouldContinue?: () => boolean;
+  now?: () => Date;
+}>;
 
 export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   assertConfiguration: () => void;
   buildCandidates: () => Promise<readonly PreparedLiveRateCandidate[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
+    options: SnapshotReviewedLiveRatesOptions,
   ) => Promise<SafeLiveRateRunSummary>;
 }>;
 
@@ -25,18 +38,22 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
  */
 export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
+  options: SnapshotReviewedLiveRatesOptions = {},
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-  return dependencies.executeCandidates(await dependencies.buildCandidates());
+  return dependencies.executeCandidates(await dependencies.buildCandidates(), options);
 }
 
 const DEFAULT_DEPENDENCIES = Object.freeze({
   assertConfiguration: assertCurrentStellarCoreConfiguration,
   buildCandidates: buildReviewedLiveRateCandidates,
-  executeCandidates: async (candidates) => formatLiveRateRunSummary(
+  executeCandidates: async (candidates, options) => formatLiveRateRunSummary(
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
+      ...(options.lineage ? { lineage: options.lineage } : {}),
+      ...(options.shouldContinue ? { shouldContinue: options.shouldContinue } : {}),
+      ...(options.now ? { now: options.now } : {}),
     }),
   ),
 }) satisfies SnapshotReviewedLiveRatesDependencies;

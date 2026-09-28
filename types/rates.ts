@@ -59,6 +59,20 @@ export type PersistedRateSnapshot = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
+  /**
+   * Durable capture-run identity for this observation. Null only for rows that
+   * predate scheduled capture; the capture boundary never writes null.
+   */
+  captureRunId: string | null;
+}>;
+
+/**
+ * Lineage attached to one persistence attempt. Kept separate from the
+ * normalized observation so quote normalization stays independent of how the
+ * observation was scheduled.
+ */
+export type RateSnapshotLineage = Readonly<{
+  captureRunId?: string | null;
 }>;
 
 export type RateSnapshotPersistenceCode =
@@ -83,6 +97,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
+    captureRunId: string | null;
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -90,6 +105,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
+    captureRunId: string | null;
   }>>;
 }>;
 
@@ -110,10 +126,19 @@ export type RateEngineFailure = Readonly<{
   code: string;
 }>;
 
+export type RateEngineSkippedSourceReason =
+  | "DUPLICATE_CANDIDATE"
+  /**
+   * The bounded execution budget ran out before this reviewed source was
+   * attempted. The source is reported as skipped rather than failed, and no
+   * snapshot is fabricated for it on the next run or this one.
+   */
+  | "EXECUTION_BUDGET_EXHAUSTED";
+
 export type RateEngineSkippedSource = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
-  reason: "DUPLICATE_CANDIDATE";
+  reason: RateEngineSkippedSourceReason;
 }>;
 
 export type RateEngineResult = Readonly<{

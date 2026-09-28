@@ -46,6 +46,19 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+/// Terminal state of one bounded capture invocation. `SKIPPED` records an
+/// invocation that did no work because another invocation held the exclusion
+/// lock or because the scheduler was disabled; it is a truthful outcome, never
+/// a substitute for an observation.
+enum RateCaptureRunOutcome {
+  SUCCEEDED @map("succeeded")
+  PARTIAL   @map("partial")
+  FAILED    @map("failed")
+  SKIPPED   @map("skipped")
+
+  @@map("rate_capture_run_outcome")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -64,6 +77,46 @@ model Anchor {
   reputationScore  ReputationScore?
 
   @@map("anchors")
+}
+
+/// One bounded, independently authenticated invocation of the reviewed
+/// rate-capture boundary.
+///
+/// It carries the durable run identity, the scheduling-contract version, the
+/// reviewed-configuration fingerprint, and the cadence that was planned for the
+/// invocation. Every `RateSnapshot` produced by the invocation points back
+/// here, so a persisted observation can always be traced to the run and
+/// configuration that produced it. It is deliberately not the
+/// reputation-evaluation ledger: reputation evaluation is a separate, slower
+/// schedule with no capture authority.
+///
+/// Overlap protection itself is a PostgreSQL advisory lock, not a row in this
+/// table; the row is the diagnostic and lineage record for a run that was
+/// allowed to proceed.
+model RateCaptureRun {
+  id                       String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId                    String                @unique @map("run_id")
+  contractVersion          Int                   @map("contract_version")
+  configurationFingerprint String                @map("configuration_fingerprint")
+  scheduler                String
+  /// Null for manual operator runs, which have no scheduler cadence.
+  scheduledIntervalMs      Int?                  @map("scheduled_interval_ms")
+  scheduledAt              DateTime              @map("scheduled_at") @db.Timestamptz(6)
+  startedAt                DateTime              @map("started_at") @db.Timestamptz(6)
+  completedAt              DateTime?             @map("completed_at") @db.Timestamptz(6)
+  outcome                  RateCaptureRunOutcome @default(SKIPPED)
+  attempted                Int                   @default(0)
+  succeeded                Int                   @default(0)
+  failed                   Int                   @default(0)
+  skipped                  Int                   @default(0)
+  /// Sanitized failure codes only; never raw errors, URLs, or payloads.
+  failureCodes             String[]              @default([]) @map("failure_codes")
+
+  snapshots RateSnapshot[]
+
+  @@index([startedAt(sort: Desc)], map: "rate_capture_runs_started_at_idx")
+  @@index([outcome, completedAt(sort: Desc)], map: "rate_capture_runs_outcome_completed_at_idx")
+  @@map("rate_capture_runs")
 }
 
 model Corridor {
@@ -104,9 +157,14 @@ model RateSnapshot {
   destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  /// Capture-run lineage. Nullable only for rows written before scheduled
+  /// capture existed; every observation written by the capture boundary sets
+  /// it. It never encodes an anchor's health.
+  captureRunId      String?  @map("capture_run_id") @db.Uuid
 
-  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor     Anchor          @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor   Corridor        @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  captureRun RateCaptureRun? @relation(fields: [captureRunId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
@@ -123,6 +181,7 @@ model RateSnapshot {
   /// per-anchor DISTINCT ON (corridor.slug) latest-quote scan: an index-only
   /// scan replaces the bitmap heap scan over the anchor's whole history.
   @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
+  @@index([captureRunId], map: "rate_snapshots_capture_run_id_idx")
   @@map("rate_snapshots")
 }
 

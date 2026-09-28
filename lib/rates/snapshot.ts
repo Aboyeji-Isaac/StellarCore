@@ -1,13 +1,20 @@
 import type {
   NormalizedRateObservation,
   PersistedRateSnapshot,
+  RateSnapshotLineage,
   RateSnapshotPersistenceResult,
   RateSnapshotRepository,
 } from "@/types/rates";
 
+/**
+ * Writes one reviewed observation. Capture-run lineage is a parameter rather
+ * than an inference: an observation is never persisted without the run that
+ * produced it, and a failed or skipped source never reaches this function.
+ */
 export async function persistRateSnapshot(
   observation: NormalizedRateObservation,
   repository: RateSnapshotRepository = PRISMA_RATE_SNAPSHOT_REPOSITORY,
+  lineage: RateSnapshotLineage = {},
 ): Promise<RateSnapshotPersistenceResult> {
   try {
     const anchor = await repository.findAnchorBySlug(observation.anchorSlug);
@@ -26,6 +33,7 @@ export async function persistRateSnapshot(
       destinationAmount: observation.destinationAmount,
       fee: observation.fee,
       capturedAt: observation.capturedAt,
+      captureRunId: lineage.captureRunId ?? null,
     });
     const snapshot: PersistedRateSnapshot = Object.freeze({
       id: row.id,
@@ -36,6 +44,7 @@ export async function persistRateSnapshot(
       destinationAmount: row.destinationAmount.toString(),
       fee: row.fee.toString(),
       capturedAt: new Date(row.capturedAt.getTime()),
+      captureRunId: row.captureRunId ?? null,
     });
     return Object.freeze({ ok: true, snapshot });
   } catch {
@@ -71,6 +80,7 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
         destinationAmount: true,
         fee: true,
         capturedAt: true,
+        captureRunId: true,
       },
     });
   },

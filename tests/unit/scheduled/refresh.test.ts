@@ -2,97 +2,61 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  runScheduledRefresh,
-  type ScheduledRefreshDependencies,
+  runReputationEvaluation,
+  type ReputationEvaluationDependencies,
 } from "@/lib/scheduled/refresh";
-import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 
 const STARTED_AT = new Date("2026-08-31T16:00:00.000Z");
 const COMPLETED_AT = new Date("2026-08-31T16:00:01.000Z");
 
-test("scheduled refresh ingests rates before evaluating reputation and returns a bounded success result", async () => {
-  const order: string[] = [];
-  const result = await runScheduledRefresh(dependencies({
-    snapshotRates: async () => {
-      order.push("rates");
-      return rateSummary();
-    },
+test("reputation evaluation reads persisted evidence at one run timestamp and returns a bounded result", async () => {
+  const observedAt: string[] = [];
+  const result = await runReputationEvaluation(dependencies({
     evaluateReputation: async ({ evaluatedAt }) => {
-      order.push(`reputation:${evaluatedAt.toISOString()}`);
+      observedAt.push(evaluatedAt.toISOString());
       return reputationSummary();
     },
   }));
 
-  assert.deepEqual(order, ["rates", "reputation:2026-08-31T16:00:00.000Z"]);
+  assert.deepEqual(observedAt, [STARTED_AT.toISOString()]);
   assert.deepEqual(result, {
+    job: "reputation-evaluation",
     ok: true,
     startedAt: STARTED_AT.toISOString(),
     completedAt: COMPLETED_AT.toISOString(),
-    rates: { attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] },
     reputation: { attempted: 3, succeeded: 3, failed: 0, failures: [] },
   });
   assert.equal(Object.isFrozen(result), true);
   assert.doesNotThrow(() => JSON.stringify(result));
 });
 
-test("a rate source partial failure is reported while reputation still evaluates persisted evidence", async () => {
-  let evaluated = false;
-  const result = await runScheduledRefresh(dependencies({
-    snapshotRates: async () => rateSummary({
-      succeeded: 0,
+test("the reputation job never captures a rate and holds no capture authority", async () => {
+  // The dependency surface is the whole contract: only an evidence evaluation
+  // callback and a clock. There is no capture, quote, or persistence seam.
+  const keys = Object.keys(dependencies({})).sort();
+  assert.deepEqual(keys, ["evaluateReputation", "now"]);
+});
+
+test("partial anchor evidence failures are reported without fabricating a score", async () => {
+  const result = await runReputationEvaluation(dependencies({
+    evaluateReputation: async () => reputationSummary({
+      attempted: 3,
+      succeeded: 2,
       failed: 1,
-      snapshotsPersisted: 0,
-      failures: [{ anchorSlug: "zeam", corridorSlug: "usdc-us-brl-br", phase: "QUOTE", code: "QUOTE_FAILURE" }],
+      failures: [{ anchorSlug: "moneygram", code: "EVIDENCE_READ_FAILURE" }],
     }),
-    evaluateReputation: async () => {
-      evaluated = true;
-      return reputationSummary();
-    },
   }));
 
-  assert.equal(evaluated, true);
   assert.equal(result.ok, false);
-  assert.deepEqual(result.rates.failures, [{
-    anchorSlug: "zeam",
-    corridorSlug: "usdc-us-brl-br",
-    phase: "QUOTE",
-    code: "QUOTE_FAILURE",
-  }]);
+  assert.equal(result.reputation.succeeded, 2);
+  assert.deepEqual(result.reputation.failures, [
+    { anchorSlug: "moneygram", code: "EVIDENCE_READ_FAILURE" },
+  ]);
 });
 
-test("a rate preparation failure is safely serialized and does not prevent reputation evaluation", async () => {
-  let evaluated = false;
-  const result = await runScheduledRefresh(dependencies({
-    snapshotRates: async () => {
-      throw new Error("DATABASE_URL=should-not-leak");
-    },
-    evaluateReputation: async () => {
-      evaluated = true;
-      return reputationSummary({
-        attempted: 3,
-        succeeded: 2,
-        failed: 1,
-        failures: [{ anchorSlug: "moneygram", code: "EVIDENCE_READ_FAILURE" }],
-      });
-    },
-  }));
-
-  assert.equal(evaluated, true);
-  assert.equal(result.ok, false);
-  assert.deepEqual(result.rates, {
-    attempted: 0,
-    succeeded: 0,
-    failed: 1,
-    skipped: 0,
-    failures: [{ phase: "PREPARATION", code: "LIVE_RATE_PREPARATION_FAILURE" }],
-  });
-  assert.equal(JSON.stringify(result).includes("should-not-leak"), false);
-});
-
-test("a fatal reputation orchestration failure reaches the HTTP boundary rather than being misreported", async () => {
+test("a fatal evaluation failure reaches the HTTP boundary rather than being misreported as a score", async () => {
   await assert.rejects(
-    runScheduledRefresh(dependencies({
-      snapshotRates: async () => rateSummary(),
+    runReputationEvaluation(dependencies({
       evaluateReputation: async () => {
         throw new Error("database unavailable");
       },
@@ -100,47 +64,27 @@ test("a fatal reputation orchestration failure reaches the HTTP boundary rather 
   );
 });
 
-test("sequential duplicate invocations remain independent without duplicate work inside either run", async () => {
-  let rateRuns = 0;
-  let reputationRuns = 0;
+test("sequential reputation invocations remain independent", async () => {
+  let runs = 0;
   const deps = dependencies({
-    snapshotRates: async () => {
-      rateRuns += 1;
-      return rateSummary();
-    },
     evaluateReputation: async () => {
-      reputationRuns += 1;
+      runs += 1;
       return reputationSummary();
     },
   });
 
-  await runScheduledRefresh(deps);
-  await runScheduledRefresh(deps);
-  assert.equal(rateRuns, 2);
-  assert.equal(reputationRuns, 2);
+  await runReputationEvaluation(deps);
+  await runReputationEvaluation(deps);
+  assert.equal(runs, 2);
 });
 
-function dependencies(overrides: Partial<ScheduledRefreshDependencies>): ScheduledRefreshDependencies {
+function dependencies(
+  overrides: Partial<ReputationEvaluationDependencies>,
+): ReputationEvaluationDependencies {
   let clockCalls = 0;
   return Object.freeze({
-    snapshotRates: async () => rateSummary(),
     evaluateReputation: async () => reputationSummary(),
     now: () => (clockCalls++ % 2 === 0 ? STARTED_AT : COMPLETED_AT),
-    ...overrides,
-  });
-}
-
-function rateSummary(overrides: Partial<SafeLiveRateRunSummary> = {}): SafeLiveRateRunSummary {
-  return Object.freeze({
-    totalCandidates: 1,
-    totalAttempted: 1,
-    succeeded: 1,
-    failed: 0,
-    skipped: 0,
-    snapshotsPersisted: 1,
-    snapshots: [],
-    failures: [],
-    skippedSources: [],
     ...overrides,
   });
 }
@@ -152,5 +96,5 @@ function reputationSummary(overrides: Record<string, unknown> = {}) {
     failed: 0,
     failures: [],
     ...overrides,
-  }) as Awaited<ReturnType<ScheduledRefreshDependencies["evaluateReputation"]>>;
+  }) as Awaited<ReturnType<ReputationEvaluationDependencies["evaluateReputation"]>>;
 }

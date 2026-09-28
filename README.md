@@ -54,7 +54,8 @@ graph TB
 
     subgraph BACKEND["Backend Services"]
         BOOTSTRAP["Manual registry bootstrap\nSEP-1 discovery · registry upsert"]
-        REFRESH["Authenticated daily refresh\nreviewed SEP-38 indicative rates"]
+        CAPTURE["Authenticated rate capture\nbounded · overlap-safe · lineage-linked"]
+        REFRESH["Authenticated daily reputation\npersisted evidence only"]
         REPENG["Reputation engine\npersisted evidence only"]
         MEDIAN["Median pricing\nfresh independent sources only"]
         ROUTES["Next.js Route Handlers\n/api/anchors · /api/rates · /api/reputation"]
@@ -87,7 +88,8 @@ graph TB
     ROUTES -->|Prisma queries| DB
     PUBAPI -->|query results| DB
     BOOTSTRAP -->|fetch TOML| TOML
-    REFRESH -->|fetch indicative prices| SEP38
+    CAPTURE -->|fetch indicative prices| SEP38
+    REFRESH -->|read persisted rates| RATES
     REPENG -->|read outcomes| OUTCOMES
     REPENG -->|write scores| SCORES
     MEDIAN -->|read snapshots| RATES
@@ -135,6 +137,37 @@ anchor's SEP-38 `/prices` endpoint, then reads an indicative price from
 `/price`. It does not call the firm `/quote` lifecycle.
 
 Rates are stored as timestamped snapshots. A rate is considered **stale** when it is older than `RATE_FRESHNESS_THRESHOLD_MS` (default: 120 seconds).
+
+#### Capture cadence
+
+Because freshness is evaluated at read time, capture runs on its own
+high-frequency authenticated boundary (`GET /api/internal/cron/capture-rates`),
+independently of the slower reputation-evaluation job
+(`GET /api/internal/cron/refresh`, daily). A versioned scheduling contract in
+`constants/scheduling.ts` proves that the configured interval plus a documented
+execution-time safety margin fits inside `RATE_FRESHNESS_THRESHOLD_MS`:
+
+```
+  90 s maximum interval  +  30 s documented margin  =  120 s freshness threshold
+```
+
+The maximum interval is derived from the shared threshold, not restated as a
+literal. Repository validation rejects a cadence that cannot fit it:
+
+```bash
+npm run audit:scheduling
+```
+
+Capture is **disabled by default** and is never enabled without a recorded
+maintainer approval of the scheduler provider. Use that command after applying
+`deploy/scheduler/*.capture.json`. Every invocation is bounded, holds a
+PostgreSQL advisory lock for the whole run, writes durable run lineage before
+touching a source, and stops at its execution budget — a delayed or missed run
+leaves the persisted evidence stale rather than backfilling an observation. See
+[docs/scheduler-cadence.md](docs/scheduler-cadence.md).
+
+More frequent capture does not create independence: capture cadence is not a
+substitute for reviewed sources, and the median below stays null with one.
 
 #### Staleness-Aware Median
 
@@ -186,12 +219,14 @@ percentiles; they are explanatory metrics, not hidden score inputs.
 
 The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
 calculation upserts the current row and advances `computedAt`; it does not append
-historical scores. The engine is run by the authenticated scheduled-refresh
-boundary and remains independent of the public, read-only reputation API.
+historical scores. The engine is run by the authenticated daily reputation-evaluation
+boundary, which is separate from rate capture and remains independent of the
+public, read-only reputation API.
 
 `TransferOutcome` is implemented data modeling, not a production evidence feed. StellarCore has no trusted production outcome-ingestion source today and does not infer outcomes from Horizon or a successful on-chain payment. SEP-6 and SEP-24 history is customer-scoped where authentication applies; SEP-31 lifecycle access is scoped to authorized participants and partner anchors. Until a legitimate, authorized source with provenance exists, sparse reputation is the intended result and established scores are not supported by sufficient evidence.
 
-**Planned/Future:** a transfer-outcome ingestion boundary may be considered only after a trusted source, authorization model, privacy review, and durable provenance design are available. It will not be a promised public write API.
+**Planned/Future:** enabling the maintainer-approved high-frequency capture
+provider is contingent on that approval; a transfer-outcome ingestion boundary may be considered only after a trusted source, authorization model, privacy review, and durable provenance design are available. It will not be a promised public write API.
 
 ### 4. The Public API
 
@@ -221,23 +256,45 @@ The manual, protected registry-bootstrap workflow runs `npm run bootstrap:regist
   4. Exit nonzero if discovery or persistence fails
 ```
 
-### Rate Snapshot Flow
+### Rate Capture Flow
 
 ```
-An external scheduler invokes GET /api/internal/cron/refresh:
+The approved scheduler invokes GET /api/internal/cron/capture-rates:
 
   1. Require exactly: Authorization: Bearer <CRON_SECRET>
        → Missing, malformed, or invalid credentials return safe 401 JSON.
-  2. Build only reviewed SEP-38 indicative-price candidates.
+  2. Refuse to run unless an approved scheduler is selected and the checked-in
+     cadence satisfies the scheduling contract.
+       → Nothing is attempted at a cadence the freshness rule cannot support.
+  3. Take the PostgreSQL advisory lock for the whole invocation.
+       → A concurrent invocation returns a truthful 200 already_running
+         summary, does no source work, and persists nothing.
+  4. Write durable capture-run lineage: run id, contract version, reviewed
+     configuration fingerprint, scheduler, planned interval.
+       → If lineage cannot be written, no observation is persisted.
+  5. Build only reviewed SEP-38 indicative-price candidates.
        → No firm quote endpoint is called.
-  3. Fetch each prepared public indicative price and append an individual
-     RateSnapshot for each successful observation.
-  4. Evaluate every persisted anchor at the one run start timestamp.
-       → Each calculation upserts its single current ReputationScore.
-  5. Return a bounded, no-store JSON run summary.
+  6. Fetch each prepared public indicative price and append an individual
+     RateSnapshot for each successful observation, linked to the run id.
+       → A failed source writes no snapshot and does not disturb successes.
+       → The execution budget stops remaining sources as skipped, not failed.
+  7. Release the lock and return a bounded, no-store JSON run summary.
+```
 
-Rate preparation failures are returned as a safe rate failure while reputation
-evaluation still runs. A fatal reputation-run failure returns a safe HTTP 500;
+### Reputation Evaluation Flow
+
+```
+Vercel Cron invokes GET /api/internal/cron/refresh once daily:
+
+  1. Require exactly: Authorization: Bearer <CRON_SECRET>
+  2. Evaluate every persisted anchor at the one run start timestamp, reading
+     only evidence already persisted.
+       → Each calculation upserts its single current ReputationScore.
+  3. Return a bounded, no-store JSON run summary.
+
+This job never captures a rate, never calls SEP-38, and never creates an
+observation, outcome, or score to cover a capture gap. A fatal evaluation
+failure returns a safe HTTP 500.
 ```
 
 ### Reputation Computation Flow
@@ -285,7 +342,9 @@ stellarcore/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
 │   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
 │   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
-│   └── scheduled/          # Internal cron authorization and orchestration
+│   ├── scheduling/         # Versioned capture-cadence contract and deployment audit
+│   └── scheduled/          # Internal cron authorization, run lineage, and orchestration
+├── deploy/scheduler/       # Approved capture-scheduler manifests (gated on maintainer approval)
 ├── prisma/                 # Schema and committed migration history
 ├── scripts/                # Bootstrap, snapshot, and verification utilities
 ├── tests/                  # Unit and controlled integration coverage
@@ -307,7 +366,7 @@ stellarcore/
 | Blockchain | @stellar/stellar-sdk | SEP-1 parsing, SEP-10 authentication boundary, SEP-38 indicative prices |
 | Testing | Node test runner via `tsx` | Unit and controlled integration coverage |
 | Deployment | Vercel | Zero-config Next.js hosting with cron support |
-| Production operations | GitHub Actions + Vercel | Manual migrations/bootstrap and authenticated daily refresh |
+| Production operations | GitHub Actions + Vercel | Manual migrations/bootstrap, authenticated rate capture, and daily reputation evaluation |
 
 ---
 
@@ -319,8 +378,15 @@ stellarcore/
 # Server-only application/runtime PostgreSQL connection for this environment.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# Required in production when Vercel Cron is enabled; never expose to the client.
+# Required in production when cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional server-only selection of the approved high-frequency rate-capture
+# scheduler: "vercel-cron" or "external". Unset (or anything else) resolves to
+# the explicit "disabled" state, in which /api/internal/cron/capture-rates
+# refuses to run. Capture is never enabled without a recorded maintainer
+# approval; see docs/scheduler-cadence.md.
+# RATE_CAPTURE_SCHEDULER="external"
 ```
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
@@ -351,7 +417,8 @@ npm install
 
 # 3. Set up environment variables
 cp .env.example .env.local
-# Fill in DATABASE_URL. CRON_SECRET is needed only when exercising the refresh route.
+# Fill in DATABASE_URL. CRON_SECRET is needed only when exercising an internal
+# route; RATE_CAPTURE_SCHEDULER is needed only when exercising capture.
 
 # 4. Run database migrations
 npx prisma migrate dev
@@ -371,7 +438,10 @@ Open [http://localhost:3000](http://localhost:3000).
 # Bootstrap the reviewed anchor and corridor registry
 npm run bootstrap:registry
 
-# Manually verify reviewed live SEP-38 sources and append snapshots
+# Manually verify reviewed live SEP-38 sources and append snapshots.
+# This is an opt-in operator tool, not the scheduled capture boundary: it takes
+# no advisory lock, records no capture run, and cannot make the cadence-health
+# signal look healthier than the approved schedule really is.
 npm run snapshot:rates
 
 # Read the latest persisted rate per independent anchor without writing
@@ -392,6 +462,9 @@ npm test
 
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
+
+# Pure offline audit of the capture cadence against the freshness contract
+npm run audit:scheduling
 
 # Human-readable inspection of the checked-in anchor/corridor registry
 npm run registry:print
@@ -417,6 +490,16 @@ internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
 independent defense-in-depth boundaries.
+
+`audit:scheduling` is a pure, deterministic check of the checked-in capture
+schedule against the versioned freshness contract. It reads `vercel.json`, the
+manifests in `deploy/scheduler/`, and the server-only `RATE_CAPTURE_SCHEDULER`
+selection — no database, network, or environment secrets. It exits nonzero when
+the configured capture interval plus the documented execution safety margin
+does not fit inside `RATE_FRESHNESS_THRESHOLD_MS`, when a cron expression cannot
+be bounded, when the manifests and deployment config disagree, or when the two
+schedulers overlap. Passing means the schedule is internally coherent; it is
+not evidence that any anchor is reachable, quoting, or observed.
 
 `registry:print` is a read-only companion to `audit:config`. It prints the
 checked-in anchors with their home domains, the corridors mapped to each anchor,
@@ -448,8 +531,9 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 - Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
 - Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- The Hobby-compatible Vercel Cron calls the authenticated refresh route daily at `0 0 * * *`.
-- Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
+- The Hobby-compatible Vercel Cron calls the authenticated reputation-evaluation route daily at `0 0 * * *`.
+- Reviewed rate capture is a separate authenticated boundary. It is **disabled by default** and is enabled only after a maintainer records a provider decision and the provider's checked-in manifest is applied; `npm run audit:scheduling` must exit 0. See [docs/scheduler-cadence.md](docs/scheduler-cadence.md).
+- Keep production database, cron, and scheduler secrets out of preview deployments until isolated preview infrastructure exists.
 
 ---
 
@@ -792,6 +876,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
+- [x] Independent, versioned rate-capture schedule with overlap protection, run lineage, and a cadence-health operator signal
 
 ### Planned/Future
 
