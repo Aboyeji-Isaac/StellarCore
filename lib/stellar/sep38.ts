@@ -1,4 +1,5 @@
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { classifySep38Operation, observeSepRequest } from "@/lib/telemetry/sep";
 import type {
   ParsedSep38AssetIdentifier,
   Sep38Asset,
@@ -533,6 +534,19 @@ async function requestJson(
   init: RequestInit,
   options: Sep38ClientOptions,
   expectedStatus = 200,
+): Promise<unknown> {
+  return observeSepRequest(
+    "38",
+    classifySep38Operation(url),
+    () => requestJsonUnobserved(url, init, options, expectedStatus),
+  );
+}
+
+async function requestJsonUnobserved(
+  url: string,
+  init: RequestInit,
+  options: Sep38ClientOptions,
+  expectedStatus: number,
 ): Promise<unknown> {
   const endpoint = safeEndpoint(url);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;

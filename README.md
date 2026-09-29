@@ -440,6 +440,16 @@ prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
 
+## Observability
+
+Optional, vendor-neutral OpenTelemetry traces and metrics cover public API
+reads, the scheduled refresh, PostgreSQL work, and outbound SEP requests. They
+are off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set (server-only). Metric and
+span semantics, cardinality budgets, redaction rules, sampling, failure
+behavior, and the baseline procedure are in
+[docs/observability.md](docs/observability.md). Telemetry describes StellarCore's
+execution and is not anchor, rate, or transfer evidence.
+
 ## Production deployment
 
 StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma ORM. The full staged deployment procedure is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); it does not provision or deploy infrastructure.

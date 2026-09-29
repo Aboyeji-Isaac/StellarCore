@@ -1,6 +1,7 @@
 import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { observeSepRequest } from "@/lib/telemetry/sep";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -145,6 +146,13 @@ export function parseSep1Toml(
 export async function fetchSep1Toml(
   homeDomain: string,
   options: FetchSep1Options = {},
+): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
+  return observeSepRequest("1", "toml", () => requestSep1Toml(homeDomain, options));
+}
+
+async function requestSep1Toml(
+  homeDomain: string,
+  options: FetchSep1Options,
 ): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
   const tomlUrl = buildSep1TomlUrl(homeDomain);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;

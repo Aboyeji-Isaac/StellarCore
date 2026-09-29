@@ -3,6 +3,7 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
+import { observeRefreshPhase, observeRefreshRun } from "@/lib/telemetry/pipeline";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/scheduled";
 
@@ -21,16 +22,26 @@ export type ScheduledRefreshDependencies = Readonly<{
 export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
+  return observeRefreshRun(() => executeScheduledRefresh(dependencies));
+}
+
+async function executeScheduledRefresh(
+  dependencies: ScheduledRefreshDependencies,
+): Promise<ScheduledRefreshResult> {
   const startedAt = dependencies.now();
-  let rates: ScheduledRefreshResult["rates"];
+  const rates = await observeRefreshPhase("rates", async () => {
+    try {
+      return toScheduledRates(await dependencies.snapshotRates());
+    } catch {
+      return preparationFailure();
+    }
+  }, (summary) => summary);
 
-  try {
-    rates = toScheduledRates(await dependencies.snapshotRates());
-  } catch {
-    rates = preparationFailure();
-  }
-
-  const reputation = await dependencies.evaluateReputation({ evaluatedAt: startedAt });
+  const reputation = await observeRefreshPhase(
+    "reputation",
+    () => dependencies.evaluateReputation({ evaluatedAt: startedAt }),
+    (summary) => summary,
+  );
   const completedAt = dependencies.now();
 
   return Object.freeze({

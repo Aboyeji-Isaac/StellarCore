@@ -9,8 +9,15 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Optional, vendor-neutral OpenTelemetry observability (#123): traces and
+  low-cardinality metrics for API routes, Prisma operations and connection-pool
+  pressure, scheduled refresh runs and phases, SEP-1/SEP-38 requests, and
+  persisted rate freshness. Export is OTLP/HTTP, configured only by server-side
+  `OTEL_*` variables, and off (no-op) by default. A redacting exporter
+  enforces a bounded attribute vocabulary, and export failures never affect
+  requests or evidence writes. See [docs/observability.md](docs/observability.md).
 
 ## [Prior work] — 2026-09-25
 

@@ -89,6 +89,17 @@ identifiers, and use no-store behavior where data is dynamic. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
 
+## Observability
+
+`instrumentation.ts` starts vendor-neutral OpenTelemetry export in the Node.js
+runtime only when `OTEL_*` endpoints are configured; otherwise all
+instrumentation is a no-op. Route handlers, Prisma operations, the scheduled
+refresh and its phases, and SEP-1/SEP-38 requests emit bounded spans and
+metrics through `lib/telemetry/`, and a redacting exporter enforces the
+attribute allowlist on every exported span. Telemetry describes StellarCore's
+execution, not anchor, rate, or transfer evidence. See
+[observability.md](observability.md).
+
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact

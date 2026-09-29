@@ -1,6 +1,7 @@
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
+import { recordRateObservationFreshness } from "@/lib/telemetry/pipeline";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
@@ -55,6 +56,7 @@ export async function readLatestCorridorRate(
           : {}),
       }) satisfies LatestRateSourceObservation;
     }));
+    recordRateObservationFreshness(observations);
 
     return Object.freeze({
       ok: true,

@@ -1,6 +1,9 @@
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 import { PrismaClient } from "@/app/generated/prisma/client";
+import { observeConnectionPool } from "@/lib/telemetry/core";
+import { databaseTelemetryExtension } from "@/lib/telemetry/database";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -31,9 +34,16 @@ function createPrismaClient() {
     throw new Error("DATABASE_URL must use postgres:// or postgresql://");
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  // StellarCore owns the pool so its idle/used/waiting counts can be
+  // observed; queueing shows up there before queries time out.
+  const pool = new Pool({ connectionString, application_name: "stellarcore" });
+  observeConnectionPool("default", pool);
+  const adapter = new PrismaPg(pool, { disposeExternalPool: true });
 
-  return new PrismaClient({ adapter });
+  // The telemetry extension only observes operations; the cast keeps the
+  // established PrismaClient type for callers.
+  return new PrismaClient({ adapter })
+    .$extends(databaseTelemetryExtension("default")) as unknown as PrismaClient;
 }
 
 export const db = globalForPrisma.prisma ?? createPrismaClient();

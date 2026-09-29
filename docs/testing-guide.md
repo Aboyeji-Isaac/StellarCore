@@ -32,6 +32,24 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Telemetry tests
+
+`tests/unit/telemetry/` registers the real OpenTelemetry SDK with in-memory
+exporters behind the production redacting exporter (`tests/support/telemetry.ts`),
+so assertions see exactly what would be exported. The SDK registers global
+providers once per process, and each test file runs in its own process, so keep
+tests that need a different SDK setup (no-op mode, unavailable collector) in
+separate files.
+
+`tests/integration/telemetry/traceContext.database.integration.test.ts` checks
+that trace context runs from the real route through Prisma to PostgreSQL, and from
+the scheduled refresh into reputation persistence. It is opt-in:
+
+```bash
+RUN_TELEMETRY_DATABASE_INTEGRATION=1 DATABASE_URL="postgresql://…/isolated_db" \
+npm test -- tests/integration/telemetry
+```
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The

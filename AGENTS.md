@@ -26,7 +26,7 @@ Do not add undocumented scripts; update this guide and the README when commands 
 
 ## Coding Style & Naming Conventions
 
-Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
+Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Instrument new API routes with `withRouteTelemetry` and keep telemetry attributes inside the bounded vocabulary in `lib/telemetry/semantics.ts` (never URLs, slugs, SQL, payloads, or secrets); see `docs/observability.md`. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
 
 ## Testing Guidelines
 

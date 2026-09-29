@@ -15,6 +15,7 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` and related `OTEL_*` | Optional | `OTEL_EXPORTER_OTLP_HEADERS` is | OpenTelemetry export. Unset means telemetry is off. See [observability.md](observability.md). |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
@@ -75,7 +76,7 @@ Vercel CLI, Vercel tokens, `CRON_SECRET`, `POSTGRES_URL`, or
 
 ## Preview policy
 
-Preview deployments must not receive the production `DATABASE_URL` or `CRON_SECRET`. Until isolated preview database infrastructure exists, omit database secrets from previews; database-backed routes will fail safely rather than target production.
+Preview deployments must not receive the production `DATABASE_URL`, `CRON_SECRET`, or collector credentials. If previews export telemetry, give them their own `deployment.environment.name`. Until isolated preview database infrastructure exists, omit database secrets from previews; database-backed routes will fail safely rather than target production.
 
 ## Bootstrap
 
