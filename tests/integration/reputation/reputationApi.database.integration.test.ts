@@ -37,9 +37,23 @@ test("isolated persisted current score and unevaluated anchor are read without e
         tomlUrl: `https://unevaluated-${suffix}.example.com/.well-known/stellar.toml`,
       },
     });
+    const evaluation = await db.reputationEvaluation.create({
+      data: {
+        anchorId: evaluated.id,
+        algorithmVersion: "legacy-unknown",
+        isLegacy: true,
+        compositeScore: 80,
+        scoreBand: "AMBER",
+        outcomeCount: 30,
+        state: "OK",
+        computedAt: new Date(),
+      },
+      select: { id: true },
+    });
     await db.reputationScore.create({
       data: {
         anchorId: evaluated.id,
+        evaluationId: evaluation.id,
         compositeScore: 80,
         scoreBand: "AMBER",
         fillRate7d: 0.8,
@@ -69,6 +83,9 @@ test("isolated persisted current score and unevaluated anchor are read without e
     assert.equal(unevaluatedResult.body.reputation.score, null);
   } finally {
     await db.reputationScore.deleteMany({ where: { anchor: { slug: evaluatedSlug } } });
+    await db.$executeRawUnsafe('ALTER TABLE "reputation_evaluations" DISABLE TRIGGER "reputation_evaluations_reject_delete"');
+    await db.reputationEvaluation.deleteMany({ where: { anchor: { slug: evaluatedSlug } } });
+    await db.$executeRawUnsafe('ALTER TABLE "reputation_evaluations" ENABLE TRIGGER "reputation_evaluations_reject_delete"');
     await db.anchor.deleteMany({ where: { slug: { in: [evaluatedSlug, unevaluatedSlug] } } });
     await db.$disconnect();
   }

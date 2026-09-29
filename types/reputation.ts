@@ -63,6 +63,7 @@ export type ReputationCalculation = Readonly<{
 
 export type PersistedReputationScore = Readonly<{
   id: string;
+  evaluationId: string;
   anchorSlug: string;
   computedAt: Date;
 }>;
@@ -80,6 +81,31 @@ export type ReputationRepository = Readonly<{
   upsertScore: (
     input: ReputationPersistenceInput,
   ) => Promise<PersistedReputationScore>;
+}>;
+
+export type ReputationHistoryRecord = Readonly<{
+  id: string;
+  anchorSlug: string;
+  algorithmVersion: string;
+  isLegacy: boolean;
+  computedAt: Date;
+  state: "INSUFFICIENT_DATA" | "OK";
+  compositeScore: number | null;
+  scoreBand: "GREEN" | "AMBER" | "RED" | null;
+  components: Readonly<Record<ReputationComponentName, Readonly<{
+    weight: number | null;
+    score: number | null;
+    earnedPoints: number | null;
+  }>>>;
+  evidence: Readonly<{
+    corridorCount: number | null;
+    latestRateCount: number | null;
+    freshRateCount: number | null;
+    outcomeCount: number | null;
+    completedOutcomeCount: number | null;
+    minimumOutcomeCount: number | null;
+  }>;
+  metrics: ReputationCalculation["metrics"];
 }>;
 
 export type ReputationEvaluationResult =

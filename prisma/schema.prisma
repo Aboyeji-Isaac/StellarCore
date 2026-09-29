@@ -58,10 +58,11 @@ model Anchor {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  corridors        AnchorCorridor[]
-  rateSnapshots    RateSnapshot[]
-  transferOutcomes TransferOutcome[]
-  reputationScore  ReputationScore?
+  corridors             AnchorCorridor[]
+  rateSnapshots         RateSnapshot[]
+  transferOutcomes      TransferOutcome[]
+  reputationScore       ReputationScore?
+  reputationEvaluations ReputationEvaluation[]
 
   @@map("anchors")
 }
@@ -158,8 +159,55 @@ model ReputationScore {
   sampleSize     Int                  @default(0) @map("sample_size")
   state          ReputationState      @default(INSUFFICIENT_DATA)
   computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
+  evaluationId   String               @unique @map("evaluation_id") @db.Uuid
 
-  anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor     Anchor               @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  evaluation ReputationEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+/// Immutable record of one completed reputation calculation. Application code
+/// may insert and inspect these rows but never update or delete them.
+model ReputationEvaluation {
+  id                              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId                        String               @map("anchor_id") @db.Uuid
+  algorithmVersion                String               @map("algorithm_version")
+  isLegacy                        Boolean              @default(false) @map("is_legacy")
+  state                           ReputationState
+  compositeScore                  Float?               @map("composite_score")
+  scoreBand                       ReputationScoreBand? @map("score_band")
+  availabilityWeight              Int?                 @map("availability_weight")
+  availabilityScore               Int?                 @map("availability_score")
+  availabilityEarnedPoints        Int?                 @map("availability_earned_points")
+  rateFreshnessWeight             Int?                 @map("rate_freshness_weight")
+  rateFreshnessScore              Int?                 @map("rate_freshness_score")
+  rateFreshnessEarnedPoints       Int?                 @map("rate_freshness_earned_points")
+  coverageWeight                  Int?                 @map("coverage_weight")
+  coverageScore                   Int?                 @map("coverage_score")
+  coverageEarnedPoints            Int?                 @map("coverage_earned_points")
+  transferReliabilityWeight       Int?                 @map("transfer_reliability_weight")
+  transferReliabilityScore        Int?                 @map("transfer_reliability_score")
+  transferReliabilityEarnedPoints Int?                 @map("transfer_reliability_earned_points")
+  corridorCount                   Int?                 @map("corridor_count")
+  latestRateCount                 Int?                 @map("latest_rate_count")
+  freshRateCount                  Int?                 @map("fresh_rate_count")
+  outcomeCount                    Int?                 @map("outcome_count")
+  completedOutcomeCount           Int?                 @map("completed_outcome_count")
+  minimumOutcomeCount             Int?                 @map("minimum_outcome_count")
+  fillRate7d                      Float?               @map("fill_rate_7d")
+  fillRate30d                     Float?               @map("fill_rate_30d")
+  fillRate90d                     Float?               @map("fill_rate_90d")
+  settleP50Ms                     Int?                 @map("settle_p50_ms")
+  settleP95Ms                     Int?                 @map("settle_p95_ms")
+  slippageP50                     Float?               @map("slippage_p50")
+  slippageP95                     Float?               @map("slippage_p95")
+  computedAt                      DateTime             @map("computed_at") @db.Timestamptz(6)
+  createdAt                       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  anchor            Anchor           @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  currentProjection ReputationScore?
+
+  @@index([anchorId, computedAt(sort: Desc), id(sort: Desc)], map: "reputation_evaluations_anchor_history_idx")
+  @@map("reputation_evaluations")
 }

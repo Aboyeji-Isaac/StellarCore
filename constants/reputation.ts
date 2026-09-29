@@ -1,6 +1,7 @@
 export const REPUTATION_OUTCOME_WINDOW_DAYS = 90;
 export const REPUTATION_METRICS_WINDOW_DAYS = 30;
 export const MIN_REPUTATION_OUTCOMES = 30;
+export const REPUTATION_POLICY_VERSION = "reputation-v1";
 
 export const REPUTATION_WEIGHTS = Object.freeze({
   availability: 20,

@@ -34,6 +34,7 @@ test("controlled evidence composes through calculation and current-score persist
       persistedCalculation = calculation;
       return Object.freeze({
         id: "current-score",
+        evaluationId: "evaluation-id",
         anchorSlug: calculation.anchorSlug,
         computedAt: new Date(calculation.computedAt),
       });

@@ -33,7 +33,7 @@ test("engine reads one 90-day window and can calculate without persistence", asy
   if (result.ok) assert.equal(result.persisted, null);
 });
 
-test("persistence upserts current score rather than appending history", async () => {
+test("each evaluation delegates one atomic history and projection persistence", async () => {
   let rowId: string | undefined;
   let writeCount = 0;
   const repo = repository({
@@ -42,6 +42,7 @@ test("persistence upserts current score rather than appending history", async ()
       rowId ??= "one-current-row";
       return Object.freeze({
         id: rowId,
+        evaluationId: `evaluation-${writeCount}`,
         anchorSlug: calculation.anchorSlug,
         computedAt: new Date(calculation.computedAt),
       });
@@ -57,7 +58,10 @@ test("persistence upserts current score rather than appending history", async ()
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
   assert.equal(writeCount, 2);
-  if (first.ok && second.ok) assert.equal(first.persisted?.id, second.persisted?.id);
+  if (first.ok && second.ok) {
+    assert.equal(first.persisted?.id, second.persisted?.id);
+    assert.notEqual(first.persisted?.evaluationId, second.persisted?.evaluationId);
+  }
 });
 
 test("missing anchors and repository failures are safely classified", async () => {
@@ -124,6 +128,7 @@ function sparseEvidence(): ReputationEvidence {
 function persisted() {
   return Object.freeze({
     id: "score-id",
+    evaluationId: "evaluation-id",
     anchorSlug: "anchor",
     computedAt: NOW,
   });
