@@ -1,7 +1,7 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Get a free hosted Postgres database in seconds: `nxp create-db`
 
 generator client {
   provider = "prisma-client"
@@ -18,7 +18,7 @@ enum AnchorStatus {
   DOWN
   UNKNOWN
 
-  @@map("anchor_status")
+  @map("anchor_status")
 }
 
 enum TransferStatus {
@@ -28,7 +28,7 @@ enum TransferStatus {
   EXPIRED
   ERROR
 
-  @@map("transfer_status")
+  @map("transfer_status")
 }
 
 enum ReputationScoreBand {
@@ -36,14 +36,32 @@ enum ReputationScoreBand {
   AMBER @map("amber")
   RED   @map("red")
 
-  @@map("reputation_score_band")
+  @map("reputation_score_band")
 }
 
 enum ReputationState {
-  INSUFFICIENT_DATA @map("insufficient_data")
+  INSUFFICIENT_DATA  @map("insufficient_data")
   OK                @map("ok")
 
-  @@map("reputation_state")
+  @map("reputation_state")
+}
+
+enum EvidenceKind {
+  RATE_SNAPSHOT    @map("rate_snapshot")
+  TRANSFER_OUTCOME  @map("transfer_outcome")
+  REPUTATION_SCORE  @map("reputation_score")
+  PROVENANCE        @map("provenance")
+  MANIFEST          @map("manifest")
+
+  @map("evidence_kind")
+}
+
+enum CheckpointStatus {
+  PENDING   @map("pending")
+  VERIFIED  @map("verified")
+  FAILED    @map("failed")
+
+  @map("checkpoint_status")
 }
 
 model Anchor {
@@ -55,7 +73,7 @@ model Anchor {
   seps              Int[]        @default([])
   isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
   status            AnchorStatus @default(UNKNOWN)
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt         DateTime     @default(now()) $map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   corridors        AnchorCorridor[]
@@ -63,7 +81,7 @@ model Anchor {
   transferOutcomes TransferOutcome[]
   reputationScore  ReputationScore?
 
-  @@map("anchors")
+  @map("anchors")
 }
 
 model Corridor {
@@ -78,7 +96,7 @@ model Corridor {
   rateSnapshots    RateSnapshot[]
   transferOutcomes TransferOutcome[]
 
-  @@map("corridors")
+  @map("corridors")
 }
 
 model AnchorCorridor {
@@ -90,7 +108,7 @@ model AnchorCorridor {
 
   @@id([anchorId, corridorId])
   @@index([corridorId], map: "anchor_corridors_corridor_id_idx")
-  @@map("anchor_corridors")
+  @@@ap("anchor_corridors")
 }
 
 /// One individual anchor quote for a corridor. Freshness is derived from
@@ -103,12 +121,12 @@ model RateSnapshot {
   sourceAmount      Decimal  @map("source_amount") @db.Decimal(38, 18)
   destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
   fee               Decimal  @default(0) @db.Decimal(38, 18)
-  capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  capturedAt        DateTime @default(now()) $map("captured_at") @db.Timestamptz(6)
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
+  @@@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
   /// Covering index for findLatestObservations
   /// (lib/rates/latestRateRepository.ts), the per-corridor
@@ -123,6 +141,7 @@ model RateSnapshot {
   /// per-anchor DISTINCT ON (corridor.slug) latest-quote scan: an index-only
   /// scan replaces the bitmap heap scan over the anchor's whole history.
   @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
+  @@@index([capturedAt(sort: Asc), id(sort: Asc)], map: "rate_snapshots_checkpoint_order_idx")
   @@map("rate_snapshots")
 }
 
@@ -134,12 +153,13 @@ model TransferOutcome {
   fillRate     Float          @map("fill_rate")
   settlementMs Int            @map("settlement_ms")
   slippage     Float
-  recordedAt   DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  recordedAt   DateTime       @default(now()) $map("recorded_at") @db.Timestamptz(6)
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([anchorId, recordedAt(sort: Desc)], map: "transfer_outcomes_anchor_id_recorded_at_idx")
+  @@@index([anchorId, recordedAt(sort: Desc)], map: "transfer_outcomes_anchor_id_recorded_at_idx")
+  @@@index([recordedAt(sort: Asc), id(sort: Asc)], map: "transfer_outcomes_checkpoint_order_idx")
   @@map("transfer_outcomes")
 }
 
@@ -155,11 +175,74 @@ model ReputationScore {
   settleP95Ms    Int?                 @map("settle_p95_ms")
   slippageP50    Float?               @map("slippage_p50")
   slippageP95    Float?               @map("slippage_p95")
-  sampleSize     Int                  @default(0) @map("sample_size")
-  state          ReputationState      @default(INSUFFICIENT_DATA)
-  computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
+  sampleSize     Int                  @default(0) $map("sample_size")
+  state           ReputationState     @default(INSUFFICIENT_DATA)
+  computedAt      DateTime             @default(now()) $map("computed_at") @db.Timestamptz(6)
 
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  @@index([computedAt(sort: Asc), id(sort: Asc)], map: "reputation_scores_checkpoint_order_idx")
   @@map("reputation_scores")
+}
+
+/// Append-only chain of cryptographic integrity checkpoints covering
+ /// ordered ranges of immutable evidence. Each record chains to its
+ /// predecessor via previousCheckpointHash, so deletion or reordering of
+ /// checkpoints is detectable. Checkpoints never mutate covered evidence.
+model EvidenceCheckpoint {
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Monotonically increasing chain position. Unique so a gap or duplicate
+  /// sequence number is detectable without reading covered records.
+  sequence                Int              @unique
+  /// Version of the canonicalization ruleset used to produce hashes.
+  canonicalizationVersion Int              @map("canonicalization_version")
+  /// Hash algorithm identifier, e.g. "sha256".
+  hashAlgorithm         String           @map("hash_algorithm")
+  /// Hash of the previous checkpoint in the chain, or null for genesis.
+  previousCheckpointHash String?         @map("previous_checkpoint_hash")
+  /// Hash of this checkpoint's canonical payload including the chain link.
+  checkpointHash         String           @map("checkpoint_hash")
+  /// Hash of the concatenated evidence digests covered by this checkpoint.
+  evidenceDigest         String           @map("evidence_digest")
+  /// Number of covered evidence records.
+  evidenceCount          Int              @map("evidence_count")
+  /// Ordered range bounds of covered evidence (kind + ordering key).
+  rangeStartKind         EvidenceKind     @map("range_start_kind")
+  rangeStartKey          String           @map("range_start_key")
+  rangeEndKind           EvidenceKind      @map("range_end_kind")
+  rangeEndKey            String           @map("range_end_key")
+  /// Whether this checkpoint includes legacy evidence with incomplete
+  /// provenance. Legacy limitations are explicit and never fabricated.
+  includesLegacy          Boolean          @default(false) @map("includes_legacy")
+  /// Optional detached signature metadata; hash-only checkpoints leave it null.
+  signatureAlgorithm      String?          @map("signature_algorithm")
+  signature               String?
+  signingKeyId           String?          @map("signing_key_id")
+  status                 CheckpointStatus @default(VERIFIED)
+  createdAt               DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  verifications EvidenceCheckpointVerification[]
+
+  @@index([createdAt(sort: Asc)], map: "evidence_checkpoints_created_at_idx")
+  @@map("evidence_checkpoints")
+}
+
+/// Read-only record of a verification run against a checkpoint. A failed
+ /// verification identifies the affected range without dumping sensitive
+ /// values.
+model EvidenceCheckpointVerification {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  checkpointId       String             @map("checkpoint_id") @db.Uuid
+  checkpoint         EvidenceCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// Whether the checkpoint's covered evidence matched the recorded hash.
+  isValid            Boolean            @map("is_valid")
+  /// Machine-readable failure classification, null when valid.
+  failureReason       String?           @map("failure_reason")
+  /// Ordered range bounds of the affected evidence, no sensitive values.
+  affectedRangeStart EvidenceKind     @map("affected_range_start")
+  affectedRangeEnd   EvidenceKind       @map("affected_range_end")
+  verifiedAt          DateTime           @default(now()) @map("verified_at") @db.Timestamptz(6)
+
+  @@@index([checkpointId, verifiedAt(sort: Desc)], map: "evidence_checkpoint_verifications_checkpoint_id_verified_at_idx")
+  @@@ap("evidence_checkpoint_verifications")
 }

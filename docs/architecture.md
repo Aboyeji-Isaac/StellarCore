@@ -100,3 +100,23 @@ daily, while registry bootstrap remains a separate manual GitHub Actions job.
 
 See the [README](../README.md) for setup, API details, and operational
 invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.
+
+## Evidence integrity checkpoints
+
+Immutable evidence history (rate observations, provenance records, immutable
+reputation evaluations, and manifests) is covered by versioned cryptographic
+checkpoints. Canonical serialization is explicitly versioned so that the
+byte-level input to the hash is deterministic and stable across runtimes.
+Checkpoints are keyless and hash-only: they detect missing, reordered, or
+modified covered records within an ordered range, but they are not proof that
+external evidence was true and do not attest to quote accuracy or transfer
+success. Optional signing, if ever added, is a separate design layered on top
+of the hash-only guarantee.
+
+Checkpoints are append-only and never mutate the evidence they cover.
+Incremental creation extends the chain from the previous checkpoint without
+rehashing the complete database, preserving range and chain continuity.
+Verification is read-only, requires no network access, and on failure
+identifies the affected range without dumping sensitive values. Legacy
+evidence may enter the first checkpoint as legacy evidence; missing
+provenance is never fabricated.

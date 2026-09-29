@@ -18,7 +18,9 @@
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
-    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
+    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
+    "checkpoint:create": "tsx scripts/checkpoint-create.ts",
+    "checkpoint:verify": "tsx scripts/checkpoint-verify.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
