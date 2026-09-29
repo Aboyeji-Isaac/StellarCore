@@ -379,6 +379,9 @@ npm run verify:latest-rates
 
 # Recompute current reputation rows from the local database
 npm run verify:reputation
+
+# Print a human-readable summary of the checked-in registries
+npm run registry:print
 ```
 
 ### Running Tests
@@ -389,6 +392,9 @@ npm test
 
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
+
+# Human-readable inspection of the checked-in anchor/corridor registry
+npm run registry:print
 
 # Type check only
 npx tsc --noEmit
@@ -411,6 +417,13 @@ internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
 independent defense-in-depth boundaries.
+
+`registry:print` is a read-only companion to `audit:config`. It prints the
+checked-in anchors with their home domains, the corridors mapped to each anchor,
+and which corridors have a reviewed live rate source. It requires no database,
+network, or environment secrets and writes nothing. The registry does not store
+SEP support — that is discovered from each anchor's `stellar.toml` during
+`bootstrap:registry` — so the script says so rather than guessing.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the
