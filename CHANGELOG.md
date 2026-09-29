@@ -12,6 +12,7 @@ with your pull request.
 ### Added
 
 - GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
+- GitHub pull request template with pre-review checklist (#10).
 
 ## [Prior work] — 2026-09-25
 
