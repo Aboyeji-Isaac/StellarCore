@@ -71,6 +71,9 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
       ...(observation.exclusionReason
         ? { exclusionReason: observation.exclusionReason }
         : {}),
+      ...(observation.disposition
+        ? { disposition: Object.freeze({ ...observation.disposition }) }
+        : {}),
     }) satisfies PublicRateObservation;
     return serialized;
   }));

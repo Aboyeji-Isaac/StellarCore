@@ -1,4 +1,8 @@
-import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
+import type {
+  BlockingDispositionState,
+  MedianExclusionReason,
+  RateFreshnessState,
+} from "@/types/rates";
 
 export type PublicRateObservation = Readonly<{
   anchor: Readonly<{
@@ -16,6 +20,15 @@ export type PublicRateObservation = Readonly<{
   }>;
   eligibleForMedian: boolean;
   exclusionReason?: MedianExclusionReason;
+  /**
+   * Present when a maintainer marked this, the anchor's newest persisted
+   * observation, unusable. No older observation is substituted for it.
+   */
+  disposition?: Readonly<{
+    state: BlockingDispositionState;
+    reasonCode: string;
+    recordedAt: string;
+  }>;
 }>;
 
 export type PublicReviewedCandidateConfiguration = Readonly<{

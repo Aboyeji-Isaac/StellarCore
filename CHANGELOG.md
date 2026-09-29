@@ -9,8 +9,17 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Non-destructive invalidation and supersession for rate observations (#121):
+  append-only, database-immutable disposition events with a reviewed state
+  machine (quarantine, release, invalidate, supersede), bounded reason codes,
+  and required review references. Adds a dry-run-by-default operator CLI and
+  protected workflow. Latest-rate reads, the public rates API, reputation
+  evidence, and a new observation timeline read model report blocked evidence
+  as an explicit gap and never promote an older observation. Original
+  snapshots are never modified. See
+  [docs/rate-observation-dispositions.md](docs/rate-observation-dispositions.md).
 
 ## [Prior work] — 2026-09-25
 

@@ -1,4 +1,5 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import { latestDispositionJoin, toBlockingDisposition } from "@/lib/rates/disposition";
 import type {
   LatestRateRepository,
   LatestRateRepositoryObservation,
@@ -13,6 +14,9 @@ type PrismaLatestRateRow = Readonly<{
   destinationAmount: Prisma.Decimal;
   fee: Prisma.Decimal;
   capturedAt: Date;
+  dispositionAction: string | null;
+  dispositionReason: string | null;
+  dispositionRecordedAt: Date | null;
 }>;
 
 export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze({
@@ -33,20 +37,31 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
 
   async findLatestObservations(corridorId) {
     const { db } = await import("@/lib/dbClient");
+    // The newest persisted observation per anchor is selected regardless of
+    // disposition. If it is blocked, the read model reports it as excluded;
+    // an older observation is never promoted to "latest" in its place.
     const rows = await db.$queryRaw<PrismaLatestRateRow[]>(Prisma.sql`
-      SELECT DISTINCT ON (snapshot.anchor_id)
-        snapshot.id,
-        anchor.slug AS "anchorSlug",
-        anchor.name AS "anchorName",
-        snapshot.rate,
-        snapshot.source_amount AS "sourceAmount",
-        snapshot.destination_amount AS "destinationAmount",
-        snapshot.fee,
-        snapshot.captured_at AS "capturedAt"
-      FROM rate_snapshots AS snapshot
-      INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
-      WHERE snapshot.corridor_id = ${corridorId}::uuid
-      ORDER BY snapshot.anchor_id, snapshot.captured_at DESC, snapshot.id DESC
+      SELECT
+        latest.*,
+        disposition.action AS "dispositionAction",
+        disposition.reason_code AS "dispositionReason",
+        disposition.recorded_at AS "dispositionRecordedAt"
+      FROM (
+        SELECT DISTINCT ON (snapshot.anchor_id)
+          snapshot.id,
+          anchor.slug AS "anchorSlug",
+          anchor.name AS "anchorName",
+          snapshot.rate,
+          snapshot.source_amount AS "sourceAmount",
+          snapshot.destination_amount AS "destinationAmount",
+          snapshot.fee,
+          snapshot.captured_at AS "capturedAt"
+        FROM rate_snapshots AS snapshot
+        INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
+        WHERE snapshot.corridor_id = ${corridorId}::uuid
+        ORDER BY snapshot.anchor_id, snapshot.captured_at DESC, snapshot.id DESC
+      ) AS latest
+      ${Prisma.raw(latestDispositionJoin("latest"))}
     `);
 
     return Object.freeze(rows.map(toRepositoryObservation));
@@ -65,5 +80,10 @@ function toRepositoryObservation(
     destinationAmount: row.destinationAmount.toString(),
     fee: row.fee.toString(),
     capturedAt: new Date(row.capturedAt.getTime()),
+    disposition: toBlockingDisposition(
+      row.dispositionAction,
+      row.dispositionReason,
+      row.dispositionRecordedAt,
+    ),
   });
 }

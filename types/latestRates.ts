@@ -1,4 +1,18 @@
-import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
+import type {
+  BlockingDispositionState,
+  MedianExclusionReason,
+  RateFreshnessState,
+} from "@/types/rates";
+
+/**
+ * The current blocking disposition of an observation. Absent means the
+ * observation is usable: either never reviewed or released from quarantine.
+ */
+export type ObservationDisposition = Readonly<{
+  state: BlockingDispositionState;
+  reasonCode: string;
+  recordedAt: string;
+}>;
 
 export type LatestRateRepositoryCorridor = Readonly<{
   id: string;
@@ -18,6 +32,7 @@ export type LatestRateRepositoryObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date | string;
+  disposition?: ObservationDisposition | null;
 }>;
 
 export type LatestRateRepository = Readonly<{
@@ -42,6 +57,7 @@ export type LatestRateSourceObservation = Readonly<{
   ageMs: number | null;
   included: boolean;
   exclusionReason?: MedianExclusionReason;
+  disposition?: ObservationDisposition;
 }>;
 
 export type LatestCorridorRate = Readonly<{

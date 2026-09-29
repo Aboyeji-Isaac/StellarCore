@@ -89,6 +89,16 @@ identifiers, and use no-store behavior where data is dynamic. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
 
+## Evidence dispositions
+
+Rate snapshots are append-only. When a stored observation is later shown to be
+unusable, a maintainer records an immutable event in
+`rate_observation_dispositions` through the dry-run-by-default operator tool.
+Latest-rate reads report a blocked newest observation as excluded rather than
+promoting an older one. Reputation evidence drops it, and the observation
+timeline keeps it flagged. See
+[rate-observation-dispositions.md](rate-observation-dispositions.md).
+
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact

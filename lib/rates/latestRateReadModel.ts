@@ -33,6 +33,9 @@ export async function readLatestCorridorRate(
       corridorSlug: corridor.slug,
       rate: observation.rate,
       capturedAt: observation.capturedAt,
+      ...(observation.disposition
+        ? { dispositionState: observation.disposition.state }
+        : {}),
     })), evaluatedAt);
 
     const observations = Object.freeze(latest.map((observation, index) => {
@@ -52,6 +55,9 @@ export async function readLatestCorridorRate(
         included: medianSource.included,
         ...(medianSource.exclusionReason
           ? { exclusionReason: medianSource.exclusionReason }
+          : {}),
+        ...(observation.disposition
+          ? { disposition: Object.freeze({ ...observation.disposition }) }
           : {}),
       }) satisfies LatestRateSourceObservation;
     }));

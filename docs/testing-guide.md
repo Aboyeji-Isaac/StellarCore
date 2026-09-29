@@ -32,6 +32,21 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Rate disposition database tests
+
+`tests/integration/rates/rateDispositions.database.integration.test.ts` creates a
+throwaway database, applies the migrations that precede dispositions, seeds
+legacy synthetic snapshots, applies the disposition migration, and then
+exercises the operator tool, the database triggers, and the read models. It
+drops the database afterwards, because disposition events are append-only and
+cannot be deleted. It is opt-in and needs a role with `CREATEDB`:
+
+```bash
+RUN_RATE_DISPOSITION_INTEGRATION=1 \
+DATABASE_TEST_ADMIN_URL="postgresql://ADMIN:PASSWORD@localhost:5432/postgres" \
+npm test -- tests/integration/rates/rateDispositions.database.integration.test.ts
+```
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The

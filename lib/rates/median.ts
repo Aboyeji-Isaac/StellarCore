@@ -28,6 +28,8 @@ export function computeFreshMedian(
     if (freshness.state === "stale") reason = "stale";
     if (freshness.state === "future") reason = "future_timestamp";
     if (freshness.state === "invalid") reason = "invalid_timestamp";
+    // A maintainer disposition takes precedence over freshness.
+    if (source.dispositionState) reason = source.dispositionState;
 
     let decimal: ExactDecimal | undefined;
     if (!reason) {

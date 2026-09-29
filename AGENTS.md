@@ -21,6 +21,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
 - `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database.
+- `npm run rates:disposition -- <inspect|quarantine|invalidate|supersede|release> …` inspects or records an append-only maintainer disposition on a rate observation; it is a dry run unless `--apply` is given. Never update or delete `rate_snapshots` rows or disposition events; see `docs/rate-observation-dispositions.md`.
 
 Do not add undocumented scripts; update this guide and the README when commands change.
 

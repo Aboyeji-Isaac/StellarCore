@@ -132,6 +132,16 @@ Running the bootstrap:
 6. Only then continue to the application deployment and scheduled refresh
    described below.
 
+## Rate observation dispositions
+
+The manual **Rate observation disposition** workflow
+(`.github/workflows/rate-observation-disposition.yml`) inspects a persisted rate
+observation or records an append-only quarantine, invalidation, supersession,
+or release. It runs in the `production` environment, defaults to a dry run,
+and uses the environment's `DATABASE_URL`. Attach required reviewers to
+`production` before using it. See
+[rate-observation-dispositions.md](rate-observation-dispositions.md).
+
 ## Scheduler
 
 `vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.

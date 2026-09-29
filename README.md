@@ -382,6 +382,9 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Inspect, or dry-run/apply a maintainer disposition on, a rate observation
+npm run rates:disposition -- inspect --snapshot <uuid>
 ```
 
 ### Running Tests
@@ -571,6 +574,13 @@ production state:
 
 A valid corridor with fewer than two fresh independent sources also returns
 HTTP 200, with `state: "insufficient_fresh_sources"` and `medianRate: null`.
+
+If a maintainer quarantined, invalidated, or superseded an anchor's newest
+observation, that observation is still returned with `eligibleForMedian: false`,
+an `exclusionReason` of `quarantined`, `invalidated`, or `superseded`, and a
+`disposition` object (`state`, `reasonCode`, `recordedAt`). No older
+observation is shown in its place. See
+[docs/rate-observation-dispositions.md](docs/rate-observation-dispositions.md).
 `reviewedCandidateConfiguration` describes only reviewed static configuration
 for the requested corridor: `candidateCount` is the number of matching reviewed
 entries, while `uniqueAnchorCount` counts the distinct anchor slugs represented

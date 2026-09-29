@@ -39,6 +39,30 @@ enum ReputationScoreBand {
   @@map("reputation_score_band")
 }
 
+/// Append-only maintainer dispositions about whether a persisted rate
+/// observation may be used as evidence. See docs/rate-observation-dispositions.md.
+enum RateObservationDispositionAction {
+  QUARANTINE
+  INVALIDATE
+  SUPERSEDE
+  RELEASE
+
+  @@map("rate_observation_disposition_action")
+}
+
+enum RateObservationDispositionReason {
+  SUSPECTED_INCORRECT_VALUE
+  SUSPECTED_SOURCE_COMPROMISE
+  SUSPECTED_INVALID_CONFIGURATION
+  SEMANTICALLY_INCORRECT
+  SOURCE_COMPROMISED
+  INVALID_CONFIGURATION
+  NORMALIZATION_DEFECT
+  REVIEW_CLEARED
+
+  @@map("rate_observation_disposition_reason")
+}
+
 enum ReputationState {
   INSUFFICIENT_DATA @map("insufficient_data")
   OK                @map("ok")
@@ -108,6 +132,9 @@ model RateSnapshot {
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  dispositions         RateObservationDisposition[] @relation("DispositionTarget")
+  supersedingDecisions RateObservationDisposition[] @relation("DispositionReplacement")
+
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
   /// Covering index for findLatestObservations
@@ -124,6 +151,30 @@ model RateSnapshot {
   /// scan replaces the bitmap heap scan over the anchor's whole history.
   @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
   @@map("rate_snapshots")
+}
+
+/// One immutable disposition event about one rate snapshot. Events are
+/// ordered per snapshot by sequence (1, 2, ...); the latest event determines
+/// the snapshot's current disposition. Rows are never updated or deleted
+/// (enforced by database triggers), and the snapshot itself is never changed.
+model RateObservationDisposition {
+  id                     String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshotId             String                           @map("snapshot_id") @db.Uuid
+  sequence               Int
+  action                 RateObservationDispositionAction
+  reasonCode             RateObservationDispositionReason @map("reason_code")
+  reviewReference        String                           @map("review_reference")
+  actor                  String
+  note                   String?
+  supersededBySnapshotId String?                          @map("superseded_by_snapshot_id") @db.Uuid
+  recordedAt             DateTime                         @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  snapshot     RateSnapshot  @relation("DispositionTarget", fields: [snapshotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  supersededBy RateSnapshot? @relation("DispositionReplacement", fields: [supersededBySnapshotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([snapshotId, sequence], map: "rate_observation_dispositions_snapshot_sequence_key")
+  @@index([supersededBySnapshotId], map: "rate_observation_dispositions_superseded_by_idx")
+  @@map("rate_observation_dispositions")
 }
 
 model TransferOutcome {

@@ -21,14 +21,19 @@ export type RateFreshness = Readonly<{
   ageMs: number | null;
 }>;
 
+/** Maintainer dispositions that make an observation unusable as evidence. */
+export type BlockingDispositionState = "quarantined" | "invalidated" | "superseded";
+
 export type MedianSource = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
   rate: string;
   capturedAt: Date | string;
+  dispositionState?: BlockingDispositionState;
 }>;
 
 export type MedianExclusionReason =
+  | BlockingDispositionState
   | "stale"
   | "future_timestamp"
   | "invalid_timestamp"

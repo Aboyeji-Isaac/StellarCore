@@ -1,4 +1,5 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import { latestDispositionJoin } from "@/lib/rates/disposition";
 import type {
   PersistedReputationScore,
   ReputationEvidence,
@@ -23,14 +24,25 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
     if (!anchor) return null;
 
     const [latestRates, transferOutcomes] = await Promise.all([
+      // Future evaluations use only usable rate evidence: when a corridor's
+      // newest observation carries a blocking disposition, that corridor
+      // contributes no latest rate. An older observation is not substituted.
+      // Previously persisted scores are not touched here.
       db.$queryRaw<LatestRateRow[]>(Prisma.sql`
-        SELECT DISTINCT ON (corridor.slug)
-          corridor.slug AS "corridorSlug",
-          snapshot.captured_at AS "capturedAt"
-        FROM rate_snapshots AS snapshot
-        INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
-        WHERE snapshot.anchor_id = ${anchor.id}::uuid
-        ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
+        SELECT latest."corridorSlug", latest."capturedAt"
+        FROM (
+          SELECT DISTINCT ON (corridor.slug)
+            snapshot.id,
+            corridor.slug AS "corridorSlug",
+            snapshot.captured_at AS "capturedAt"
+          FROM rate_snapshots AS snapshot
+          INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
+          WHERE snapshot.anchor_id = ${anchor.id}::uuid
+          ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
+        ) AS latest
+        ${Prisma.raw(latestDispositionJoin("latest"))}
+        WHERE disposition.action IS NULL OR disposition.action = 'RELEASE'
+        ORDER BY latest."corridorSlug"
       `),
       db.transferOutcome.findMany({
         where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },

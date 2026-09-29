@@ -1,0 +1,95 @@
+# Records one maintainer disposition about a persisted rate observation
+# (quarantine, invalidate, supersede, release) or inspects one.
+#
+# Manual and protected: triggered only by workflow_dispatch, runs in the
+# `production` environment (attach required reviewers there), and defaults to
+# a dry run that writes nothing. Disposition events are append-only; the rate
+# snapshot itself is never modified. The GitHub actor is recorded as the
+# event's actor. See docs/rate-observation-dispositions.md.
+#
+# Inputs reach the tool only through environment variables, never through
+# shell interpolation, so free-text fields cannot inject commands.
+
+name: Rate observation disposition
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "inspect, quarantine, invalidate, supersede, or release"
+        required: true
+        type: choice
+        options: [inspect, quarantine, invalidate, supersede, release]
+      snapshot_id:
+        description: "Target rate snapshot id (UUID)"
+        required: true
+        type: string
+      reason_code:
+        description: "Reason code allowed for the action (see docs)"
+        required: false
+        type: string
+      review_reference:
+        description: "External review reference, for example an issue URL"
+        required: false
+        type: string
+      superseded_by:
+        description: "Replacement snapshot id (supersede only)"
+        required: false
+        type: string
+      note:
+        description: "Optional note, at most 500 characters"
+        required: false
+        type: string
+      apply:
+        description: "Write the event (unchecked = dry run)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: rate-observation-disposition
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  disposition:
+    name: rate observation disposition
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run disposition tool
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          INPUT_COMMAND: ${{ inputs.command }}
+          INPUT_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+          INPUT_REASON_CODE: ${{ inputs.reason_code }}
+          INPUT_REVIEW_REFERENCE: ${{ inputs.review_reference }}
+          INPUT_SUPERSEDED_BY: ${{ inputs.superseded_by }}
+          INPUT_NOTE: ${{ inputs.note }}
+          INPUT_APPLY: ${{ inputs.apply }}
+        run: |
+          args=("$INPUT_COMMAND" --snapshot "$INPUT_SNAPSHOT_ID")
+          if [ "$INPUT_COMMAND" != "inspect" ]; then
+            args+=(--reason "$INPUT_REASON_CODE" --review-ref "$INPUT_REVIEW_REFERENCE" --actor "$GITHUB_ACTOR")
+            if [ -n "$INPUT_SUPERSEDED_BY" ]; then args+=(--superseded-by "$INPUT_SUPERSEDED_BY"); fi
+            if [ -n "$INPUT_NOTE" ]; then args+=(--note "$INPUT_NOTE"); fi
+            if [ "$INPUT_APPLY" = "true" ]; then args+=(--apply); fi
+          fi
+          npm run --silent rates:disposition -- "${args[@]}"
