@@ -69,6 +69,7 @@ export type Sep38ClientOptions = Readonly<{
   timeoutMs?: number;
   fetcher?: typeof fetch;
   authentication?: Sep38Authentication;
+  signal?: AbortSignal;
 }>;
 
 export function parseSep38AssetIdentifier(
@@ -556,6 +557,11 @@ async function requestJson(
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const external = options.signal;
+  if (external) {
+    if (external.aborted) controller.abort();
+    else external.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   try {
     const response = await fetcher(url, {

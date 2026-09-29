@@ -46,6 +46,7 @@ export class Sep1DiscoveryError extends Error {
 export type FetchSep1Options = Readonly<{
   timeoutMs?: number;
   fetcher?: typeof fetch;
+  signal?: AbortSignal;
 }>;
 
 export function buildSep1TomlUrl(homeDomain: string): string {
@@ -160,6 +161,11 @@ export async function fetchSep1Toml(
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const external = options.signal;
+  if (external) {
+    if (external.aborted) controller.abort();
+    else external.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   try {
     const response = await fetcher(tomlUrl, {

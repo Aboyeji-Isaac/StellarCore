@@ -100,13 +100,13 @@ export type RateCandidate = Readonly<{
 }>;
 
 export type RateQuoteProvider = (
-  candidate: RateCandidate,
+  candidate: RateCandidate, signal?: AbortSignal,
 ) => Promise<Sep38IndicativePrice>;
 
 export type RateEngineFailure = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
-  phase: "QUOTE" | "NORMALIZATION" | "PERSISTENCE";
+  phase: "QUOTE" | "NORMALIZATION" | "PERSISTENCE" | "CAPTURE_BUDGET";
   code: string;
 }>;
 

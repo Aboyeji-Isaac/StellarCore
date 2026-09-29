@@ -6,6 +6,7 @@ import {
 } from "@/lib/rates/liveRateSource";
 import { runRateEngine } from "@/lib/rates/rateEngine";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
+import { getSep38IndicativePrice } from "@/lib/stellar/sep38";
 import type {
   PreparedLiveRateCandidate,
   SafeLiveRateRunSummary,
@@ -35,7 +36,14 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
   buildCandidates: buildReviewedLiveRateCandidates,
   executeCandidates: async (candidates) => formatLiveRateRunSummary(
     await runRateEngine(candidates, {
-      quote: fetchReviewedIndicativeRate,
+      quote: (candidate, signal) => fetchReviewedIndicativeRate(
+        candidate,
+        (quoteServer, request, options) => getSep38IndicativePrice(
+          quoteServer,
+          request,
+          { ...options, ...(signal ? { signal } : {}) },
+        ),
+      ),
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
     }),
   ),
