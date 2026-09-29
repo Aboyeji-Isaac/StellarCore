@@ -1,0 +1,54 @@
+# Updated release workflow with SBOM/provenance generation
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test
+
+  generate-artifacts:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Generate SBOM
+        run: npm run generate-sbom
+      - name: Generate Provenance
+        run: npm run generate-provenance
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-artifacts
+          path: |
+            dist/**
+            *.spdx.json
+            *.intoto.json
+
+  verify-artifacts:
+    needs: generate-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: release-artifacts
+      - run: npm run verify-artifact
