@@ -27,28 +27,34 @@ npm run verify:latest-rates
 npm run registry:print
 ```
 
-Each command has its own entry point under `scripts/` and exits non-zero when
-its work reports a failure. `bootstrap:registry` writes the reviewed anchor,
-corridor, and relationship records; `snapshot:rates` calls the configured
-SEP-38 sources and stores successful snapshots; and `verify:reputation`
-recomputes reputation rows from persisted data. Run them against a disposable
-local database when experimenting.
+Each command has its own entry point under `scripts/`. The registry bootstrap
+and rate snapshot commands set a non-zero exit status when their work reports
+failures; `verify:reputation` prints the result of its persisted-data
+calculation and sets a non-zero exit status only when the verification process
+itself fails. `bootstrap:registry` writes the reviewed anchor, corridor, and
+relationship records; `snapshot:rates` calls the configured SEP-38 sources and
+stores successful snapshots; and `verify:reputation` recomputes reputation
+rows from persisted data. Run them against a disposable local database when
+experimenting.
 
-## Seed useful local scenarios
+## Seed the reviewed local registry
 
-The reviewed registry is seeded through the same idempotent command used by
-the documented deployment workflow:
+The reviewed anchor and corridor registry is seeded through the same idempotent
+command used by the documented deployment workflow:
 
 ```bash
 npx prisma migrate dev
 npm run bootstrap:registry
 ```
 
-For a clean experiment, point `DATABASE_URL` at a disposable PostgreSQL
-database and run migrations before bootstrapping. Do not copy production
-credentials into `.env.local`. The rate snapshot and reputation jobs operate
-on the rows already present in that database, so run the bootstrap first when
-you need the reviewed anchors and corridors.
+This command loads the checked-in, reviewed registry configuration and
+reconciles its anchor, corridor, and relationship records. It is not a general
+synthetic-scenario or test-fixture seeder. For a clean experiment, point
+`DATABASE_URL` at a disposable PostgreSQL database and run migrations before
+bootstrapping. Do not copy production credentials into `.env.local`. The rate
+snapshot and reputation jobs operate on the rows already present in that
+database, so run the bootstrap first when you need the reviewed anchors and
+corridors.
 
 ## Run or debug one test file
 
