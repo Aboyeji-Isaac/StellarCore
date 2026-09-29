@@ -9,7 +9,7 @@ container.
 
 ## What is being backed up
 
-One PostgreSQL database (the `DATABASE_URL` of the environment). Data falls
+One PostgreSQL database (the database behind the environment's `DATABASE_READ_URL`, `DATABASE_WRITE_URL`, and `MIGRATION_DATABASE_URL`). Data falls
 into two classes, which matters for recovery decisions:
 
 | Tables | Recoverable without a backup? |
@@ -88,7 +88,7 @@ psql "$RESTORED_URL" -c "select 'anchors', count(*) from anchors
   union all select '_prisma_migrations', count(*) from _prisma_migrations"
 
 # b. Prisma recognizes the restored schema state:
-DATABASE_URL="$RESTORED_URL" npx prisma migrate status   # "Database schema is up to date!"
+MIGRATION_DATABASE_URL="$RESTORED_URL" npx prisma migrate status   # "Database schema is up to date!"
 
 # c. A real read path answers (the /api/rates latest-per-anchor query):
 psql "$RESTORED_URL" -c "SELECT count(*) FROM (
@@ -102,8 +102,14 @@ psql "$RESTORED_URL" -c "SELECT count(*) FROM (
 1. Disable the Vercel cron (per `DEPLOYMENT.md`'s rollback section) so no
    refresh writes race the switch.
 2. Restore into a **new** database and complete the checklist above.
-3. Point the production `DATABASE_URL` (Vercel env + the GitHub `production`
-   environment secret) at the restored database and redeploy.
+3. Point the production database URLs at the restored database: Vercel
+   `DATABASE_READ_URL` / `DATABASE_WRITE_URL` and the GitHub `production`
+   environment's `MIGRATION_DATABASE_URL` / `DATABASE_WRITE_URL`, then
+   redeploy. The restore above uses `--no-owner --no-privileges`, so restore
+   as the migration owner (or `REASSIGN OWNED BY <restoring user> TO
+   <migration owner>` afterwards), then run **Deploy production migrations**,
+   which applies `npm run db:grants`, before the runtime roles can read or
+   write. See [DEPLOYMENT.md](DEPLOYMENT.md#database-roles).
 4. If the dump predates the latest committed migrations, run the
    **Deploy production migrations** workflow to bring it current, then
    re-check `npx prisma migrate status`.

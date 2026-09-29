@@ -82,6 +82,11 @@ payment or Horizon observation.
 Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
+PostgreSQL roles enforce that boundary: public read models connect through
+`lib/db/readClient.ts` as a SELECT-only role, maintenance engines through
+`lib/db/writeClient.ts` as a writer with reviewed DML and no DDL, and only
+migrations and `npm run db:grants` use the schema owner. See
+[DEPLOYMENT.md](DEPLOYMENT.md#database-roles).
 
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal

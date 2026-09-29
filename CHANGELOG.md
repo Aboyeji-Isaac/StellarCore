@@ -9,8 +9,18 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Security
+
+- Enforce least-privilege PostgreSQL roles (#124): separate read-only
+  (`DATABASE_READ_URL`), internal writer (`DATABASE_WRITE_URL`), and migration
+  owner (`MIGRATION_DATABASE_URL`) credentials with no fallback between them;
+  add the reviewed, idempotent `npm run db:grants` plan with default
+  privileges for future migrations; route public repositories through a
+  read-only client and mutation paths through the writer; enforce the import
+  boundary with ESLint and an import-graph test; and prove allowed and denied
+  operations against real PostgreSQL. **Breaking configuration:** the runtime
+  no longer reads `DATABASE_URL`; see
+  [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#migrating-an-existing-single-credential-deployment).
 
 ## [Prior work] — 2026-09-25
 

@@ -43,7 +43,7 @@ const REPUTATION_SCORE_SELECT = {
 
 export const PRISMA_REPUTATION_API_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly ReputationApiAnchorRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const anchors = await db.anchor.findMany({
       orderBy: { slug: "asc" },
       select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },
@@ -53,7 +53,7 @@ export const PRISMA_REPUTATION_API_REPOSITORY = Object.freeze({
   },
 
   async findBySlug(slug: string): Promise<ReputationApiAnchorRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const anchor = await db.anchor.findUnique({
       where: { slug },
       select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },

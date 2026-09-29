@@ -14,8 +14,9 @@
 # (see docs/DEPLOYMENT.md for the full procedure):
 #   1. The GitHub Actions environment named `production` must already exist
 #      (created for the migration workflow).
-#   2. Its `DATABASE_URL` environment secret must be the direct PostgreSQL
-#      connection string suitable for Prisma.
+#   2. Its `DATABASE_WRITE_URL` environment secret must be the internal
+#      writer role's PostgreSQL connection string. The bootstrap never uses
+#      the migration owner credential.
 #   3. Optionally attach required reviewers / protection rules to the
 #      `production` environment.
 #
@@ -41,7 +42,7 @@ jobs:
   bootstrap:
     name: bootstrap registry
     runs-on: ubuntu-latest
-    # GitHub Actions environment: scopes the DATABASE_URL secret to production
+    # GitHub Actions environment: scopes the DATABASE_WRITE_URL secret to production
     # and allows future required-reviewer / protection rules on this job.
     environment: production
     timeout-minutes: 10
@@ -56,16 +57,11 @@ jobs:
           cache: 'npm'
 
       # `npm ci` runs the existing `postinstall` lifecycle script
-      # (`prisma generate`), which loads `prisma.config.ts`. That config
-      # resolves `DATABASE_URL`, so the production secret must be present for
-      # this step or `npm ci` fails with `PrismaConfigEnvError` before the
-      # bootstrap runs. It is scoped to this step only; it is never printed.
+      # (`prisma generate`), which needs no database credential.
       - name: Install dependencies
         run: npm ci
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Bootstrap registry
         run: npm run bootstrap:registry
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_WRITE_URL: ${{ secrets.DATABASE_WRITE_URL }}

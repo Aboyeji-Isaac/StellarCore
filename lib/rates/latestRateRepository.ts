@@ -17,7 +17,7 @@ type PrismaLatestRateRow = Readonly<{
 
 export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze({
   async findCorridorBySlug(slug) {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     return db.corridor.findUnique({
       where: { slug },
       select: {
@@ -32,7 +32,7 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
   },
 
   async findLatestObservations(corridorId) {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const rows = await db.$queryRaw<PrismaLatestRateRow[]>(Prisma.sql`
       SELECT DISTINCT ON (snapshot.anchor_id)
         snapshot.id,

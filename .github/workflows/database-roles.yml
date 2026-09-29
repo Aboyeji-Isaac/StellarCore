@@ -1,0 +1,71 @@
+# Proves the least-privilege PostgreSQL role boundaries against a real,
+# ephemeral PostgreSQL service. The test creates its own throwaway database and
+# synthetic roles, applies the committed migrations as a synthetic owner,
+# applies the reviewed grant plan, and checks allowed and denied operations.
+# It uses only synthetic fixtures and never reaches production data. When the
+# migration-chain CI job (#112) lands, this job can be folded into it.
+
+name: Database role boundaries
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "tests/**"
+      - "eslint.config.mjs"
+      - "prisma.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/database-roles.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  roles:
+    name: database role boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway CI-only superuser for an ephemeral service container.
+          POSTGRES_USER: ci_admin
+          POSTGRES_PASSWORD: ci_admin_password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint import boundaries
+        run: npm run lint
+
+      - name: Unit role and boundary tests
+        run: npm test -- tests/unit/db
+
+      - name: PostgreSQL role integration tests
+        run: npm test -- tests/integration/database
+        env:
+          RUN_DATABASE_ROLE_INTEGRATION: "1"
+          DATABASE_ROLE_TEST_ADMIN_URL: postgresql://ci_admin:ci_admin_password@localhost:5432/postgres

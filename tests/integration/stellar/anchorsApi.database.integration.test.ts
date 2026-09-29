@@ -10,7 +10,8 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
   skip: !DATABASE_INTEGRATION_ENABLED,
 }, async () => {
   await import("dotenv/config");
-  const { db } = await import("@/lib/dbClient");
+  const { createFixtureDatabase, disconnectRuntimeDatabases } = await import("@/tests/support/fixtureDatabase");
+  const db = createFixtureDatabase();
   const suffix = randomUUID().replaceAll("-", "");
   const anchorSlug = `test-anchor-api-${suffix}`;
   const corridorSlug = `test-corridor-api-${suffix}`;
@@ -70,5 +71,6 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
     await db.anchor.deleteMany({ where: { slug: anchorSlug } });
     await db.corridor.deleteMany({ where: { slug: corridorSlug } });
     await db.$disconnect();
+    await disconnectRuntimeDatabases();
   }
 });

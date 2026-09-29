@@ -14,7 +14,8 @@ test("isolated persisted current score and unevaluated anchor are read without e
   skip: !DATABASE_INTEGRATION_ENABLED,
 }, async () => {
   await import("dotenv/config");
-  const { db } = await import("@/lib/dbClient");
+  const { createFixtureDatabase, disconnectRuntimeDatabases } = await import("@/tests/support/fixtureDatabase");
+  const db = createFixtureDatabase();
   const suffix = randomUUID().replaceAll("-", "");
   const evaluatedSlug = `test-reputation-api-evaluated-${suffix}`;
   const unevaluatedSlug = `test-reputation-api-unevaluated-${suffix}`;
@@ -71,5 +72,6 @@ test("isolated persisted current score and unevaluated anchor are read without e
     await db.reputationScore.deleteMany({ where: { anchor: { slug: evaluatedSlug } } });
     await db.anchor.deleteMany({ where: { slug: { in: [evaluatedSlug, unevaluatedSlug] } } });
     await db.$disconnect();
+    await disconnectRuntimeDatabases();
   }
 });

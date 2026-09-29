@@ -34,7 +34,7 @@ export type CorridorDetailRepository = Readonly<{
 
 export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly CorridorDirectoryRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const corridors = await db.corridor.findMany({
       orderBy: { slug: "asc" },
       select: {
@@ -58,7 +58,7 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
   },
 
   async findBySlug(slug: string): Promise<CorridorDetailRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const corridor = await db.corridor.findUnique({
       where: { slug },
       select: {

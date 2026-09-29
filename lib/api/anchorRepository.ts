@@ -31,7 +31,7 @@ export type AnchorDirectoryRepository = Readonly<{
 
 export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly AnchorDirectoryRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const anchors = await db.anchor.findMany({
       orderBy: { slug: "asc" },
       select: {
@@ -55,7 +55,7 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   },
 
   async findBySlug(slug: string): Promise<AnchorDetailRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+    const { readDb: db } = await import("@/lib/db/readClient");
     const anchor = await db.anchor.findUnique({
       where: { slug },
       select: {

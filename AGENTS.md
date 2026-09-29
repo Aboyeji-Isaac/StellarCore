@@ -20,17 +20,18 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
-- `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database.
+- `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database; it connects as the internal writer (`DATABASE_WRITE_URL`).
+- `npm run db:grants` applies the reviewed least-privilege PostgreSQL grant plan (`lib/db/grants.ts`) as the migration owner (`MIGRATION_DATABASE_URL`); run it after migrations. `npm run db:grants -- --print` prints the plan without connecting.
 
 Do not add undocumented scripts; update this guide and the README when commands change.
 
 ## Coding Style & Naming Conventions
 
-Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
+Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Public read paths import only `@/lib/db/readClient`; only the approved mutation paths in `eslint.config.mjs` may import `@/lib/db/writeClient`, and `npm run lint` enforces it. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
 
 ## Testing Guidelines
 
-Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses.
+Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses. Database role tests (`tests/integration/database`) run only when `RUN_DATABASE_ROLE_INTEGRATION=1` and `DATABASE_ROLE_TEST_ADMIN_URL` point at an isolated PostgreSQL server; they create and drop their own synthetic database and roles.
 
 ## Commit & Pull Request Guidelines
 
@@ -38,4 +39,4 @@ No commit convention is established yet. Use concise, imperative subjects, optio
 
 ## Security & Configuration
 
-Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.
+Copy `.env.example` to `.env.local`; the runtime uses `DATABASE_READ_URL` and `DATABASE_WRITE_URL`, and only the Prisma CLI and grant tooling use `MIGRATION_DATABASE_URL`. Never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.

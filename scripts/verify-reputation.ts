@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { db } from "@/lib/dbClient";
+import { writeDb as db } from "@/lib/db/writeClient";
 import { evaluatePersistedAnchorReputations } from "@/lib/reputation/run";
 
 const ANCHOR_SLUGS = Object.freeze(["cowrie", "moneygram", "zeam"]);

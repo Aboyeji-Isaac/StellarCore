@@ -10,7 +10,8 @@ test("isolated database evidence persists one current ReputationScore row", {
   skip: !DATABASE_INTEGRATION_ENABLED,
 }, async () => {
   await import("dotenv/config");
-  const { db } = await import("@/lib/dbClient");
+  const { createFixtureDatabase, disconnectRuntimeDatabases } = await import("@/tests/support/fixtureDatabase");
+  const db = createFixtureDatabase();
   const suffix = randomUUID().replaceAll("-", "");
   const anchorSlug = `test-reputation-${suffix}`;
   const corridorSlug = `test-reputation-corridor-${suffix}`;
@@ -86,5 +87,6 @@ test("isolated database evidence persists one current ReputationScore row", {
     await db.anchor.deleteMany({ where: { slug: anchorSlug } });
     await db.corridor.deleteMany({ where: { slug: corridorSlug } });
     await db.$disconnect();
+    await disconnectRuntimeDatabases();
   }
 });

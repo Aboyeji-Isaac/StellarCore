@@ -316,19 +316,27 @@ stellarcore/
 ```bash
 # .env.example
 
-# Server-only application/runtime PostgreSQL connection for this environment.
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+# Public read-only role: public API routes and the dashboard.
+DATABASE_READ_URL="postgresql://READ_USER:PASSWORD@HOST:PORT/DATABASE"
+
+# Internal writer role: scheduled refresh, registry bootstrap, persistence.
+DATABASE_WRITE_URL="postgresql://WRITE_USER:PASSWORD@HOST:PORT/DATABASE"
+
+# Migration owner: Prisma CLI and `npm run db:grants` only; never a deployed runtime.
+MIGRATION_DATABASE_URL="postgresql://OWNER_USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
 ```
 
-`DATABASE_URL` is server-only. The application runtime uses the connection
-appropriate to its deployment environment; local development may use a
-compatible PostgreSQL database. Separately, the protected production migration
-workflow supplies its direct Prisma Postgres credential through its GitHub
-Actions `DATABASE_URL` secret. Neither credential belongs in client code,
-repository files, or logs.
+All three database URLs are server-only and belong to three different
+PostgreSQL roles in production: a SELECT-only reader, an internal writer with
+reviewed DML and no DDL, and the migration owner. The runtime never falls back
+from one URL to another, and a production runtime refuses to connect when the
+migration credential is present. Local development may point all three URLs at
+one local PostgreSQL user. See
+[docs/DEPLOYMENT.md#database-roles](docs/DEPLOYMENT.md#database-roles). No
+credential belongs in client code, repository files, or logs.
 
 ---
 
@@ -351,7 +359,10 @@ npm install
 
 # 3. Set up environment variables
 cp .env.example .env.local
-# Fill in DATABASE_URL. CRON_SECRET is needed only when exercising the refresh route.
+# Fill in DATABASE_READ_URL, DATABASE_WRITE_URL, and MIGRATION_DATABASE_URL
+# (they may share one local user). The Prisma CLI loads .env, so also export
+# MIGRATION_DATABASE_URL or copy it into .env for step 4. CRON_SECRET is needed
+# only when exercising the refresh route.
 
 # 4. Run database migrations
 npx prisma migrate dev
@@ -382,6 +393,9 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Apply the reviewed least-privilege PostgreSQL grants as the migration owner
+npm run db:grants
 ```
 
 ### Running Tests
@@ -425,6 +439,13 @@ network, or environment secrets and writes nothing. The registry does not store
 SEP support — that is discovered from each anchor's `stellar.toml` during
 `bootstrap:registry` — so the script says so rather than guessing.
 
+`db:grants` applies the reviewed read/write role grants in `lib/db/grants.ts`
+with `MIGRATION_DATABASE_URL`, after migrations. It is idempotent, touches no
+rows, prints only role names and bounded codes, and exits nonzero when a
+runtime role is missing, over-privileged, or owns schema objects. Add
+`-- --print` to print the plan without connecting. See
+[docs/DEPLOYMENT.md#database-roles](docs/DEPLOYMENT.md#database-roles).
+
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the
 exact median when enough sources exist, and verifies the snapshot count is
@@ -445,8 +466,8 @@ the production build, or `postinstall`.
 StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma ORM. The full staged deployment procedure is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); it does not provision or deploy infrastructure.
 
 - Use Node.js 22.x and `npm run build`; existing `postinstall` generates Prisma Client.
-- Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
-- Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- Set server-only `DATABASE_READ_URL`, `DATABASE_WRITE_URL`, and `CRON_SECRET` on Vercel; never set `MIGRATION_DATABASE_URL` or `DATABASE_URL` there. `DIRECT_URL` is not used.
+- Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` and then `npm run db:grants` with the migration owner credential — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - The Hobby-compatible Vercel Cron calls the authenticated refresh route daily at `0 0 * * *`.
 - Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.

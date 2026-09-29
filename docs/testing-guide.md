@@ -32,6 +32,34 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Database role tests
+
+`tests/integration/database/roles.database.integration.test.ts` proves the
+least-privilege PostgreSQL roles against a real server. It creates a throwaway
+database and synthetic owner, reader, and writer roles, applies the committed
+migrations as the synthetic owner, applies `npm run db:grants`'s plan, and
+checks that public read paths succeed as the reader, approved mutation paths
+succeed as the writer, forbidden DML/DDL fails for each role, and a table added
+by a later migration receives the intended default grants. It uses only
+synthetic fixtures and drops everything it created.
+
+It is opt-in and needs an isolated PostgreSQL server where the admin role has
+`CREATEDB` and `CREATEROLE`:
+
+```bash
+RUN_DATABASE_ROLE_INTEGRATION=1 \
+DATABASE_ROLE_TEST_ADMIN_URL="postgresql://ADMIN:PASSWORD@localhost:5432/postgres" \
+npm test -- tests/integration/database
+```
+
+The **Database role boundaries** workflow runs it against an ephemeral
+PostgreSQL service on pull requests. The other opt-in database tests
+(`RUN_DATABASE_INTEGRATION`, `RUN_REPUTATION_DATABASE_INTEGRATION`,
+`RUN_REPUTATION_API_DATABASE_INTEGRATION`) exercise application code through
+`DATABASE_READ_URL` / `DATABASE_WRITE_URL` and seed and remove their synthetic
+fixtures through `MIGRATION_DATABASE_URL`, because the runtime roles
+intentionally cannot delete evidence.
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The

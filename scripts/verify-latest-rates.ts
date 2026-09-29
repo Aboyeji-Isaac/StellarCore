@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { db } from "@/lib/dbClient";
+import { readDb as db } from "@/lib/db/readClient";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 
 const CORRIDOR_SLUG = "usdc-us-brl-br";
