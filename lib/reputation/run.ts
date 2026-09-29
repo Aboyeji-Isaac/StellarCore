@@ -64,10 +64,10 @@ async function listPersistedAnchorSlugs(): Promise<readonly string[]> {
   return Object.freeze(anchors.map(({ slug }) => slug));
 }
 
-const DEFAULT_DEPENDENCIES = Object.freeze({
+const DEFAULT_DEPENDENCIES: ReputationEvaluationRunDependencies = Object.freeze({
   listAnchorSlugs: listPersistedAnchorSlugs,
   evaluate: evaluateAnchorReputation,
-}) satisfies ReputationEvaluationRunDependencies;
+});
 
 function normalizeSlugs(slugs: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(slugs)].sort((left, right) =>

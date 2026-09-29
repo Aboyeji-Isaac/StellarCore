@@ -95,4 +95,50 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       computedAt: new Date(persisted.computedAt.getTime()),
     });
   },
+
+  async readHistoricalEvaluation(anchorSlug, computedAt) {
+    const { db } = await import("@/lib/dbClient");
+    const anchor = await db.anchor.findUnique({
+      where: { slug: anchorSlug },
+      select: { id: true, slug: true },
+    });
+    if (!anchor) return null;
+
+    const record = await db.reputationHistory.findFirst({
+      where: {
+        anchorId: anchor.id,
+        computedAt: new Date(computedAt),
+      },
+      orderBy: [ { id: "asc" } ],
+      select: {
+        id: true,
+        anchorId: true,
+        computedAt: true,
+        policyVersion: true,
+        state: true,
+        compositeScore: true,
+        scoreBand: true,
+        components: true,
+        metrics: true,
+        counts: true,
+        manifest: true,
+      },
+    });
+    if (!record) return null;
+
+    return Object.freeze({
+      id: record.id,
+      anchorId: record.anchorId,
+      anchorSlug: anchor.slug,
+      computedAt: new Date(record.computedAt.getTime()),
+      policyVersion: record.policyVersion,
+      state: record.state,
+      compositeScore: record.compositeScore,
+      scoreBand: record.scoreBand,
+      components: record.components,
+      metrics: record.metrics,
+      counts: record.counts,
+      manifest: record.manifest,
+    });
+  },
 });
