@@ -15,6 +15,8 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
   const anchorSlug = `test-anchor-api-${suffix}`;
   const corridorSlug = `test-corridor-api-${suffix}`;
   const registryOnlySlug = `test-registry-only-${suffix}`;
+  const retiredAnchorSlug = `test-retired-anchor-${suffix}`;
+  const retiredCorridorSlug = `test-retired-corridor-${suffix}`;
 
   try {
     const anchor = await db.anchor.create({
@@ -41,14 +43,53 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
     await db.anchorCorridor.create({
       data: { anchorId: anchor.id, corridorId: corridor.id },
     });
+    const retiredAnchor = await db.anchor.create({
+      data: {
+        slug: retiredAnchorSlug,
+        name: "Retired historical fixture",
+        homeDomain: `retired-${suffix}.example.com`,
+        tomlUrl: `https://retired-${suffix}.example.com/.well-known/stellar.toml`,
+        registryActive: false,
+        registryRetiredAt: new Date(),
+        registryRetirementReason: "removed_from_reviewed_registry",
+      },
+      select: { id: true },
+    });
+    const retiredCorridor = await db.corridor.create({
+      data: {
+        slug: retiredCorridorSlug,
+        assetCodeFrom: "USD",
+        countryFrom: "US",
+        assetCodeTo: "NGN",
+        countryTo: "NG",
+        registryActive: false,
+        registryRetiredAt: new Date(),
+        registryRetirementReason: "removed_from_reviewed_registry",
+      },
+      select: { id: true },
+    });
+    await db.rateSnapshot.create({
+      data: {
+        anchorId: retiredAnchor.id,
+        corridorId: retiredCorridor.id,
+        rate: "1500",
+        sourceAmount: "1",
+        destinationAmount: "1500",
+      },
+    });
 
     const list = await getAnchorsApiResult();
     const detail = await getAnchorApiResult(anchorSlug);
     const registryOnly = await getAnchorApiResult(registryOnlySlug);
+    const retired = await getAnchorApiResult(retiredAnchorSlug);
 
     assert.equal(list.status, 200);
     assert.equal(detail.status, 200);
     assert.equal(registryOnly.status, 404);
+    assert.equal(retired.status, 404);
+    assert.equal(await db.rateSnapshot.count({
+      where: { anchorId: retiredAnchor.id, corridorId: retiredCorridor.id },
+    }), 1);
     if (list.status !== 200 || detail.status !== 200) return;
     const listed = list.body.anchors.find(({ slug }) => slug === anchorSlug);
     assert.equal(listed?.corridorCount, 1);
@@ -64,11 +105,18 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
       destinationCountry: "BR",
     }]);
   } finally {
+    await db.rateSnapshot.deleteMany({
+      where: { anchor: { slug: retiredAnchorSlug } },
+    });
     await db.anchorCorridor.deleteMany({
       where: { anchor: { slug: anchorSlug }, corridor: { slug: corridorSlug } },
     });
-    await db.anchor.deleteMany({ where: { slug: anchorSlug } });
-    await db.corridor.deleteMany({ where: { slug: corridorSlug } });
+    await db.anchor.deleteMany({
+      where: { slug: { in: [anchorSlug, retiredAnchorSlug] } },
+    });
+    await db.corridor.deleteMany({
+      where: { slug: { in: [corridorSlug, retiredCorridorSlug] } },
+    });
     await db.$disconnect();
   }
 });

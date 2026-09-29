@@ -36,6 +36,7 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly CorridorDirectoryRecord[]> {
     const { db } = await import("@/lib/dbClient");
     const corridors = await db.corridor.findMany({
+      where: { registryActive: true },
       orderBy: { slug: "asc" },
       select: {
         slug: true,
@@ -43,7 +44,13 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
         countryFrom: true,
         assetCodeTo: true,
         countryTo: true,
-        _count: { select: { anchors: true } },
+        _count: {
+          select: {
+            anchors: {
+              where: { registryActive: true, anchor: { registryActive: true } },
+            },
+          },
+        },
       },
     });
 
@@ -59,8 +66,8 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
 
   async findBySlug(slug: string): Promise<CorridorDetailRecord | null> {
     const { db } = await import("@/lib/dbClient");
-    const corridor = await db.corridor.findUnique({
-      where: { slug },
+    const corridor = await db.corridor.findFirst({
+      where: { slug, registryActive: true },
       select: {
         slug: true,
         assetCodeFrom: true,
@@ -68,6 +75,7 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
         assetCodeTo: true,
         countryTo: true,
         anchors: {
+          where: { registryActive: true, anchor: { registryActive: true } },
           orderBy: { anchor: { slug: "asc" } },
           select: {
             anchor: {

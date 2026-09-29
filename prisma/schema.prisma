@@ -47,16 +47,20 @@ enum ReputationState {
 }
 
 model Anchor {
-  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug              String       @unique
-  name              String
-  homeDomain        String       @map("home_domain")
-  tomlUrl           String       @map("toml_url")
-  seps              Int[]        @default([])
-  isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
-  status            AnchorStatus @default(UNKNOWN)
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                     String       @unique
+  name                     String
+  homeDomain               String       @map("home_domain")
+  tomlUrl                  String       @map("toml_url")
+  seps                     Int[]        @default([])
+  isTransferCapable        Boolean      @default(false) @map("is_transfer_capable")
+  status                   AnchorStatus @default(UNKNOWN)
+  registryActive           Boolean      @default(true) @map("registry_active")
+  registryActivatedAt      DateTime     @default(now()) @map("registry_activated_at") @db.Timestamptz(6)
+  registryRetiredAt        DateTime?    @map("registry_retired_at") @db.Timestamptz(6)
+  registryRetirementReason String?      @map("registry_retirement_reason")
+  createdAt                DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   corridors        AnchorCorridor[]
   rateSnapshots    RateSnapshot[]
@@ -67,12 +71,16 @@ model Anchor {
 }
 
 model Corridor {
-  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  assetCodeFrom String @map("asset_code_from")
-  countryFrom   String @map("country_from")
-  assetCodeTo   String @map("asset_code_to")
-  countryTo     String @map("country_to")
-  slug          String @unique
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetCodeFrom            String    @map("asset_code_from")
+  countryFrom              String    @map("country_from")
+  assetCodeTo              String    @map("asset_code_to")
+  countryTo                String    @map("country_to")
+  slug                     String    @unique
+  registryActive           Boolean   @default(true) @map("registry_active")
+  registryActivatedAt      DateTime  @default(now()) @map("registry_activated_at") @db.Timestamptz(6)
+  registryRetiredAt        DateTime? @map("registry_retired_at") @db.Timestamptz(6)
+  registryRetirementReason String?   @map("registry_retirement_reason")
 
   anchors          AnchorCorridor[]
   rateSnapshots    RateSnapshot[]
@@ -82,8 +90,12 @@ model Corridor {
 }
 
 model AnchorCorridor {
-  anchorId   String @map("anchor_id") @db.Uuid
-  corridorId String @map("corridor_id") @db.Uuid
+  anchorId                 String    @map("anchor_id") @db.Uuid
+  corridorId               String    @map("corridor_id") @db.Uuid
+  registryActive           Boolean   @default(true) @map("registry_active")
+  registryActivatedAt      DateTime  @default(now()) @map("registry_activated_at") @db.Timestamptz(6)
+  registryRetiredAt        DateTime? @map("registry_retired_at") @db.Timestamptz(6)
+  registryRetirementReason String?   @map("registry_retirement_reason")
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)

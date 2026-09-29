@@ -67,6 +67,9 @@ export async function persistDiscoveredAnchor(
     seps: [...anchor.seps],
     isTransferCapable: anchor.isTransferCapable,
     status: AnchorStatus.LIVE,
+    registryActive: true,
+    registryRetiredAt: null,
+    registryRetirementReason: null,
   };
 
   const persisted = await db.anchor.upsert({
@@ -82,7 +85,7 @@ export async function persistDiscoveredAnchor(
 export async function markAnchorDownIfExists(slug: string): Promise<boolean> {
   const { db } = await import("@/lib/dbClient");
   const result = await db.anchor.updateMany({
-    where: { slug },
+    where: { slug, registryActive: true },
     data: { status: AnchorStatus.DOWN },
   });
 

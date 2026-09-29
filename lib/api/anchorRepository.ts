@@ -33,6 +33,7 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly AnchorDirectoryRecord[]> {
     const { db } = await import("@/lib/dbClient");
     const anchors = await db.anchor.findMany({
+      where: { registryActive: true },
       orderBy: { slug: "asc" },
       select: {
         slug: true,
@@ -40,7 +41,13 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
         homeDomain: true,
         status: true,
         seps: true,
-        _count: { select: { corridors: true } },
+        _count: {
+          select: {
+            corridors: {
+              where: { registryActive: true, corridor: { registryActive: true } },
+            },
+          },
+        },
       },
     });
 
@@ -56,8 +63,8 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
 
   async findBySlug(slug: string): Promise<AnchorDetailRecord | null> {
     const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug },
+    const anchor = await db.anchor.findFirst({
+      where: { slug, registryActive: true },
       select: {
         slug: true,
         name: true,
@@ -65,6 +72,7 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
         status: true,
         seps: true,
         corridors: {
+          where: { registryActive: true, corridor: { registryActive: true } },
           orderBy: { corridor: { slug: "asc" } },
           select: {
             corridor: {

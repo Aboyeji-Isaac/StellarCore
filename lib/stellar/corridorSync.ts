@@ -73,6 +73,9 @@ export async function persistCorridor(
     countryFrom: corridor.countryFrom,
     assetCodeTo: corridor.assetCodeTo,
     countryTo: corridor.countryTo,
+    registryActive: true,
+    registryRetiredAt: null,
+    registryRetirementReason: null,
   };
 
   const persisted = await db.corridor.upsert({
@@ -116,23 +119,35 @@ export async function persistAnchorCorridorAssociations(
     }
 
     const desiredCorridorIds = corridorIds as string[];
-    const removed = await transaction.anchorCorridor.deleteMany({
+    const retiredAt = new Date();
+    const removed = await transaction.anchorCorridor.updateMany({
       where: {
         anchorId: anchor.id,
         corridorId: { notIn: desiredCorridorIds },
+        registryActive: true,
+      },
+      data: {
+        registryActive: false,
+        registryRetiredAt: retiredAt,
+        registryRetirementReason: "removed_from_reviewed_registry",
       },
     });
 
-    await transaction.anchorCorridor.createMany({
-      data: desiredCorridorIds.map((corridorId) => ({
-        anchorId: anchor.id,
-        corridorId,
-      })),
-      skipDuplicates: true,
-    });
+    for (const corridorId of desiredCorridorIds) {
+      await transaction.anchorCorridor.upsert({
+        where: { anchorId_corridorId: { anchorId: anchor.id, corridorId } },
+        create: { anchorId: anchor.id, corridorId },
+        update: {
+          registryActive: true,
+          registryActivatedAt: retiredAt,
+          registryRetiredAt: null,
+          registryRetirementReason: null,
+        },
+      });
+    }
 
     const associationCount = await transaction.anchorCorridor.count({
-      where: { anchorId: anchor.id },
+      where: { anchorId: anchor.id, registryActive: true },
     });
 
     return freezeAssociationResult({
