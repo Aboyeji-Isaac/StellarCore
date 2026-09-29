@@ -1,8 +1,9 @@
 # Load-testing plan and results — public API
 
-A reusable k6 plan for the public read-only GET routes, and the real results
-of running it on 2026-09-25 against a local production build, per #63. No
-load was sent to the live production deployment, per the issue's
+A reusable, reproducible k6 plan for the public read-only GET routes, and the
+real results of running it on 2026-09-29 against a local production build of
+current `main` (which includes PR #70's `rate_snapshots` covering indexes).
+No load was sent to the live production deployment, per the issue's
 out-of-scope rule.
 
 ## The plan
@@ -14,89 +15,117 @@ product's hot path), 20% `GET /api/reputation`, 15%
 `GET /api/corridors` — with 0.5–2.5 s think-time between requests, so VU
 count approximates *concurrent users*, not raw request floods.
 
+**Dataset:** `tests/load/seed.ts`, a deterministic load-test-only seeder.
+Every slug it writes carries the `loadtest-` prefix, so synthetic rows can
+never collide with — or be mistaken for — the reviewed registry that
+`bootstrap:registry` maintains, and teardown removes exactly that prefix.
+Values are index arithmetic, not `random()`: a fresh checkout reproduces the
+documented dataset byte for byte. **Synthetic load data is measurement
+fixture only and must never surface through the public product as real
+Stellar evidence.**
+
 **Method:** fixed-VU runs at increasing levels (5 → 15 → 30 → 50), 45 s
 each, comparing per-endpoint p95 across levels to locate the degradation
 point. Fixed levels give clean per-level tables; a single ramped run hides
 the knee inside one aggregate.
 
-**Running it** (any k6; the Docker image needs no install):
+## Reproducing the run (local only — never production)
 
 ```bash
-# 1. Database: local Postgres, committed migrations, seeded dataset
-#    (24 anchors x 4 corridors, 90 days of hourly rate snapshots = 207,360
-#    rows, plus 8,640 transfer outcomes and per-anchor reputation scores).
-# 2. App: a production build, NOT the dev server:
-DATABASE_URL=... npm run build && DATABASE_URL=... npm start
-# 3. One run per level:
+# 1. Throwaway Postgres + schema (all committed migrations, PR #70 included):
+docker run -d --rm --name stellarcore-load -e POSTGRES_PASSWORD=pw \
+  -p 55450:5432 postgres:16-alpine
+export DATABASE_URL="postgresql://postgres:pw@localhost:55450/stellarcore"
+docker exec stellarcore-load psql -U postgres -c 'CREATE DATABASE stellarcore'
+npx prisma migrate deploy
+
+# 2. The deterministic dataset (24 anchors × 4 corridors × 90 days hourly
+#    = 207,360 snapshots; ANCHORS/CORRIDORS/DAYS env vars override):
+npx tsx tests/load/seed.ts
+
+# 3. A production build, NOT the dev server:
+npm run build && npm start
+
+# 4. One k6 run per level (the Docker image needs no install):
 docker run --rm -i --add-host=host.docker.internal:host-gateway \
   -e BASE_URL=http://host.docker.internal:3000 -e VUS=15 \
   grafana/k6 run - < tests/load/api-load.js
+
+# 5. Remove every synthetic row (children first, loadtest-% scoped):
+npx tsx tests/load/seed.ts --teardown
 ```
 
-**Never point `BASE_URL` at the live production API without explicit
-maintainer confirmation.**
-
-## Results (2026-09-25, real run)
+## Results (2026-09-29, current `main` with the #70 indexes)
 
 Environment: local Windows host; `next start` (single instance, production
-build of commit `7c36dc8`-era main — i.e. **without** the covering indexes
-proposed in PR #70); Postgres 16 in Docker; dataset as above. Absolute
-numbers are therefore not Vercel numbers — the shape and the ratios are the
-signal, and serverless adds per-invocation overhead but also horizontal
-fan-out this single instance does not have.
+build); Postgres 16 in Docker; dataset as above. Absolute numbers are not
+Vercel numbers — the shape and the ratios are the signal.
 
 | VUs | req/s | Error rate | `/api/rates` p50 / p95 | `/api/reputation` p95 | `/api/reputation/[slug]` p95 | `/api/anchors` p95 | `/api/corridors` p95 |
 | --- | ----- | ---------- | ---------------------- | --------------------- | ---------------------------- | ------------------ | -------------------- |
-| 5   | 3.0   | 0%         | 260 ms / 621 ms        | 37 ms                 | 42 ms                        | 25 ms              | 21 ms                |
-| 15  | 7.6   | 0%         | 664 ms / 2.87 s        | 338 ms                | 590 ms                       | 220 ms             | 538 ms               |
-| 30  | 15.2  | 0%         | 602 ms / 2.73 s        | 797 ms                | 224 ms                       | 409 ms             | 123 ms               |
-| 50  | 19.2  | 0%         | **1.55 s / 2.97 s**    | 1.64 s                | 1.11 s                       | 854 ms             | 866 ms               |
+| 5   | 3.1   | 0%         | 16 ms / 53 ms          | 31 ms                 | 21 ms                        | 18 ms              | 30 ms                |
+| 15  | 9.7   | 0%         | 25 ms / 113 ms         | 199 ms                | 25 ms                        | 33 ms              | 16 ms                |
+| 30  | 19.0  | 0%         | 21 ms / 147 ms         | 18 ms                 | 24 ms                        | 161 ms             | 15 ms                |
+| 50  | 31.6  | 0%         | 26 ms / 127 ms         | 31 ms                 | 29 ms                        | 136 ms             | 25 ms                |
 
-(928 requests at the 50-VU level; every request returned 200 at every level —
-the Prisma pool and Postgres never failed, they just queued.)
+(1,498 requests at the 50-VU level; every request returned 200 at every
+level.)
 
 ## Findings
 
-1. **`/api/rates` is the bottleneck from the first user.** 260 ms median at
-   5 VUs and p95 near 3 s from 15 VUs onward. This is the known
-   sort-the-whole-corridor-history query cost (measured independently in
-   PR #70); under concurrency those sorts compete for the same cores and
-   everything queues behind them.
-2. **The system-wide knee is ≈ 30 concurrent users** on this hardware.
-   Up to 30 VUs the cheap endpoints stay in tens-to-hundreds of ms while
-   rates saturates; between 30 and 50 VUs *every* endpoint degrades
-   (anchors median 16 ms → 240 ms), the signature of CPU/pool saturation
-   spilling over rather than one slow query.
-3. **Failure mode is latency, not errors: 0% errors at every level.**
-   Nothing broke; requests queued. On serverless this converts to function
-   timeouts and bill growth rather than 500s — which also means there is no
-   error signal to alert on today, only latency.
-4. **Throughput scaled sub-linearly** (3.0 → 19.2 req/s for 10× the users
-   at ~1.5 s think-time-adjusted demand), confirming contention rather than
-   capacity headroom.
+1. **No degradation point up to 50 concurrent users.** Median latency is
+   essentially flat across the whole ladder (rates 16 → 26 ms) and
+   throughput scales linearly with demand (3.1 → 31.6 req/s, exactly the
+   ×10 the VU count implies under think-time) — the ladder never found the
+   knee on this hardware. The previous revision of this document measured a
+   system-wide knee at ≈30 users; that measurement predates the #70 indexes
+   (appendix below).
+2. **`/api/rates` is still the heaviest route, but no longer a problem**:
+   ~25 ms median and 110–150 ms p95 under load, with the per-request sort
+   of the corridor's history gone. Its p95 plateaus rather than growing
+   with VUs — contention noise, not a scaling curve.
+3. **The tail is spiky, not the median**: every route shows occasional
+   300–700 ms maxima (a few per thousand requests) with clean p50/p90 —
+   Node GC pauses and Docker networking on a laptop, worth re-measuring on
+   real infrastructure before chasing.
+4. **Failure mode remains latency, never errors: 0% at every level.**
+   Nothing errors under this load; there is still no error signal to alert
+   on, only latency.
 
-## Where the current setup needs to scale
+## Where the current setup would need to scale
 
-In priority order, matching the measured shape:
-
-1. **Fix the rates query cost** — PR #70's covering indexes remove the
-   per-request sort (2,935 → 197 ms warm in isolation). This moves the
-   entire knee, since rates is both the hottest and the heaviest route.
-2. **Shared response caching** — every route measured is read-only and
-   `Cache-Control: no-store`. Rates change at cron cadence (daily), so even
-   a short shared `s-maxage`/SWR would collapse repeated load to ~one DB hit
-   per corridor per window, and is the cheapest large win.
+1. **Find the real ceiling**: 50 think-time users no longer approach it.
+   The next bottleneck candidates are the Prisma connection pool /
+   Postgres `max_connections` under serverless fan-out — a hosting
+   configuration decision (pool size, PgBouncer) — and they need a rawer
+   arrival rate (k6 `constant-arrival-rate`, no think time) to surface.
+2. **Shared response caching is still the cheapest win**: every route
+   measured is read-only and `Cache-Control: no-store`, while rates change
+   at cron cadence. Even a short shared `s-maxage` would collapse repeated
+   load to ~one DB hit per corridor per window.
 3. **Rate limiting** (tracked in the threat model, #61): nothing bounds a
-   single client today; the 0%-errors result means an abusive loop degrades
+   single client, and the 0%-errors result means an abusive loop degrades
    everyone silently.
-4. After 1–2, re-run this plan; the next expected ceiling is the Prisma
-   connection pool / Postgres `max_connections` under serverless fan-out,
-   which is a hosting configuration decision (pool size, PgBouncer) rather
-   than a code change.
+
+## Appendix: pre-#70 baseline (historical, 2026-09-25)
+
+Kept only to document what the covering indexes bought; **the tables above
+are the current baseline.** Same ladder, same dataset shape, same machine,
+before `rate_snapshots_latest_observation_idx` /
+`rate_snapshots_anchor_corridor_latest_idx` existed:
+
+| VUs | req/s | `/api/rates` p50 / p95 | Notes |
+| --- | ----- | ---------------------- | ----- |
+| 5   | 3.0   | 260 ms / 621 ms        | rates already the bottleneck at one user |
+| 15  | 7.6   | 664 ms / 2.87 s        | rates saturated |
+| 30  | 15.2  | 602 ms / 2.73 s        | system-wide knee ≈ here |
+| 50  | 19.2  | 1.55 s / 2.97 s        | every endpoint degrading together |
+
+Post-#70, the same 50-VU rates p95 is **127 ms — roughly 23× better** — and
+the knee is gone from the measurable range.
 
 ## Re-running after changes
 
-The script is deterministic in shape (seeded slugs, fixed mix), so re-running
-the same ladder after #70's indexes or a caching change yields directly
-comparable tables. Keep the dataset generator and VU ladder identical when
-comparing.
+The seeder and the script are deterministic, so re-running the same ladder
+after a caching change (or on different hardware) yields directly comparable
+tables. Keep the dataset parameters and VU ladder identical when comparing.

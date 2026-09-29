@@ -34,15 +34,20 @@ export const options = {
   },
 };
 
-// Slugs from the seeded dataset (see docs/load-testing.md).
-const CORRIDORS = [1, 2, 3, 4].map((i) => `usdc-us-ngnc-ng-${i}`);
-const ANCHORS = Array.from({ length: 24 }, (_, i) => `anchor-${i + 1}`);
+// Slugs from tests/load/seed.ts — one convention, defined there, derived
+// here from the same counts (override N_ANCHORS/N_CORRIDORS to match a
+// non-default seed). The `loadtest-` prefix keeps synthetic rows unmistakable
+// and lets `seed.ts --teardown` remove exactly them.
+const N_CORRIDORS = Number(__ENV.N_CORRIDORS || 4);
+const N_ANCHORS = Number(__ENV.N_ANCHORS || 24);
+const CORRIDORS = Array.from({ length: N_CORRIDORS }, (_, i) => `loadtest-usdc-ngn-${i + 1}`);
+const ANCHORS = Array.from({ length: N_ANCHORS }, (_, i) => `loadtest-anchor-${i + 1}`);
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-export default function () {
+export default function scenario() {
   // Weighted mix: the rate comparison is the product's hot path.
   const r = Math.random();
   let res;
