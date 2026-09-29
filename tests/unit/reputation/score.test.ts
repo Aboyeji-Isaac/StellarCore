@@ -146,6 +146,11 @@ function evidence(options: {
       capturedAt: new Date(NOW.getTime() - rate.ageMs),
     }))),
     transferOutcomes: Object.freeze([...(options.transferOutcomes ?? [])]),
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
 }
 
