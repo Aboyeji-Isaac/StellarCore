@@ -7,7 +7,7 @@ and debugged independently without repeating that setup guide.
 
 ## Run one workflow at a time
 
-After migrations have been applied and `.env.local` contains a local
+After migrations have been applied and `.env` contains a local
 `DATABASE_URL`, run the jobs directly from the repository root:
 
 ```bash
@@ -43,7 +43,7 @@ The reviewed anchor and corridor registry is seeded through the same idempotent
 command used by the documented deployment workflow:
 
 ```bash
-npx prisma migrate dev
+npx prisma migrate deploy
 npm run bootstrap:registry
 ```
 
@@ -51,7 +51,7 @@ This command loads the checked-in, reviewed registry configuration and
 reconciles its anchor, corridor, and relationship records. It is not a general
 synthetic-scenario or test-fixture seeder. For a clean experiment, point
 `DATABASE_URL` at a disposable PostgreSQL database and run migrations before
-bootstrapping. Do not copy production credentials into `.env.local`. The rate
+bootstrapping. Do not copy production credentials into `.env`. The rate
 snapshot and reputation jobs operate on the rows already present in that
 database, so run the bootstrap first when you need the reviewed anchors and
 corridors.
