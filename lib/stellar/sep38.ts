@@ -355,8 +355,12 @@ export function parseSep38IndicativePrice(
   const record = requireRecord(value, endpoint);
 
   return Object.freeze({
-    sellAsset: request.sellAsset,
-    buyAsset: request.buyAsset,
+    sellAsset: record.sell_asset !== undefined
+      ? parseAsset(requireString(record.sell_asset, "sell_asset", endpoint))
+      : request.sellAsset,
+    buyAsset: record.buy_asset !== undefined
+      ? parseAsset(requireString(record.buy_asset, "buy_asset", endpoint))
+      : request.buyAsset,
     totalPrice: requireDecimal(
       record.total_price,
       "total_price",
@@ -377,6 +381,24 @@ export function parseSep38IndicativePrice(
       true,
     ),
     fee: parseFee(record.fee, endpoint),
+    ...(record.sell_delivery_method !== undefined
+      ? {
+          sellDeliveryMethod: requireString(
+            record.sell_delivery_method,
+            "sell_delivery_method",
+            endpoint,
+          ),
+        }
+      : {}),
+    ...(record.buy_delivery_method !== undefined
+      ? {
+          buyDeliveryMethod: requireString(
+            record.buy_delivery_method,
+            "buy_delivery_method",
+            endpoint,
+          ),
+        }
+      : {}),
   });
 }
 
