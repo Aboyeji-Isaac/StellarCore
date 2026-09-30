@@ -455,7 +455,7 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 ## API Reference
 
-All public endpoints return JSON and are read-only.
+All public endpoints return JSON and are read-only. Requests are budgeted per client; over-budget requests receive HTTP 429 `rate_limited` with `Retry-After` (see [docs/rate-limiting.md](docs/rate-limiting.md)).
 
 ### `GET /api/anchors`
 
