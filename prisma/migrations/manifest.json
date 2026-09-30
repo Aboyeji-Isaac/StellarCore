@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "generatedAt": "2026-09-30T12:34:37.187Z",
+  "migrations": {
+    "20260818140749_init/migration.sql": {
+      "path": "20260818140749_init/migration.sql",
+      "digest": "c28184efb37057090551057bd3daf4edd01bb3f458a844b86ed7ed9e243362b4",
+      "byteLength": 5304
+    },
+    "20260925124558_add_rate_snapshots_read_path_indexes/migration.sql": {
+      "path": "20260925124558_add_rate_snapshots_read_path_indexes/migration.sql",
+      "digest": "e5dbcc791f58d3d0a42881e150f0174e7764e93d2863394bf27e90ca274c5838",
+      "byteLength": 360
+    }
+  }
+}
