@@ -13,7 +13,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm install` installs locked dependencies.
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
-- `npm test` runs Vitest unit and integration tests.
+- `npm test` runs Vitest unit and integration tests. Database-gated integration suites skip by default; `npm run test:db` runs the full sequence against an isolated PostgreSQL database (fresh migration chain from zero, Prisma Client generation, every gated suite), and `npm run verify:migrations` checks pending migrations apply cleanly on a migrated baseline. Run both for anchor, corridor, membership, reviewed rate-source, or Prisma schema changes.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run refresh:runs` inspects the persisted scheduled-refresh run ledger (`list`, `show <runId>`) and safely resumes a terminal run (`resume <runId>`); inspection is read-only, resume acquires the advisory lock.

@@ -11,6 +11,15 @@ with your pull request.
 
 ### Added
 
+- A required **Database integration** CI job (`.github/workflows/database-integration.yml`)
+  that provisions a pinned, ephemeral PostgreSQL 17 service, applies the
+  complete committed migration chain from zero, generates the Prisma Client,
+  and runs every database-gated integration suite with all gate variables
+  enabled — skipped suites fail the job. It also verifies migration safety:
+  pending migrations must reproduce the full-chain history from an already
+  migrated baseline, with no destructive reset. `npm run test:db` and
+  `npm run verify:migrations` reproduce the same sequence locally; failure
+  diagnostics are sanitized and contain no credentials.
 - Immutable, versioned evidence-set manifests persisted atomically with every
   new reputation evaluation. Each manifest names the exact persisted rate
   snapshots, transfer outcomes, corridor memberships, and anchor state read for

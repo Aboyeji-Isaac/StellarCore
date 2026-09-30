@@ -1,0 +1,153 @@
+# Required CI path: provisions an ephemeral, pinned PostgreSQL service,
+# applies the complete committed migration chain from zero, generates the
+# Prisma Client, and runs every database-gated integration suite. A green run
+# here means the full migration history and ALL discovered suites actually
+# executed; suites cannot silently skip, and a suite file without a
+# recognizable gate fails the run before any test starts.
+#
+# The job is isolated from production: it connects only to its own ephemeral
+# service container. It never touches preview, staging, or production
+# databases, and the credentials below exist only inside this run.
+#
+# Coordinates with deploy-production-migrations.yml (that workflow applies
+# committed migrations to production; this one proves the same chain is clean
+# before it gets there) and reuses the same setup steps as
+# audit-configuration.yml without weakening either check.
+#
+# Migration-safety check (scripts/verify-migration-safety.ts): starts from the
+# documented baseline path — the earliest committed migration stamped via
+# `prisma migrate resolve --applied`, whose SQL is never executed on that
+# database — then applies every remaining migration with `prisma migrate
+# deploy` and asserts the resulting migration history matches the full-chain
+# reference. No reset or drop behavior is involved.
+#
+# Failure diagnostics (tmp/*-diagnostics/summary.json) are sanitized: they
+# contain only step names, commands, exit codes, and environment availability.
+# The DATABASE_URL below stays inside the job and is never echoed or uploaded.
+name: Database integration
+
+on:
+  pull_request:
+    paths:
+      - "prisma/**"
+      - "lib/dbClient.ts"
+      - "lib/reputation/**"
+      - "lib/rates/**"
+      - "lib/scheduled/**"
+      - "lib/api/**"
+      - "scripts/test-database.ts"
+      - "scripts/verify-migration-safety.ts"
+      - "tests/integration/**"
+      - ".github/workflows/database-integration.yml"
+  workflow_dispatch:
+
+# Abandoned database jobs must not hold runners or the service container.
+concurrency:
+  group: database-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the job only needs to read the repository contents.
+permissions:
+  contents: read
+
+env:
+  # Pinned major version; the job's own ephemeral instance, not a shared one.
+  POSTGRES_IMAGE: postgres:17
+  # CI-only credential for the ephemeral service below. It is scoped to this
+  # job, never used against any external database, and never printed.
+  POSTGRES_USER: stellarcore_ci
+  POSTGRES_PASSWORD: stellarcore_ci_password
+  POSTGRES_DB: stellarcore_ci
+  # The port the service container is published on inside the job.
+  POSTGRES_PORT: "55432"
+
+jobs:
+  database-integration:
+    name: postgres 17 · migrations + gated integration suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: stellarcore_ci
+          POSTGRES_PASSWORD: stellarcore_ci_password
+          POSTGRES_DB: stellarcore_ci
+        ports:
+          - "55432:5432"
+        # Fail fast instead of connecting before the server accepts sockets.
+        options: >-
+          --health-cmd "pg_isready -U stellarcore_ci -d stellarcore_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --shm-size 256m
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Verify PostgreSQL readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" > /dev/null 2>&1; then
+              echo "PostgreSQL is ready (attempt $attempt)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL did not become ready in time." >&2
+          exit 1
+
+      # `npm ci` runs the existing `postinstall` lifecycle script
+      # (`prisma generate`), which loads prisma.config.ts and therefore needs
+      # DATABASE_URL to be present already. Same env as the production
+      # workflows: scoped to the step, never printed.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          DATABASE_URL: postgresql://stellarcore_ci:stellarcore_ci_password@127.0.0.1:55432/stellarcore_ci
+
+      # `npm run test:db` proves in order, failing fast on the first problem:
+      #   1. Full committed migration chain from zero (no db push, no reset).
+      #   2. Prisma Client generation against the committed schema.
+      #   3. Every discovered *.database.integration.test.ts suite with ALL
+      #      gate variables exported as "1" — skipped suites fail the job.
+      #   4. node:test reported zero skipped tests.
+      # Artifacts on failure are sanitized (no connection strings or secrets).
+      - name: Run database integration sequence
+        id: tests
+        run: npm run test:db
+        env:
+          DATABASE_URL: postgresql://stellarcore_ci:stellarcore_ci_password@127.0.0.1:55432/stellarcore_ci
+
+      # Second, independent check: the production-shaped migration path.
+      # It creates two scratch databases (full-chain reference vs. baseline
+      # + pending chain) inside the same ephemeral server, compares the
+      # resulting _prisma_migrations histories, then drops them. Only the
+      # fixed-name scratch databases are ever touched or dropped.
+      - name: Verify migration safety (baseline + pending chain)
+        if: steps.tests.outcome == 'success'
+        run: npm run verify:migrations
+        env:
+          DATABASE_URL: postgresql://stellarcore_ci:stellarcore_ci_password@127.0.0.1:55432/stellarcore_ci
+
+      # Sanitized diagnostics only: step/exit summaries written by the scripts.
+      # No logs, no connection strings, no secrets.
+      - name: Upload sanitized failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-integration-diagnostics-${{ github.run_id }}
+          path: |
+            tmp/test-database-diagnostics/summary.json
+            tmp/migration-safety-diagnostics/summary.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -12,6 +12,8 @@
     "lint": "eslint .",
     "postinstall": "prisma generate",
     "test": "tsx scripts/run-tests.ts",
+    "test:db": "tsx scripts/test-database.ts",
+    "verify:migrations": "tsx scripts/verify-migration-safety.ts",
     "audit:config": "node --import tsx scripts/audit-configuration.ts",
     "registry:print": "node --import tsx scripts/registry-print.ts",
     "verify:sep10": "tsx scripts/verify-sep10.ts",

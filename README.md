@@ -407,6 +407,15 @@ npm run registry:print
 # Unit and integration tests
 npm test
 
+# Full database-integration sequence: fresh migration chain from zero,
+# Prisma Client generation, and every database-gated integration suite
+# (requires DATABASE_URL pointing at an isolated PostgreSQL database)
+npm run test:db
+
+# Migration-safety check: pending migrations must reproduce the full-chain
+# history from an already-migrated baseline, with no destructive reset
+npm run verify:migrations
+
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
 

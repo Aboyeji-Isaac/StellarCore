@@ -24,6 +24,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# CI/local database-integration failure diagnostics
+/tmp/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
