@@ -205,7 +205,7 @@ export function validateExceptions(
 // Scanner report parsing (npm audit --json, auditReportVersion 2)
 // ---------------------------------------------------------------------------
 
-interface RawFinding extends Omit<Finding, "disposition"> {}
+type RawFinding = Omit<Finding, "disposition">;
 type Parsed =
   | { ok: true; findings: RawFinding[] }
   | { ok: false; status: "malformed-output" | "scanner-failure"; errors: string[] };
