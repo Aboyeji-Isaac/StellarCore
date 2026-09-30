@@ -32,6 +32,7 @@ with your pull request.
   LIVE requires repeated successful evidence, and bounded per-anchor health
   rows (`anchor_health_states`) make transitions deterministic across process
   restarts. Policy documented in `docs/anchor-health-policy.md`.
+- GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
 
 ## [Prior work] — 2026-09-25
 

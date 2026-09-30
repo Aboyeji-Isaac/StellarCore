@@ -8,6 +8,43 @@ import type {
 
 type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
+/**
+ * The newest snapshot time per corridor for one anchor, as a bounded set of
+ * index probes instead of a walk over the anchor's history.
+ *
+ * Where the group set comes from: `corridors`, one row per corridor and
+ * independent of how many snapshots exist. `rate_snapshots.corridor_id` is a
+ * foreign key, so every corridor this anchor has ever quoted is in that table,
+ * including one it is no longer a member of. Nothing is filtered on membership
+ * or age, so stale and historically associated corridors stay visible.
+ *
+ * For each corridor the lateral subquery takes the single newest row for
+ * (anchor, corridor) in `captured_at DESC, id DESC` order, the tie-break the
+ * previous DISTINCT ON used, from rate_snapshots_anchor_corridor_latest_idx. A
+ * corridor the anchor never quoted yields no row, as before. Slugs are unique,
+ * so ordering by slug is the order DISTINCT ON (corridor.slug) produced.
+ *
+ * Exported so the differential tests and the benchmark run the exact text that
+ * production runs.
+ */
+export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      corridor.slug AS "corridorSlug",
+      latest.captured_at AS "capturedAt"
+    FROM corridors AS corridor
+    CROSS JOIN LATERAL (
+      SELECT snapshot.captured_at
+      FROM rate_snapshots AS snapshot
+      WHERE snapshot.anchor_id = ${anchorId}::uuid
+        AND snapshot.corridor_id = corridor.id
+      ORDER BY snapshot.captured_at DESC, snapshot.id DESC
+      LIMIT 1
+    ) AS latest
+    ORDER BY corridor.slug
+  `;
+}
+
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
     const { db } = await import("@/lib/dbClient");
@@ -23,15 +60,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
     if (!anchor) return null;
 
     const [latestRates, transferOutcomes] = await Promise.all([
-      db.$queryRaw<LatestRateRow[]>(Prisma.sql`
-        SELECT DISTINCT ON (corridor.slug)
-          corridor.slug AS "corridorSlug",
-          snapshot.captured_at AS "capturedAt"
-        FROM rate_snapshots AS snapshot
-        INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
-        WHERE snapshot.anchor_id = ${anchor.id}::uuid
-        ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
-      `),
+      db.$queryRaw<LatestRateRow[]>(latestCorridorRatesQuery(anchor.id)),
       db.transferOutcome.findMany({
         where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
         orderBy: [{ recordedAt: "asc" }, { id: "asc" }],

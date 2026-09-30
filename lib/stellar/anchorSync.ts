@@ -130,6 +130,7 @@ export async function syncAnchorRegistry(
       const failureClass = classifyAnchorFailure(error);
       const code = classifyDiscoveryFailure(error);
 
+      const code = classifyDiscoveryFailure(error);
       failures.push(
         Object.freeze({
           slug: entry.slug,
@@ -142,6 +143,10 @@ export async function syncAnchorRegistry(
             dependencies.recordFailure,
             transitions,
           ),
+          statusUpdate:
+            code === "EGRESS_POLICY"
+              ? "NOT_ATTEMPTED"
+              : await safelyMarkDown(entry.slug, dependencies.markDown),
         }),
       );
       continue;
