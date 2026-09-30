@@ -9,7 +9,7 @@ Read-only anchor, corridor, rate, and reputation visibility for Stellar.
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](https://typescriptlang.org)
 [![Drips Wave](https://img.shields.io/badge/Drips%20Wave-7-00d4b4)](https://drips.network/wave)
-
+........
 ---
 
 ## The Problem
