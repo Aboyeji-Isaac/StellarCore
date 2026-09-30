@@ -18,6 +18,25 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
+### Database TLS policy
+
+Production database connections always use certificate-verified TLS supplied
+by the application — see
+[database-tls-policy.md](database-tls-policy.md) for the full policy.
+Operational requirements:
+
+- Keep `DATABASE_URL` free of TLS parameters (`sslmode`, `ssl`,
+  `sslrootcert`). The application strips them and rejects production
+  configuration that disables TLS or bypasses certificate verification; a
+  bypass URL fails startup with a safe diagnostic.
+- Managed providers with publicly rooted certificates need no CA
+  configuration. Otherwise set `STELLARCORE_DB_CA_PATH` (or inline
+  `STELLARCORE_DB_CA`) with the provider CA; the material is never logged or
+  committed.
+- `STELLARCORE_DB_TLS_EMERGENCY_BYPASS=allow-unverified` is the only gated
+  verification bypass. It is inert by default, prints a process warning when
+  active, never enables plaintext, and must be removed after the incident.
+
 ## Migration strategy
 
 1. Configure the server-only runtime `DATABASE_URL` for the production deployment, and separately configure the protected GitHub Actions `production` environment's direct Prisma Postgres credential as its `DATABASE_URL` secret.

@@ -267,6 +267,13 @@ anchors, corridors, reviewed anchor–corridor associations, individual rate
 snapshots, transfer-outcome evidence, and one current reputation score per
 anchor. Freshness is calculated at read time; it is not stored on a snapshot.
 
+Production PostgreSQL connections always use certificate-verified TLS supplied
+by the application: TLS parameters in `DATABASE_URL` are stripped and
+classified, plaintext and verification-bypass configuration fail startup with
+safe diagnostics, and an optional provider CA is configured through
+environment without committing secrets. The full policy is documented in
+[docs/database-tls-policy.md](docs/database-tls-policy.md).
+
 `TransferOutcome` supports the scoring model but has no production writer. Its
 presence in the schema must not be read as a claim that StellarCore collects
 customer transfers, independently verifies off-chain settlement, or has

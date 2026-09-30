@@ -9,8 +9,14 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Production PostgreSQL TLS policy: connections use certificate-verified TLS
+  supplied by the application. TLS parameters are stripped from the database
+  URL, production startup rejects plaintext or verification-bypass
+  configuration with safe diagnostics, an optional provider CA is supported
+  without committing secrets, and a separately gated emergency bypass never
+  enables plaintext. Policy documented in `docs/database-tls-policy.md`.
 
 ## [Prior work] — 2026-09-25
 
