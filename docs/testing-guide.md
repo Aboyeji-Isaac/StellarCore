@@ -32,6 +32,27 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Fuzz and property testing (issue #141)
+
+`tests/fuzz/` contains deterministic seeded property suites for the untrusted
+SEP-1 TOML parser and SEP-38 JSON/decimal/asset parsers. The suites run as
+part of `npm test` with fixed committed seeds, and `.github/workflows/fuzz-sep-parsers.yml`
+runs them on every parser-touching pull request. Generated inputs are bounded
+so the harness itself cannot cause uncontrolled resource use.
+
+Reproducing a failing seed locally:
+
+```bash
+npx tsx --test tests/fuzz/sep38Fuzz.test.ts
+# A failure prints seed=<seed> index=<n>; filter or replay it:
+FUZZ_SEED=20260930 npx tsx --test tests/fuzz/sep38Fuzz.test.ts
+```
+
+When fuzzing uncovers a parser defect, minimize the input, persist it under
+`tests/fuzz/fixtures/regressions/` (see `tests/fuzz/README.md`), and add a
+focused regression test. Never weaken parser validation to make a generated
+case pass.
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The

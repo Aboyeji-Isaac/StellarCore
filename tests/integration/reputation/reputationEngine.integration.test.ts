@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { evaluateAnchorReputation } from "@/lib/reputation/engine";
-import type { ReputationEvidence, ReputationRepository } from "@/types/reputation";
+import type {
+  ReputationEvidence,
+  ReputationEvidenceReadResult,
+  ReputationRepository,
+} from "@/types/reputation";
 
 const NOW = new Date("2026-08-31T12:00:00.000Z");
 
@@ -29,7 +33,18 @@ test("controlled evidence composes through calculation and current-score persist
       }))),
   });
   const repository: ReputationRepository = Object.freeze({
-    readEvidence: async () => evidence,
+    readEvidence: async (): Promise<ReputationEvidenceReadResult> => Object.freeze({
+      ok: true,
+      evidenceSet: Object.freeze({
+        evidence,
+        snapshot: Object.freeze({
+          isolationLevel: "RepeatableRead" as const,
+          readOnly: true as const,
+          transactionId: "0",
+          snapshotAt: NOW.toISOString(),
+        }),
+      }),
+    }),
     upsertScore: async ({ calculation }) => {
       persistedCalculation = calculation;
       return Object.freeze({

@@ -66,3 +66,8 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Issue #143: migrations are an explicit environment boundary. The
+          # migration step declares the production runtime so migration
+          # tooling cannot silently target a database not marked production
+          # (scripts/verify-database-environment.ts enforces this).
+          STELLARCORE_ENVIRONMENT: production

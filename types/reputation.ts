@@ -23,6 +23,41 @@ export type ReputationEvidence = Readonly<{
   }>[];
 }>;
 
+/**
+ * PostgreSQL snapshot context (issue #135) describing the single read-only
+ * RepeatableRead transaction that observed one evaluation's evidence set.
+ * It is deployment/observation metadata for evidence manifests, not evidence
+ * about anchors: it proves only that the evidence set was internally coherent
+ * at one database point in time.
+ */
+export const REPUTATION_SNAPSHOT_ISOLATION_LEVEL = "RepeatableRead" as const;
+export type ReputationSnapshotIsolationLevel =
+  typeof REPUTATION_SNAPSHOT_ISOLATION_LEVEL;
+
+export type ReputationSnapshotContext = Readonly<{
+  isolationLevel: ReputationSnapshotIsolationLevel;
+  readOnly: true;
+  /** PostgreSQL transaction id (xid8) that held the snapshot. */
+  transactionId: string;
+  /** Transaction start timestamp (transaction_timestamp()) as UTC ISO 8601. */
+  snapshotAt: string;
+}>;
+
+/** One evaluation's evidence together with the snapshot that observed it. */
+export type ReputationEvidenceSet = Readonly<{
+  evidence: ReputationEvidence;
+  snapshot: ReputationSnapshotContext;
+}>;
+
+export type ReputationEvidenceReadFailureCode =
+  | "ANCHOR_NOT_FOUND"
+  | "SNAPSHOT_UNAVAILABLE"
+  | "RETRY_EXHAUSTED";
+
+export type ReputationEvidenceReadResult =
+  | Readonly<{ ok: true; evidenceSet: ReputationEvidenceSet }>
+  | Readonly<{ ok: false; code: ReputationEvidenceReadFailureCode }>;
+
 export type ReputationComponentName =
   | "availability"
   | "rateFreshness"
@@ -42,6 +77,8 @@ export type ReputationCalculation = Readonly<{
   score: number | null;
   scoreBand: "GREEN" | "AMBER" | "RED" | null;
   components: Readonly<Record<ReputationComponentName, ReputationComponent>>;
+  /** Set by the evaluation engine from the evidence read; null when unset. */
+  snapshot: ReputationSnapshotContext | null;
   evidence: Readonly<{
     corridorCount: number;
     latestRateCount: number;
@@ -76,7 +113,7 @@ export type ReputationRepository = Readonly<{
   readEvidence: (
     anchorSlug: string,
     outcomeWindowStart: Date,
-  ) => Promise<ReputationEvidence | null>;
+  ) => Promise<ReputationEvidenceReadResult>;
   upsertScore: (
     input: ReputationPersistenceInput,
   ) => Promise<PersistedReputationScore>;
@@ -86,6 +123,8 @@ export type ReputationEvaluationResult =
   | Readonly<{
       ok: true;
       calculation: ReputationCalculation;
+      /** Snapshot that observed this evaluation's evidence set (issue #135). */
+      snapshot: ReputationSnapshotContext;
       persisted: PersistedReputationScore | null;
     }>
   | Readonly<{

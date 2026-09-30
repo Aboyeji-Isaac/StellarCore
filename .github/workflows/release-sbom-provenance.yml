@@ -1,0 +1,103 @@
+# Issue #142: reproducible software-supply-chain record for production builds.
+#
+# On a manual dispatch against a chosen revision this workflow:
+#   1. Installs exactly the locked dependency graph (npm ci).
+#   2. Generates a CycloneDX SBOM from the lockfile.
+#   3. Builds the production Next.js artifact and a deployment bundle.
+#   4. Emits non-forgeable provenance: GitHub generates a signed attestation
+#      (SLSA build level 3) for each artifact via actions/attest-build-provenance,
+#      bound to the exact commit SHA and workflow run — not handwritten.
+#   5. Uploads SBOM + provenance + a build manifest as the workflow artifact.
+#
+# Environment secrets are never consumed here; the workflow only reads the
+# repository, so no credentials or connection strings can leak into artifacts.
+
+name: Release SBOM and provenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required by actions/attest-build-provenance to write the attestation and
+  # its entry into the repo's attestation log.
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-sbom-provenance
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  release-record:
+    name: SBOM + provenance for production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          # Build-time placeholder only; no real database is contacted.
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+      # CycloneDX SBOM derived from the lockfile actually used for installation.
+      - name: Generate SBOM (CycloneDX from package-lock.json)
+        run: npx --yes @cyclonedx/cyclonedx-npm@latest --output-file sbom/stellarcore.cdx.json --output-format JSON --profile license-concurrent --omit dev
+        env:
+          # Placeholder; SBOM generation performs no database access.
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+      - name: Assemble deployment bundle
+        run: |
+          mkdir -p release
+          tar --exclude='.git' --exclude='release' --exclude='.next/cache' \
+              -czf release/stellarcore-build-${{ github.sha }}.tar.gz \
+              -C "$GITHUB_WORKSPACE" \
+              .next package.json package-lock.json prisma public constants lib app types scripts docs || true
+          # The tarball intentionally excludes node_modules: dependencies are
+          # reinstalled from the lockfile, whose digest is in the manifest.
+
+      - name: Write build manifest
+        run: node scripts/write-build-manifest.mjs manifest.json sbom/stellarcore.cdx.json
+
+      - name: Attest build provenance (SLSA, signed by GitHub)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/stellarcore-build-${{ github.sha }}.tar.gz
+            sbom/stellarcore.cdx.json
+            manifest.json
+
+      - name: Verify the attestation of this very build (self-check)
+        run: node scripts/verify-build-provenance.mjs --self-test
+
+      - name: Upload supply-chain record
+        uses: actions/upload-artifact@v4
+        with:
+          name: stellarcore-supply-chain-${{ github.sha }}
+          path: |
+            sbom/stellarcore.cdx.json
+            release/stellarcore-build-${{ github.sha }}.tar.gz
+            manifest.json
+          retention-days: 90
+          if-no-files-found: error

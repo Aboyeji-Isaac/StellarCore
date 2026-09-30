@@ -4,6 +4,7 @@ import { calculateReputation } from "@/lib/reputation/score";
 import type {
   ReputationEvaluationResult,
   ReputationRepository,
+  ReputationSnapshotContext,
 } from "@/types/reputation";
 
 const DAYS_TO_MS = 24 * 60 * 60 * 1_000;
@@ -25,25 +26,34 @@ export async function evaluateAnchorReputation(
     evaluatedAt.getTime() - REPUTATION_OUTCOME_WINDOW_DAYS * DAYS_TO_MS,
   );
 
-  let evidence;
+  let evidenceSet;
   try {
-    evidence = await repository.readEvidence(anchorSlug, outcomeWindowStart);
+    evidenceSet = await repository.readEvidence(anchorSlug, outcomeWindowStart);
   } catch {
     return failure(anchorSlug, "EVIDENCE_READ_FAILURE");
   }
-  if (!evidence) return failure(anchorSlug, "ANCHOR_NOT_FOUND");
+  if (!evidenceSet.ok) {
+    return failure(anchorSlug, evidenceSet.code === "ANCHOR_NOT_FOUND"
+      ? "ANCHOR_NOT_FOUND"
+      : "EVIDENCE_READ_FAILURE");
+  }
+  const snapshot = evidenceSet.evidenceSet.snapshot;
 
-  const calculation = calculateReputation(evidence, evaluatedAt);
+  const calculation = calculateReputation(
+    evidenceSet.evidenceSet.evidence,
+    evaluatedAt,
+    snapshot,
+  );
   if (options.persist === false) {
-    return Object.freeze({ ok: true, calculation, persisted: null });
+    return Object.freeze({ ok: true, calculation, snapshot, persisted: null });
   }
 
   try {
     const persisted = await repository.upsertScore({
-      anchorId: evidence.anchorId,
+      anchorId: evidenceSet.evidenceSet.evidence.anchorId,
       calculation,
     });
-    return Object.freeze({ ok: true, calculation, persisted });
+    return Object.freeze({ ok: true, calculation, snapshot, persisted });
   } catch {
     return failure(anchorSlug, "PERSISTENCE_FAILURE");
   }
@@ -55,3 +65,5 @@ function failure(
 ): ReputationEvaluationResult {
   return Object.freeze({ ok: false, anchorSlug, code });
 }
+
+export type { ReputationSnapshotContext };

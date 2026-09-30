@@ -4,10 +4,27 @@ import test from "node:test";
 import { evaluateAnchorReputation } from "@/lib/reputation/engine";
 import type {
   ReputationEvidence,
+  ReputationEvidenceReadResult,
   ReputationRepository,
 } from "@/types/reputation";
 
 const NOW = new Date("2026-08-31T12:00:00.000Z");
+
+function snapshot() {
+  return Object.freeze({
+    isolationLevel: "RepeatableRead" as const,
+    readOnly: true as const,
+    transactionId: "12345",
+    snapshotAt: NOW.toISOString(),
+  });
+}
+
+function evidenceResult(evidence: ReputationEvidence): ReputationEvidenceReadResult {
+  return Object.freeze({
+    ok: true as const,
+    evidenceSet: Object.freeze({ evidence, snapshot: snapshot() }),
+  });
+}
 
 test("engine reads one 90-day window and can calculate without persistence", async () => {
   let windowStart: Date | undefined;
@@ -18,7 +35,7 @@ test("engine reads one 90-day window and can calculate without persistence", asy
     repository: repository({
       readEvidence: async (_slug, start) => {
         windowStart = start;
-        return sparseEvidence();
+        return evidenceResult(sparseEvidence());
       },
       upsertScore: async () => {
         writes += 1;
@@ -62,11 +79,16 @@ test("persistence upserts current score rather than appending history", async ()
 
 test("missing anchors and repository failures are safely classified", async () => {
   const missing = await evaluateAnchorReputation("missing", {
-    repository: repository({ readEvidence: async () => null }),
+    repository: repository({ readEvidence: async () => ({ ok: false, code: "ANCHOR_NOT_FOUND" }) }),
   });
   const readFailure = await evaluateAnchorReputation("anchor", {
     repository: repository({
       readEvidence: async () => { throw new Error("DATABASE_URL=secret"); },
+    }),
+  });
+  const snapshotUnavailable = await evaluateAnchorReputation("anchor", {
+    repository: repository({
+      readEvidence: async () => ({ ok: false, code: "SNAPSHOT_UNAVAILABLE" }),
     }),
   });
   const writeFailure = await evaluateAnchorReputation("anchor", {
@@ -77,8 +99,9 @@ test("missing anchors and repository failures are safely classified", async () =
 
   assert.deepEqual(missing, { ok: false, anchorSlug: "missing", code: "ANCHOR_NOT_FOUND" });
   assert.equal(readFailure.ok, false);
-  assert.equal(writeFailure.ok, false);
+  assert.equal(snapshotUnavailable.ok, false);
   if (!readFailure.ok) assert.equal(readFailure.code, "EVIDENCE_READ_FAILURE");
+  if (!snapshotUnavailable.ok) assert.equal(snapshotUnavailable.code, "EVIDENCE_READ_FAILURE");
   if (!writeFailure.ok) assert.equal(writeFailure.code, "PERSISTENCE_FAILURE");
   assert.equal(JSON.stringify({ readFailure, writeFailure }).includes("secret"), false);
 });
@@ -90,7 +113,7 @@ test("invalid evaluation time is rejected before repository access", async () =>
     repository: repository({
       readEvidence: async () => {
         accessed = true;
-        return sparseEvidence();
+        return evidenceResult(sparseEvidence());
       },
     }),
   });
@@ -104,7 +127,7 @@ test("invalid evaluation time is rejected before repository access", async () =>
 
 function repository(overrides: Partial<ReputationRepository>): ReputationRepository {
   return Object.freeze({
-    readEvidence: async () => sparseEvidence(),
+    readEvidence: async () => evidenceResult(sparseEvidence()),
     upsertScore: async () => persisted(),
     ...overrides,
   });

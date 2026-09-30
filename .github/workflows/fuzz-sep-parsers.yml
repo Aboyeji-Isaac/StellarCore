@@ -1,0 +1,50 @@
+name: Fuzz untrusted SEP parsers
+
+# Issue #141: deterministic, seeded fuzz/property testing for SEP-1 and SEP-38
+# parsing. The suites are plain *.test.ts files, so `npm test` already runs
+# them with the committed seeds; this workflow makes the fuzz budget explicit,
+# reproducible, and independently observable on parser-touching changes.
+
+on:
+  pull_request:
+    paths:
+      - "lib/stellar/**"
+      - "tests/fuzz/**"
+      - "tests/unit/stellar/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: deterministic SEP parser fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          # Build-time placeholder; the fuzz suites never touch a database.
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+      - name: Run deterministic fuzz suites
+        run: |
+          npx tsx --test tests/fuzz/sep1Fuzz.test.ts
+          npx tsx --test tests/fuzz/sep38Fuzz.test.ts
+
+      - name: Run parser unit suites
+        run: npx tsx --test tests/unit/stellar/sep1.test.ts tests/unit/stellar/sep38.test.ts

@@ -46,6 +46,19 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+/// Durable database-environment identity (issue #143). Exactly one row exists;
+/// a missing row or NULL environment means the identity is unknown. Written
+/// once by environment provisioning or scripts/mark-database-environment.ts.
+/// This is deployment metadata, not evidence about anchors.
+model EnvironmentIdentity {
+  id       Int      @id @default(1)
+  environment String?
+  markedAt DateTime @default(now()) @map("marked_at") @db.Timestamptz(6)
+  note     String?
+
+  @@map("environment_identity")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique

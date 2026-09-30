@@ -66,9 +66,13 @@ performing a live upstream request.
 
 `lib/reputation/engine.ts` evaluates each persisted anchor at one shared run
 timestamp. It reads synchronized corridors, latest rate evidence, and
-transfer-outcome rows from the configured trailing window. The score module
-normalizes bounded evidence and calculates the documented weighted components
-with deterministic integer basis-point arithmetic.
+transfer-outcome rows from the configured trailing window inside one explicit
+read-only RepeatableRead PostgreSQL transaction, so every evaluation observes
+one coherent evidence snapshot even under concurrent rate capture or outcome
+ingestion; the snapshot identity (isolation level, PostgreSQL snapshot id,
+and start timestamp) accompanies the result for evidence manifests. The score
+module normalizes bounded evidence and calculates the documented weighted
+components with deterministic integer basis-point arithmetic.
 
 When evidence thresholds are not met, the result deliberately has no composite
 score or score band and reports insufficient data. Otherwise the current
@@ -92,11 +96,14 @@ API present the same persisted evidence and uncertainty semantics.
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact
-`CRON_SECRET` bearer credential. It prepares and snapshots reviewed indicative
-rates, then evaluates reputation. Rate preparation failures are returned in a
-safe summary while reputation evaluation still runs; a fatal reputation
-failure produces a safe server error. The production cron invokes this route
-daily, while registry bootstrap remains a separate manual GitHub Actions job.
+`CRON_SECRET` bearer credential and a passing environment identity check: a
+runtime whose declared environment does not match the database's durable
+`environment_identity` mark fails closed before any evidence mutation. It
+prepares and snapshots reviewed indicative rates, then evaluates reputation.
+Rate preparation failures are returned in a safe summary while reputation
+evaluation still runs; a fatal reputation failure produces a safe server
+error. The production cron invokes this route daily, while registry bootstrap
+remains a separate manual GitHub Actions job.
 
 See the [README](../README.md) for setup, API details, and operational
 invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.

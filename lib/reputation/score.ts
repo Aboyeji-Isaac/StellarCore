@@ -9,6 +9,7 @@ import type {
   ReputationCalculation,
   ReputationComponent,
   ReputationEvidence,
+  ReputationSnapshotContext,
   ReputationTransferStatus,
 } from "@/types/reputation";
 
@@ -18,6 +19,7 @@ const DAYS_TO_MS = 24 * 60 * 60 * 1_000;
 export function calculateReputation(
   input: ReputationEvidence,
   evaluatedAt: Date,
+  snapshot: ReputationSnapshotContext | null = null,
 ): ReputationCalculation {
   if (!Number.isFinite(evaluatedAt.getTime())) {
     throw new Error("Invalid reputation evaluation time");
@@ -89,6 +91,7 @@ export function calculateReputation(
     score,
     scoreBand: score === null ? null : scoreBand(score),
     components,
+    snapshot: snapshot ? Object.freeze({ ...snapshot }) : null,
     evidence: Object.freeze({
       corridorCount: corridorSlugs.size,
       latestRateCount: latestRates.length,

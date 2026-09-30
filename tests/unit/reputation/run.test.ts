@@ -19,6 +19,12 @@ test("persisted reputation evaluation is deterministic, deduplicated, and isolat
         : Object.freeze({
           ok: true as const,
           calculation: {} as never,
+          snapshot: Object.freeze({
+            isolationLevel: "RepeatableRead" as const,
+            readOnly: true as const,
+            transactionId: "0",
+            snapshotAt: options.evaluatedAt.toISOString(),
+          }),
           persisted: null,
         });
     },
@@ -54,9 +60,15 @@ test("explicit anchor slugs preserve the shared evaluation path without listing 
         listed = true;
         return [];
       },
-      evaluate: async () => Object.freeze({
+      evaluate: async (_slug, options) => Object.freeze({
         ok: true as const,
         calculation: {} as never,
+        snapshot: Object.freeze({
+          isolationLevel: "RepeatableRead" as const,
+          readOnly: true as const,
+          transactionId: "0",
+          snapshotAt: options.evaluatedAt.toISOString(),
+        }),
         persisted: null,
       }),
     }),

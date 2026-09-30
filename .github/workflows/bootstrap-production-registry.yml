@@ -69,3 +69,6 @@ jobs:
         run: npm run bootstrap:registry
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Issue #143: explicit runtime identity; the bootstrap refuses to
+          # run unless the durable database identity is marked production.
+          STELLARCORE_ENVIRONMENT: production

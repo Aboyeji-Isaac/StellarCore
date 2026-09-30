@@ -24,7 +24,11 @@ test("unauthorized scheduled requests do not run jobs and use a safe 401 contrac
     if (authorization) headers.set("authorization", authorization);
     const response = await getScheduledRefreshResponse(
       new Request("http://localhost/api/internal/cron/refresh", { headers }),
-      { cronSecret: SECRET, run: async () => { runs += 1; return successfulRun(); } },
+      {
+        cronSecret: SECRET,
+        assertEnvironment: passingEnvironment(),
+        run: async () => { runs += 1; return successfulRun(); },
+      },
     );
     assert.equal(response.status, 401);
     assert.equal(response.headers.get("cache-control"), "no-store");
@@ -47,7 +51,7 @@ test("authorized scheduled requests return only bounded JSON and preserve partia
     new Request("http://localhost/api/internal/cron/refresh", {
       headers: { authorization: `Bearer ${SECRET}` },
     }),
-    { cronSecret: SECRET, run: async () => result },
+    { cronSecret: SECRET, assertEnvironment: passingEnvironment(), run: async () => result },
   );
 
   assert.equal(response.status, 200);
@@ -64,6 +68,7 @@ test("fatal job failures are a safe 500 and the route stays GET-only dynamic", a
     }),
     {
       cronSecret: SECRET,
+      assertEnvironment: passingEnvironment(),
       run: async () => { throw new Error("DATABASE_URL=secret"); },
     },
   );
@@ -79,6 +84,10 @@ test("fatal job failures are a safe 500 and the route stays GET-only dynamic", a
   const missing = await route.GET(new Request("http://localhost/api/internal/cron/refresh"));
   assert.equal(missing.status, 401);
 });
+
+function passingEnvironment(): () => Promise<{ ok: boolean }> {
+  return async () => ({ ok: true });
+}
 
 function successfulRun(overrides: Partial<ScheduledRefreshResult> = {}): ScheduledRefreshResult {
   return Object.freeze({

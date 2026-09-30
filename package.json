@@ -15,6 +15,7 @@
     "audit:config": "node --import tsx scripts/audit-configuration.ts",
     "registry:print": "node --import tsx scripts/registry-print.ts",
     "verify:sep10": "tsx scripts/verify-sep10.ts",
+    "verify:supply-chain": "node scripts/verify-build-provenance.mjs",
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
