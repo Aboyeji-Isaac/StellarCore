@@ -9,8 +9,22 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Distributed locking and a resumable refresh-run ledger for the scheduled
+  refresh. A session-scoped PostgreSQL advisory lock returns a non-error
+  `already_running` result on contention, every attempt persists durable run
+  and phase state, an interrupted run is reclaimed as failed, and a terminal
+  run can be safely resumed without re-executing completed phases. See
+  [docs/runbook-scheduled-refresh.md](docs/runbook-scheduled-refresh.md).
+- `npm run refresh:runs` to inspect recent refresh runs and resume a failed or
+  partially succeeded run.
+
+### Changed
+
+- The internal cron response now carries the durable run id and truthful
+  terminal state: `succeeded`, `partially_succeeded`, `failed`, or
+  `already_running`.
 
 ## [Prior work] — 2026-09-25
 

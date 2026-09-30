@@ -228,16 +228,22 @@ An external scheduler invokes GET /api/internal/cron/refresh:
 
   1. Require exactly: Authorization: Bearer <CRON_SECRET>
        → Missing, malformed, or invalid credentials return safe 401 JSON.
-  2. Build only reviewed SEP-38 indicative-price candidates.
+  2. Take a session-scoped PostgreSQL advisory lock.
+       → A concurrent attempt returns a non-error already_running result
+         without starting work or writing a run row.
+  3. Write a durable refresh-run row with a stable run id and phase ledger.
+       → An orphaned RUNNING row from a dead process is reclaimed as FAILED.
+  4. Build only reviewed SEP-38 indicative-price candidates.
        → No firm quote endpoint is called.
-  3. Fetch each prepared public indicative price and append an individual
+  5. Fetch each prepared public indicative price and append an individual
      RateSnapshot for each successful observation.
-  4. Evaluate every persisted anchor at the one run start timestamp.
+  6. Evaluate every persisted anchor at the one run start timestamp.
        → Each calculation upserts its single current ReputationScore.
-  5. Return a bounded, no-store JSON run summary.
+  7. Return a bounded, no-store JSON run summary with the run id and state.
 
-Rate preparation failures are returned as a safe rate failure while reputation
-evaluation still runs. A fatal reputation-run failure returns a safe HTTP 500;
+Rate preparation failures are recorded as a failed phase while reputation
+evaluation still runs. A fatal reputation-run failure is recorded truthfully
+and returns a safe HTTP 500;
 ```
 
 ### Reputation Computation Flow
@@ -264,8 +270,9 @@ For one persisted anchor at one evaluation timestamp:
 
 The source of truth is [prisma/schema.prisma](prisma/schema.prisma). It models
 anchors, corridors, reviewed anchor–corridor associations, individual rate
-snapshots, transfer-outcome evidence, and one current reputation score per
-anchor. Freshness is calculated at read time; it is not stored on a snapshot.
+snapshots, transfer-outcome evidence, one current reputation score per anchor,
+and the durable scheduled-refresh run ledger. Freshness is calculated at read
+time; it is not stored on a snapshot.
 
 `TransferOutcome` supports the scoring model but has no production writer. Its
 presence in the schema must not be read as a claim that StellarCore collects
@@ -285,7 +292,7 @@ stellarcore/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
 │   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
 │   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
-│   └── scheduled/          # Internal cron authorization and orchestration
+│   └── scheduled/          # Cron authorization, advisory lock, run ledger, and orchestration
 ├── prisma/                 # Schema and committed migration history
 ├── scripts/                # Bootstrap, snapshot, and verification utilities
 ├── tests/                  # Unit and controlled integration coverage
@@ -379,6 +386,11 @@ npm run verify:latest-rates
 
 # Recompute current reputation rows from the local database
 npm run verify:reputation
+
+# Inspect persisted scheduled-refresh runs, or resume a terminal run
+npm run refresh:runs -- list 20
+npm run refresh:runs -- show <runId>
+npm run refresh:runs -- resume <runId>
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print

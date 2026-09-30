@@ -35,14 +35,18 @@ test("unauthorized scheduled requests do not run jobs and use a safe 401 contrac
   assert.equal(runs, 0);
 });
 
-test("authorized scheduled requests return only bounded JSON and preserve partial run status", async () => {
-  const result = successfulRun({ ok: false, rates: {
-    attempted: 1,
-    succeeded: 0,
-    failed: 1,
-    skipped: 0,
-    failures: [{ phase: "PREPARATION", code: "LIVE_RATE_PREPARATION_FAILURE" }],
-  } });
+test("authorized scheduled requests surface the run id and truthful partial state", async () => {
+  const result = successfulRun({
+    ok: false,
+    state: "partially_succeeded",
+    rates: {
+      attempted: 1,
+      succeeded: 0,
+      failed: 1,
+      skipped: 0,
+      failures: [{ phase: "PREPARATION", code: "LIVE_RATE_PREPARATION_FAILURE" }],
+    },
+  });
   const response = await getScheduledRefreshResponse(
     new Request("http://localhost/api/internal/cron/refresh", {
       headers: { authorization: `Bearer ${SECRET}` },
@@ -54,7 +58,24 @@ test("authorized scheduled requests return only bounded JSON and preserve partia
   assert.equal(response.headers.get("cache-control"), "no-store");
   const body = await response.json();
   assert.deepEqual(body, result);
+  assert.equal(body.runId, "run-1");
+  assert.equal(body.state, "partially_succeeded");
   assert.equal(JSON.stringify(body).includes(SECRET), false);
+});
+
+test("a lock-contended already_running outcome is a non-error 200 that names the active run", async () => {
+  const result = successfulRun({ state: "already_running", activeRunId: "active-run" });
+  const response = await getScheduledRefreshResponse(
+    new Request("http://localhost/api/internal/cron/refresh", {
+      headers: { authorization: `Bearer ${SECRET}` },
+    }),
+    { cronSecret: SECRET, run: async () => result },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.state, "already_running");
+  assert.equal(body.activeRunId, "active-run");
 });
 
 test("fatal job failures are a safe 500 and the route stays GET-only dynamic", async () => {
@@ -83,6 +104,10 @@ test("fatal job failures are a safe 500 and the route stays GET-only dynamic", a
 function successfulRun(overrides: Partial<ScheduledRefreshResult> = {}): ScheduledRefreshResult {
   return Object.freeze({
     ok: true,
+    runId: "run-1",
+    state: "succeeded",
+    activeRunId: null,
+    resumedFromId: null,
     startedAt: "2026-08-31T16:00:00.000Z",
     completedAt: "2026-08-31T16:00:01.000Z",
     rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] }),

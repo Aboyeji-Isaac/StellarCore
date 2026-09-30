@@ -46,6 +46,25 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+enum RefreshRunState {
+  RUNNING             @map("running")
+  SUCCEEDED           @map("succeeded")
+  PARTIALLY_SUCCEEDED @map("partially_succeeded")
+  FAILED              @map("failed")
+
+  @@map("refresh_run_state")
+}
+
+enum RefreshPhaseState {
+  PENDING   @map("pending")
+  RUNNING   @map("running")
+  SUCCEEDED @map("succeeded")
+  FAILED    @map("failed")
+  SKIPPED   @map("skipped")
+
+  @@map("refresh_phase_state")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -162,4 +181,26 @@ model ReputationScore {
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+/// Durable ledger for the authenticated scheduled refresh. Exactly one row is
+/// created per refresh attempt that acquires the advisory lock; terminal rows
+/// are immutable and resume creates a new row linked through resumedFromId.
+/// Phase progress lives in phaseStates so an interrupted run can be inspected
+/// and resumed without re-executing completed phases. Only bounded, sanitized
+/// failure summaries are stored here — never secrets or raw remote bodies.
+model RefreshRun {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  triggeredBy   String          @default("cron") @map("triggered_by") @db.VarChar(32)
+  state         RefreshRunState @default(RUNNING)
+  attempt       Int             @default(1)
+  resumedFromId String?         @map("resumed_from_id") @db.Uuid
+  startedAt     DateTime        @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime?       @map("completed_at") @db.Timestamptz(6)
+  phaseStates   Json            @default("{}") @map("phase_states")
+  failures      Json            @default("[]")
+  result        Json?
+
+  @@index([state, startedAt(sort: Desc)], map: "refresh_runs_state_started_at_idx")
+  @@map("refresh_runs")
 }

@@ -80,8 +80,9 @@ payment or Horizon observation.
 ## Database and public API
 
 Prisma models anchors, corridors, their reviewed associations, rate snapshots,
-transfer-outcome evidence, and one current reputation score per anchor. The
-database is the boundary between maintenance engines and read consumers.
+transfer-outcome evidence, one current reputation score per anchor, and the
+durable scheduled-refresh run ledger. The database is the boundary between
+maintenance engines and read consumers.
 
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal
@@ -92,11 +93,16 @@ API present the same persisted evidence and uncertainty semantics.
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact
-`CRON_SECRET` bearer credential. It prepares and snapshots reviewed indicative
-rates, then evaluates reputation. Rate preparation failures are returned in a
-safe summary while reputation evaluation still runs; a fatal reputation
-failure produces a safe server error. The production cron invokes this route
-daily, while registry bootstrap remains a separate manual GitHub Actions job.
+`CRON_SECRET` bearer credential. It takes a session-scoped PostgreSQL advisory
+lock, writes a durable refresh-run row, prepares and snapshots reviewed
+indicative rates, then evaluates reputation. Rate preparation failures are
+recorded as a failed phase while reputation evaluation still runs; a fatal
+reputation failure is recorded truthfully and produces a safe server error.
+Each attempt returns its run id and terminal state, and an attempt that cannot
+take the lock returns a non-error `already_running` result without starting
+work. The production cron invokes this route daily, while registry bootstrap
+remains a separate manual GitHub Actions job.
 
-See the [README](../README.md) for setup, API details, and operational
-invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.
+See [runbook-scheduled-refresh.md](runbook-scheduled-refresh.md) for run-state
+meanings, inspection, retry, and recovery, the [README](../README.md) for setup
+and API details, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.
