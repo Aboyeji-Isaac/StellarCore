@@ -28,8 +28,9 @@ function evidence(
     transferOutcomes: Object.freeze(Array.from({ length: 30 }, (_, index) =>
       Object.freeze({
         status: outcomeStatus,
+        fillRate: outcomeStatus === "COMPLETED" ? "1" : "0",
         settlementMs: 1_000,
-        slippage: 0,
+        slippage: "0",
         recordedAt: new Date(NOW.getTime() - index),
       }))),
   });

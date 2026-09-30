@@ -23,8 +23,9 @@ test("controlled evidence composes through calculation and current-score persist
     transferOutcomes: Object.freeze(Array.from({ length: 30 }, (_, index) =>
       Object.freeze({
         status: index < 24 ? "COMPLETED" as const : "ERROR" as const,
+        fillRate: index < 24 ? "1" : "0",
         settlementMs: 1_000,
-        slippage: 0,
+        slippage: "0",
         recordedAt: new Date(NOW.getTime() - index * 1_000),
       }))),
   });

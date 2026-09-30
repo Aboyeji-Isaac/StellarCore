@@ -117,8 +117,10 @@ function safeScore(value: number | null): number | null {
     : null;
 }
 
-function safeNumber(value: number | null): number | null {
-  return value !== null && Number.isFinite(value) ? value : null;
+function safeNumber(value: number | string | null): number | null {
+  if (value === null) return null;
+  const numericValue = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 function errorBody(

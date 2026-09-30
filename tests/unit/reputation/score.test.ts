@@ -106,17 +106,54 @@ test("results and nested evidence are immutable", () => {
 
 test("rolling metrics use deterministic success ratios and nearest-rank percentiles", () => {
   const history = outcomes(28, "ERROR");
-  history.push(outcome("COMPLETED", 1, 1_000, 0.01));
-  history.push(outcome("COMPLETED", 2, 3_000, 0.03));
+  history.push(outcome("COMPLETED", 1, 1_000, "0.01"));
+  history.push(outcome("COMPLETED", 2, 3_000, "0.03"));
   const result = calculateReputation(establishedEvidence(history), NOW);
 
-  assert.equal(result.metrics.fillRate7d, 0.0667);
-  assert.equal(result.metrics.fillRate30d, 0.0667);
-  assert.equal(result.metrics.fillRate90d, 0.0667);
+  assert.equal(result.metrics.fillRate7d, "0.0667");
+  assert.equal(result.metrics.fillRate30d, "0.0667");
+  assert.equal(result.metrics.fillRate90d, "0.0667");
   assert.equal(result.metrics.settleP50Ms, 1_000);
   assert.equal(result.metrics.settleP95Ms, 3_000);
-  assert.equal(result.metrics.slippageP50, 0.01);
-  assert.equal(result.metrics.slippageP95, 0.03);
+  assert.equal(result.metrics.slippageP50, "0.01");
+  assert.equal(result.metrics.slippageP95, "0.03");
+});
+
+test("exact slippage ordering and score bands remain deterministic at thresholds", () => {
+  const lower = "10000000000000000.000000000000000001";
+  const higher = "10000000000000000.000000000000000002";
+  const ordered = calculateReputation(establishedEvidence([
+    outcome("COMPLETED", 0, 1_000, higher),
+    outcome("COMPLETED", 1, 1_000, lower),
+    ...outcomes(28, "ERROR"),
+  ]), NOW);
+  assert.equal(ordered.metrics.slippageP50, lower);
+  assert.deepEqual(ordered, calculateReputation(establishedEvidence([
+    outcome("COMPLETED", 0, 1_000, higher),
+    outcome("COMPLETED", 1, 1_000, lower),
+    ...outcomes(28, "ERROR"),
+  ]), NOW));
+
+  const red = calculateReputation(establishedEvidence([
+    ...outcomes(21, "ERROR"),
+    ...outcomes(29, "COMPLETED"),
+  ]), NOW);
+  const amber = calculateReputation(establishedEvidence([
+    ...outcomes(20, "ERROR"),
+    ...outcomes(30, "COMPLETED"),
+  ]), NOW);
+  const amberAtGreenEdge = calculateReputation(establishedEvidence([
+    ...outcomes(6, "ERROR"),
+    ...outcomes(44, "COMPLETED"),
+  ]), NOW);
+  const green = calculateReputation(establishedEvidence([
+    ...outcomes(5, "ERROR"),
+    ...outcomes(45, "COMPLETED"),
+  ]), NOW);
+  assert.deepEqual([red.score, red.scoreBand], [79, "RED"]);
+  assert.deepEqual([amber.score, amber.scoreBand], [80, "AMBER"]);
+  assert.deepEqual([amberAtGreenEdge.score, amberAtGreenEdge.scoreBand], [94, "AMBER"]);
+  assert.deepEqual([green.score, green.scoreBand], [95, "GREEN"]);
 });
 
 function establishedEvidence(
@@ -160,10 +197,11 @@ function outcome(
   status: ReputationTransferStatus,
   index: number,
   settlementMs = 1_000,
-  slippage = 0,
+  slippage = "0",
 ): ReputationEvidence["transferOutcomes"][number] {
   return Object.freeze({
     status,
+    fillRate: status === "COMPLETED" ? "1" : "0",
     settlementMs,
     slippage,
     recordedAt: new Date(NOW.getTime() - index * 1_000),

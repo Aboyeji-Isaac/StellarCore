@@ -118,9 +118,9 @@ model TransferOutcome {
   anchorId     String         @map("anchor_id") @db.Uuid
   corridorId   String         @map("corridor_id") @db.Uuid
   status       TransferStatus
-  fillRate     Float          @map("fill_rate")
+  fillRate     Decimal        @map("fill_rate") @db.Decimal(19, 18)
   settlementMs Int            @map("settlement_ms")
-  slippage     Float
+  slippage     Decimal        @db.Decimal(38, 18)
   recordedAt   DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -135,13 +135,13 @@ model ReputationScore {
   anchorId       String               @unique @map("anchor_id") @db.Uuid
   compositeScore Float?               @map("composite_score")
   scoreBand      ReputationScoreBand? @map("score_band")
-  fillRate7d     Float?               @map("fill_rate_7d")
-  fillRate30d    Float?               @map("fill_rate_30d")
-  fillRate90d    Float?               @map("fill_rate_90d")
+  fillRate7d     Decimal?             @map("fill_rate_7d") @db.Decimal(5, 4)
+  fillRate30d    Decimal?             @map("fill_rate_30d") @db.Decimal(5, 4)
+  fillRate90d    Decimal?             @map("fill_rate_90d") @db.Decimal(5, 4)
   settleP50Ms    Int?                 @map("settle_p50_ms")
   settleP95Ms    Int?                 @map("settle_p95_ms")
-  slippageP50    Float?               @map("slippage_p50")
-  slippageP95    Float?               @map("slippage_p95")
+  slippageP50    Decimal?             @map("slippage_p50") @db.Decimal(38, 18)
+  slippageP95    Decimal?             @map("slippage_p95") @db.Decimal(38, 18)
   sampleSize     Int                  @default(0) @map("sample_size")
   state          ReputationState      @default(INSUFFICIENT_DATA)
   computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)

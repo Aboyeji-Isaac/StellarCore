@@ -17,8 +17,9 @@ export type ReputationEvidence = Readonly<{
   }>[];
   transferOutcomes: readonly Readonly<{
     status: ReputationTransferStatus;
+    fillRate: string;
     settlementMs: number;
-    slippage: number;
+    slippage: string;
     recordedAt: Date | string;
   }>[];
 }>;
@@ -51,13 +52,13 @@ export type ReputationCalculation = Readonly<{
     minimumOutcomeCount: number;
   }>;
   metrics: Readonly<{
-    fillRate7d: number | null;
-    fillRate30d: number | null;
-    fillRate90d: number | null;
+    fillRate7d: string | null;
+    fillRate30d: string | null;
+    fillRate90d: string | null;
     settleP50Ms: number | null;
     settleP95Ms: number | null;
-    slippageP50: number | null;
-    slippageP95: number | null;
+    slippageP50: string | null;
+    slippageP95: string | null;
   }>;
 }>;
 

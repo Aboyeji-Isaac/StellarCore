@@ -1,4 +1,5 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import { normalizeOutcomeMetric } from "@/lib/reputation/outcomeMetrics";
 import type {
   PersistedReputationScore,
   ReputationEvidence,
@@ -37,6 +38,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
         orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
         select: {
           status: true,
+          fillRate: true,
           settlementMs: true,
           slippage: true,
           recordedAt: true,
@@ -58,8 +60,9 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       transferOutcomes: Object.freeze(transferOutcomes.map((outcome) =>
         Object.freeze({
           status: outcome.status,
+          fillRate: normalizeOutcomeMetric(outcome.fillRate.toFixed(), "fillRate"),
           settlementMs: outcome.settlementMs,
-          slippage: outcome.slippage,
+          slippage: normalizeOutcomeMetric(outcome.slippage.toFixed(), "slippage"),
           recordedAt: new Date(outcome.recordedAt.getTime()),
         }))),
     }) satisfies ReputationEvidence;

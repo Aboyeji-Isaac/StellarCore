@@ -5,6 +5,10 @@ import {
   REPUTATION_WEIGHTS,
 } from "@/constants/reputation";
 import { getRateFreshness } from "@/lib/rates/freshness";
+import {
+  basisPointsToOutcomeMetric,
+  parseOutcomeMetric,
+} from "@/lib/reputation/outcomeMetrics";
 import type {
   ReputationCalculation,
   ReputationComponent,
@@ -167,19 +171,19 @@ function calculateMetrics(
     fillRate7d: successRatio(inWindow(sevenDayStart)),
     fillRate30d: successRatio(inWindow(thirtyDayStart)),
     fillRate90d: successRatio(outcomes),
-    settleP50Ms: percentile(
+    settleP50Ms: integerPercentile(
       thirtyDayCompleted.map(({ settlementMs }) => settlementMs),
       50,
     ),
-    settleP95Ms: percentile(
+    settleP95Ms: integerPercentile(
       thirtyDayCompleted.map(({ settlementMs }) => settlementMs),
       95,
     ),
-    slippageP50: percentile(
+    slippageP50: decimalPercentile(
       thirtyDayCompleted.map(({ slippage }) => slippage),
       50,
     ),
-    slippageP95: percentile(
+    slippageP95: decimalPercentile(
       thirtyDayCompleted.map(({ slippage }) => slippage),
       95,
     ),
@@ -188,17 +192,26 @@ function calculateMetrics(
 
 function successRatio(
   outcomes: readonly Readonly<{ status: ReputationTransferStatus }>[],
-): number | null {
+): string | null {
   if (outcomes.length === 0) return null;
   const completed = outcomes.filter(({ status }) => status === "COMPLETED").length;
-  return ratioBasisPoints(completed, outcomes.length) / 10_000;
+  return basisPointsToOutcomeMetric(ratioBasisPoints(completed, outcomes.length));
 }
 
-function percentile(values: readonly number[], percentileValue: number): number | null {
+function integerPercentile(values: readonly number[], percentileValue: number): number | null {
   const valid = values.filter(Number.isFinite).sort((left, right) => left - right);
   if (valid.length === 0) return null;
   const index = Math.ceil((percentileValue / 100) * valid.length) - 1;
   return valid[Math.max(0, index)]!;
+}
+
+function decimalPercentile(values: readonly string[], percentileValue: number): string | null {
+  if (values.length === 0) return null;
+  const sorted = values
+    .map((value) => ({ value, scaled: parseOutcomeMetric(value, "slippage") }))
+    .sort((left, right) => left.scaled < right.scaled ? -1 : left.scaled > right.scaled ? 1 : 0);
+  const index = Math.ceil((percentileValue / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, index)]!.value;
 }
 
 function timestamp(value: Date | string): number | null {

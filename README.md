@@ -180,7 +180,13 @@ bands `GREEN` (95–100), `AMBER` (80–94), or `RED` (0–79).
 
 Ratios use integer basis-point arithmetic with explicit half-up rounding; the
 0–100 result is deterministic and bounded. Stored 7/30/90-day fill rates report
-the completed-outcome ratio. Settlement and slippage p50/p95 metrics use
+the completed-outcome ratio rounded half-up to four decimal places.
+`TransferOutcome.fillRate` is a unit ratio in [0,1], stored as
+`NUMERIC(19,18)`; `slippage` is a signed unitless decimal stored as
+`NUMERIC(38,18)`. Both reject more than 18 fractional digits. Exact decimal
+text is retained through reputation evidence and nearest-rank percentile
+ordering, which compares scaled integers rather than JavaScript numbers.
+Settlement and slippage p50/p95 metrics use
 completed outcomes in the trailing 30 days and deterministic nearest-rank
 percentiles; they are explanatory metrics, not hidden score inputs.
 
@@ -271,6 +277,15 @@ anchor. Freshness is calculated at read time; it is not stored on a snapshot.
 presence in the schema must not be read as a claim that StellarCore collects
 customer transfers, independently verifies off-chain settlement, or has
 established reputation evidence.
+
+The decimal migration converts each legacy `FLOAT8` through PostgreSQL's
+shortest round-trip decimal text, then rounds to 18 fractional places (and
+persisted fill-ratio summaries to four) using PostgreSQL `round`; this avoids
+the lower-precision direct `FLOAT8` to `NUMERIC` cast. It aborts for non-finite,
+out-of-domain, or unrepresentable existing values instead of clamping them. The companion
+`rollback.sql` is manual because Prisma migrations are forward-only. It restores
+`FLOAT8`, which is inherently lossy for decimal values; take and verify a
+database backup before using it.
 
 ---
 
@@ -386,6 +401,10 @@ npm run verify:reputation
 ```bash
 # Unit and integration tests
 npm test
+
+# PostgreSQL-backed integration tests, including decimal migration rollback/forward
+RUN_DATABASE_INTEGRATION=1 RUN_REPUTATION_API_DATABASE_INTEGRATION=1 \
+RUN_REPUTATION_DATABASE_INTEGRATION=1 RUN_MIGRATION_DATABASE_INTEGRATION=1 npm test
 
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
@@ -636,6 +655,11 @@ persisted engine result rather than recalculated. `evidence.outcomeCount` is the
 persisted score sample size. The metric fields are persisted explanatory values,
 not request-time recomputations. Component scores and corridor/freshness counts
 are not exposed because the current schema does not persist them.
+
+For backward compatibility, public metric field names, nullability, and JSON
+number types are unchanged. Decimal values are converted to JSON numbers only
+when serialized at this API boundary; clients that need exact decimal text must
+not treat these legacy numeric fields as an exact-decimal transport format.
 
 `computedAt` is the timestamp of the latest completed reputation evaluation, not
 a live-health timestamp. Both routes are dynamic, use `Cache-Control: no-store`,

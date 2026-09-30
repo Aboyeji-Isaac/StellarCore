@@ -3,13 +3,13 @@ import type { ReputationState, ReputationScoreBand } from "@/app/generated/prism
 export type ReputationApiScoreRecord = Readonly<{
   compositeScore: number | null;
   scoreBand: ReputationScoreBand | null;
-  fillRate7d: number | null;
-  fillRate30d: number | null;
-  fillRate90d: number | null;
+  fillRate7d: number | string | null;
+  fillRate30d: number | string | null;
+  fillRate90d: number | string | null;
   settleP50Ms: number | null;
   settleP95Ms: number | null;
-  slippageP50: number | null;
-  slippageP95: number | null;
+  slippageP50: number | string | null;
+  slippageP95: number | string | null;
   sampleSize: number;
   state: ReputationState;
   computedAt: Date;
@@ -63,16 +63,35 @@ export const PRISMA_REPUTATION_API_REPOSITORY = Object.freeze({
   },
 }) satisfies ReputationApiRepository;
 
+type DecimalValue = Readonly<{ toFixed: () => string }> | null;
+type PersistedScoreRecord = Omit<ReputationApiScoreRecord,
+  "fillRate7d" | "fillRate30d" | "fillRate90d" | "slippageP50" | "slippageP95"> & Readonly<{
+    fillRate7d: DecimalValue;
+    fillRate30d: DecimalValue;
+    fillRate90d: DecimalValue;
+    slippageP50: DecimalValue;
+    slippageP95: DecimalValue;
+  }>;
+
 function toRecord(anchor: {
   slug: string;
   name: string;
-  reputationScore: ReputationApiScoreRecord | null;
+  reputationScore: PersistedScoreRecord | null;
 }): ReputationApiAnchorRecord {
+  const score = anchor.reputationScore;
   return Object.freeze({
     slug: anchor.slug,
     name: anchor.name,
-    reputationScore: anchor.reputationScore
-      ? Object.freeze({ ...anchor.reputationScore, computedAt: new Date(anchor.reputationScore.computedAt) })
+    reputationScore: score
+      ? Object.freeze({
+        ...score,
+        fillRate7d: score.fillRate7d?.toFixed() ?? null,
+        fillRate30d: score.fillRate30d?.toFixed() ?? null,
+        fillRate90d: score.fillRate90d?.toFixed() ?? null,
+        slippageP50: score.slippageP50?.toFixed() ?? null,
+        slippageP95: score.slippageP95?.toFixed() ?? null,
+        computedAt: new Date(score.computedAt),
+      })
       : null,
   });
 }
