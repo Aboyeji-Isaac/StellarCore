@@ -14,7 +14,8 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
 - `npm test` runs Vitest unit and integration tests.
-- `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
+- `npm run audit:config` checks repository-controlled registry relationships offline, including the reviewed production database target identity; run it for anchor, corridor, membership, reviewed rate-source, or production target identity changes.
+- `npm run preflight:production-database` runs the read-only production database target-identity guard. It requires `DATABASE_URL`, writes nothing, and exits nonzero on a host, database name, cluster fingerprint, or marker mismatch. The production migration and registry-bootstrap workflows run it before their mutation step.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.
@@ -31,6 +32,15 @@ Use strict TypeScript, two-space indentation, and functional React components. N
 ## Testing Guidelines
 
 Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses.
+
+The production database target-identity guard follows the same layering: keep the
+pure decision in `lib/config/productionDatabaseIdentity.ts` free of I/O, keep
+`lib/config/currentProductionDatabaseIdentity.ts` as the only reader of
+`constants/`, and inject the database client or observer so unit tests can
+simulate a correct and an incorrect target without a live database. Assert that
+diagnostics never contain a connection string, username, or password, and assert
+against the workflow files that the privileged mutation steps stay gated on the
+preflight.
 
 ## Commit & Pull Request Guidelines
 

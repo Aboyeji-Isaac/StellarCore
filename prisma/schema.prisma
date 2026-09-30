@@ -143,6 +143,23 @@ model TransferOutcome {
   @@map("transfer_outcomes")
 }
 
+/// Non-secret marker proving this database is the reviewed StellarCore
+/// production target. Written once by a committed migration and re-read
+/// read-only by the preflight in `lib/config/productionDatabasePreflight.ts`
+/// before any privileged production workflow mutates the database. The stored
+/// value is a public constant, never a credential, so it is committed here and
+/// in `constants/productionDatabaseIdentity.ts`; the offline `npm run
+/// audit:config` keeps the two in agreement.
+model ProductionDatabaseIdentity {
+  /// Row key, `primary` for the single production target.
+  rowKey    String   @id @map("row_key")
+  /// Non-secret marker value the reviewed registry pins for this target.
+  marker    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("production_database_identity")
+}
+
 model ReputationScore {
   id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   anchorId       String               @unique @map("anchor_id") @db.Uuid

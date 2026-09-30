@@ -6,7 +6,10 @@ on:
       - "constants/**"
       - "lib/config/**"
       - "lib/stellar/**"
+      - "prisma/migrations/**"
+      - "prisma/schema.prisma"
       - "scripts/audit-configuration.ts"
+      - "tests/unit/config/**"
       - "package.json"
       - "package-lock.json"
 
@@ -31,5 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # Validates the reviewed anchor, corridor, membership, and rate-source
+      # relationships together with the reviewed production database target
+      # identity, so an approved identity change is checked offline before it can
+      # reach a privileged workflow. Requires no database, network, or secrets.
       - name: Audit registry configuration
         run: npm run audit:config

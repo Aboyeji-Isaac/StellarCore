@@ -54,3 +54,25 @@ Use explicit status codes, headers, and bodies to model timeout, malformed
 JSON, and upstream errors. Do not weaken production validation just to make a
 test pass. Live integrations belong in an explicitly configured integration
 environment and must not run as part of the default unit suite.
+
+## Privileged workflow guards
+
+Tests that guard a production boundary assert against the artifacts themselves,
+not against a description of them.
+`tests/unit/config/productionDatabaseWorkflows.test.ts` reads the workflow YAML
+directly, so deleting the preflight, moving it after the mutation, dropping the
+`if: ${{ success() }}` gate, or widening the secret to a job-level `env:` block
+fails the suite instead of passing review.
+
+Tests for a database-identity check must cover both directions — the correct
+target continues, and a credential that authenticates successfully against the
+wrong database halts — and must assert that the reported diagnostic contains no
+connection string, username, or password. Inject the client or observer rather
+than opening a connection, and drive the real query path with a recording stub so
+the statements themselves can be asserted read-only.
+
+`tests/integration/config/productionDatabasePreflight.database.integration.test.ts`
+covers the same properties against a real server, because read-only enforcement
+and `inet_server_addr()` are server behaviour rather than SQL we control. It is
+opt-in via `RUN_PRODUCTION_DATABASE_PREFLIGHT_INTEGRATION=1` and never runs as
+part of `npm test`.

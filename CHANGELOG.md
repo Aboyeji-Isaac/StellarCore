@@ -9,8 +9,13 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Read-only production database target-identity preflight that binds the manual
+  production migration and registry-bootstrap workflows to an approved database,
+  verified by a reviewed host, port, database name, server-reported cluster
+  fingerprint, and non-secret marker row. See
+  [docs/production-database-identity.md](docs/production-database-identity.md).
 
 ## [Prior work] — 2026-09-25
 

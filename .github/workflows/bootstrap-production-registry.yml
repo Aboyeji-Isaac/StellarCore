@@ -4,11 +4,19 @@
 # This workflow is intentionally manual and kept separate from Vercel builds,
 # preview deployments, the migration workflow, and the scheduled refresh, so an
 # ordinary build, a preview, or a cron run can never mutate the production
-# registry. It runs only `npm run bootstrap:registry`, which upserts the
+# registry. Before it writes anything it runs the same read-only target-identity
+# preflight as the migration workflow, so a misconfigured `DATABASE_URL` halts
+# the run instead of bootstrapping an unintended database. After that preflight
+# passes it runs only `npm run bootstrap:registry`, which upserts the
 # already-reviewed anchor/corridor registry defined in the repository; it
 # creates no new anchors, infers no corridors, and never resets data. The
 # bootstrap is idempotent: normally required once for a fresh production
 # database, but safe to re-run deliberately after a reviewed registry change.
+#
+# The production target identity is not a secret and is not stored here. It is
+# reviewed in the repository at `constants/productionDatabaseIdentity.ts`; a
+# planned database replacement is a pull request against that file. See
+# docs/production-database-identity.md.
 #
 # One-time setup a repository admin must complete before the first run
 # (see docs/DEPLOYMENT.md for the full procedure):
@@ -65,7 +73,20 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      # The same read-only target-identity preflight the migration workflow
+      # uses. A bootstrap is a mutation, so it is gated identically: the
+      # preflight writes nothing, prints no secret, and exits nonzero on any
+      # host, cluster fingerprint, or marker mismatch.
+      - name: Verify production database target identity
+        run: npm run preflight:production-database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # `if: success()` is explicit even though it is the default: it is the
+      # guard rail that makes the preflight a hard gate on this mutation rather
+      # than an advisory step that a later edit could reorder or skip.
       - name: Bootstrap registry
+        if: ${{ success() }}
         run: npm run bootstrap:registry
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

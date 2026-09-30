@@ -2,17 +2,28 @@
 #
 # This workflow is intentionally manual and kept separate from Vercel builds
 # and preview deployments, so an ordinary build or a preview can never mutate
-# the production database. It runs only `npx prisma migrate deploy`, which
-# applies already-committed migrations; it never runs `prisma migrate dev`,
-# `prisma db push`, or any reset command, and it never creates or edits a
-# migration.
+# the production database. Before it migrates anything it runs a read-only
+# preflight that proves the resolved credential points at the reviewed
+# production database, so a misconfigured `DATABASE_URL` halts the run instead
+# of migrating an unintended target. After that preflight passes it runs only
+# `npx prisma migrate deploy`, which applies already-committed migrations; it
+# never runs `prisma migrate dev`, `prisma db push`, or any reset command, and
+# it never creates or edits a migration.
+#
+# The production target identity is not a secret and is not stored here. It is
+# reviewed in the repository at `constants/productionDatabaseIdentity.ts`; a
+# planned database replacement is a pull request against that file. See
+# docs/production-database-identity.md.
 #
 # One-time setup a repository admin must complete before the first run
 # (see docs/DEPLOYMENT.md for the full procedure):
 #   1. Create a GitHub Actions environment named `production`.
 #   2. Add a `DATABASE_URL` secret to that environment containing the direct
 #      PostgreSQL connection string suitable for Prisma Migrate.
-#   3. Optionally attach required reviewers / protection rules to the
+#   3. Review the production target identity in
+#      `constants/productionDatabaseIdentity.ts` so the preflight has an
+#      approved host, cluster fingerprint, and marker to enforce.
+#   4. Optionally attach required reviewers / protection rules to the
 #      `production` environment.
 #
 # The secret is read only from the GitHub `production` environment. Do not
@@ -62,7 +73,24 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      # Read-only target-identity preflight. It opens a `READ ONLY` transaction,
+      # compares the server-reported database name and cluster fingerprint
+      # against the reviewed registry in `constants/productionDatabaseIdentity.ts`,
+      # and checks the non-secret marker row. It writes nothing, prints no
+      # secret, and exits nonzero on any mismatch. A direct (non-pooled) URL is
+      # required because `inet_server_addr()` is what makes the fingerprint
+      # verifiable; a socket or pooling endpoint halts with
+      # PRODUCTION_DATABASE_FINGERPRINT_UNVERIFIED.
+      - name: Verify production database target identity
+        run: npm run preflight:production-database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # `if: success()` is explicit even though it is the default: it is the
+      # guard rail that makes the preflight a hard gate on this mutation rather
+      # than an advisory step that a later edit could reorder or skip.
       - name: Apply migrations
+        if: ${{ success() }}
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

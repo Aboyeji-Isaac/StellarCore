@@ -267,6 +267,12 @@ anchors, corridors, reviewed anchor–corridor associations, individual rate
 snapshots, transfer-outcome evidence, and one current reputation score per
 anchor. Freshness is calculated at read time; it is not stored on a snapshot.
 
+It also holds a one-row `ProductionDatabaseIdentity` marker. That row is not
+application data: it is the non-secret proof, written by a committed migration
+and re-read read-only before any privileged production workflow mutates the
+database, that this database is the reviewed StellarCore production target. See
+[docs/production-database-identity.md](docs/production-database-identity.md).
+
 `TransferOutcome` supports the scoring model but has no production writer. Its
 presence in the schema must not be read as a claim that StellarCore collects
 customer transfers, independently verifies off-chain settlement, or has
@@ -280,14 +286,15 @@ established reputation evidence.
 stellarcore/
 ├── app/                    # Landing page, /dashboard, public read APIs, internal cron route
 ├── components/dashboard/   # Dashboard sections and bounded state views
-├── constants/              # Reviewed anchor, corridor, rate-source, and scoring configuration
+├── constants/              # Reviewed anchor, corridor, rate-source, production database, and scoring configuration
 ├── lib/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
+│   ├── config/             # Offline configuration audit and the production database target-identity guard
 │   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
 │   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
 │   └── scheduled/          # Internal cron authorization and orchestration
 ├── prisma/                 # Schema and committed migration history
-├── scripts/                # Bootstrap, snapshot, and verification utilities
+├── scripts/                # Bootstrap, snapshot, preflight, and verification utilities
 ├── tests/                  # Unit and controlled integration coverage
 └── .github/workflows/      # Manual production migration and registry-bootstrap workflows
 ```
@@ -321,6 +328,11 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional, non-secret. Narrow the reviewed production database target during a
+# rotation window. Both fail closed if they disagree with the reviewed registry.
+# PRODUCTION_DATABASE_EXPECTED_FINGERPRINT="sha256:<64 hex characters>"
+# PRODUCTION_DATABASE_EXPECTED_MARKER="STELLARCORE_PRODUCTION_DATABASE_V1"
 ```
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
@@ -329,6 +341,12 @@ compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
 repository files, or logs.
+
+The two optional `PRODUCTION_DATABASE_*` variables are not credentials. They can
+only narrow the reviewed production target identity in
+[constants/productionDatabaseIdentity.ts](constants/productionDatabaseIdentity.ts),
+never widen it, so a wrong value halts the preflight rather than admitting an
+unapproved database. See [docs/production-database-identity.md](docs/production-database-identity.md).
 
 ---
 
@@ -393,6 +411,9 @@ npm test
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
 
+# Read-only preflight: prove DATABASE_URL is the reviewed production database
+npm run preflight:production-database
+
 # Human-readable inspection of the checked-in anchor/corridor registry
 npm run registry:print
 
@@ -408,10 +429,26 @@ npm run verify:sep10
 registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
+`preflight:production-database` is a read-only guard for privileged production
+workflows. It opens a `READ ONLY` transaction and checks three independent facts
+before anything is mutated: the connection URL's host/port/database, a SHA-256
+fingerprint of the **server-reported** `current_database()` and
+`inet_server_addr()`, and a non-secret marker row in the database. The expected
+values live in [constants/productionDatabaseIdentity.ts](constants/productionDatabaseIdentity.ts)
+and are reviewed in code — they are not a secret and are not read from GitHub. Any
+mismatch exits nonzero with a credential-free JSON diagnostic; there is no
+override. It is run by the production migration and registry-bootstrap workflows
+before their mutation step, and can be run locally against any database. Because
+the fingerprint needs a real network address, a pooled or proxying endpoint halts
+as unverifiable. See [docs/production-database-identity.md](docs/production-database-identity.md).
+
 `audit:config` performs a pure, deterministic check of the checked-in anchor,
-corridor, membership, and reviewed rate-source relationships. It requires no
+corridor, membership, and reviewed rate-source relationships, together with the
+reviewed production database target identity. It requires no
 database, network, or environment secrets. Registry bootstrap and reviewed rate
-snapshot preparation run the same preflight before operational work begins.
+snapshot preparation run the same configuration preflight before operational work
+begins, and the privileged production workflows run the database target-identity
+preflight before they mutate anything.
 Passing this audit means only that repository-controlled configuration is
 internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
@@ -446,8 +483,9 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 - Use Node.js 22.x and `npm run build`; existing `postinstall` generates Prisma Client.
 - Set server-only `DATABASE_URL` and `CRON_SECRET`; `DIRECT_URL` is not used.
-- Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which runs `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-- Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- Review the production target identity in [constants/productionDatabaseIdentity.ts](constants/productionDatabaseIdentity.ts) before the first privileged run; the repository ships an unresolved placeholder so the guard halts until a maintainer approves a real host, cluster fingerprint, and marker. Rotating the production database is a reviewed pull request against that file, not an environment edit.
+- Apply tracked migrations only through the manual **Deploy production migrations** GitHub Actions workflow (`.github/workflows/deploy-production-migrations.yml`, `workflow_dispatch` only), which first runs the read-only `npm run preflight:production-database` and only then `npx prisma migrate deploy` — never ordinary Vercel builds or previews. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/production-database-identity.md](docs/production-database-identity.md).
+- Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs the same read-only target-identity preflight and then `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - The Hobby-compatible Vercel Cron calls the authenticated refresh route daily at `0 0 * * *`.
 - Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
 

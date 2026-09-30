@@ -17,11 +17,18 @@
 * @Aboyeji-Isaac
 
 # Registry definitions — reviewed source of anchor, corridor, membership,
-# and live-rate-source relationships (see `npm run audit:config`).
+# live-rate-source, and production database target relationships (see
+# `npm run audit:config`).
 /constants/ @Aboyeji-Isaac
 
 # Database schema — migrations and any schema change affect production data.
 /prisma/schema.prisma @Aboyeji-Isaac
+/prisma/migrations/ @Aboyeji-Isaac
+
+# Privileged operation guards — the read-only preflight that binds production
+# migrations and the registry bootstrap to an approved database target, plus the
+# offline configuration audit it shares its registry with.
+/lib/config/ @Aboyeji-Isaac
 
 # Scoring logic — reputation evidence reads, deterministic scoring, and
 # score persistence.
