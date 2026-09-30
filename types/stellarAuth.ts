@@ -30,6 +30,13 @@ export type StellarAuthTokenMetadata = Readonly<{
 /**
  * Signing is intentionally caller-owned. Implementations may delegate to a
  * wallet, hardware signer, key-management service, or injected SDK keypair.
+ *
+ * Contract: the returned XDR must carry the same transaction body that was
+ * passed in (same SDK transaction hash under `networkPassphrase`). Only
+ * signatures may be added; the server signature must be preserved. Anything
+ * else is rejected with `SIGNING_FAILURE` before any request to the
+ * authentication endpoint. Client signatures need not match the account
+ * master key (delegated and multi-signer accounts are supported).
  */
 export interface Sep10ChallengeSigner {
   signChallenge(input: Readonly<{
