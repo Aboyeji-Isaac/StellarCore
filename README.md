@@ -215,11 +215,38 @@ The manual, protected registry-bootstrap workflow runs `npm run bootstrap:regist
        → Fetch stellar.toml from homeDomain
        → Parse SEPs, assets, and endpoints
        → Run transferCapable() → true / false
-       → Upsert into anchors table
+       → Upsert into anchors table (metadata only; status is owned by the
+         health state machine)
   3. For each anchor + corridor pair:
        → Upsert into anchor_corridors table
   4. Exit nonzero if discovery or persistence fails
 ```
+
+### Anchor Availability Transitions
+
+```
+Discovery failures are evidence, not verdicts:
+
+  1. Classify each discovery failure:
+       → TRANSIENT (timeout, network, 5xx, oversized response)
+       → DETERMINISTIC (invalid TOML/data, missing fields, 4xx)
+       → UNKNOWN (unexpected error; never escalates faster than transient)
+  2. Record bounded evidence in the anchor's health row
+       (anchor_health_states: counters + timestamps, one row per anchor).
+  3. Apply the pure state machine (lib/stellar/anchorHealth.ts):
+       → 1 transient failure on a LIVE anchor: no status change.
+       → 2 consecutive transient failures: DEGRADED.
+       → 3 consecutive transient failures (or a failure ≥48h after the
+         previous one): DOWN.
+       → Deterministic failures: DEGRADED on the first, DOWN on the second.
+       → Recovery: DOWN → DEGRADED on the first success, LIVE on the second.
+  4. Persist the transition with the evidence row in one transaction.
+```
+
+Status is observational health of SEP-1 discovery. It is not a claim about
+transfer success or trustworthiness, and it survives process restarts because
+the full machine state is the one persisted row. The complete policy is
+documented in [docs/anchor-health-policy.md](docs/anchor-health-policy.md).
 
 ### Rate Snapshot Flow
 
@@ -264,8 +291,10 @@ For one persisted anchor at one evaluation timestamp:
 
 The source of truth is [prisma/schema.prisma](prisma/schema.prisma). It models
 anchors, corridors, reviewed anchor–corridor associations, individual rate
-snapshots, transfer-outcome evidence, and one current reputation score per
-anchor. Freshness is calculated at read time; it is not stored on a snapshot.
+snapshots, transfer-outcome evidence, one current reputation score per anchor,
+and one bounded health-evidence row per anchor (`anchor_health_states`)
+driving deterministic availability transitions. Freshness is calculated at
+read time; it is not stored on a snapshot.
 
 Production PostgreSQL connections always use certificate-verified TLS supplied
 by the application: TLS parameters in `DATABASE_URL` are stripped and

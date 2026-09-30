@@ -11,12 +11,13 @@ with your pull request.
 
 ### Added
 
-- Production PostgreSQL TLS policy: connections use certificate-verified TLS
-  supplied by the application. TLS parameters are stripped from the database
-  URL, production startup rejects plaintext or verification-bypass
-  configuration with safe diagnostics, an optional provider CA is supported
-  without committing secrets, and a separately gated emergency bypass never
-  enables plaintext. Policy documented in `docs/database-tls-policy.md`.
+- Evidence-based anchor availability transitions: discovery failures are
+  classified (transient / deterministic / unknown) and a destructive status
+  change requires consecutive-failure or sustained-window evidence, so one
+  transient SEP-1 timeout no longer marks a healthy anchor DOWN. Recovery to
+  LIVE requires repeated successful evidence, and bounded per-anchor health
+  rows (`anchor_health_states`) make transitions deterministic across process
+  restarts. Policy documented in `docs/anchor-health-policy.md`.
 
 ## [Prior work] — 2026-09-25
 

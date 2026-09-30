@@ -35,9 +35,19 @@ database read models <───────────────────�
 The reviewed anchor registry in `constants/anchors.ts` is the source for the
 manual `npm run bootstrap:registry` job. For each configured anchor,
 `lib/stellar/anchorSync.ts` fetches and validates its `stellar.toml`, discovers
-the supported SEP endpoints and assets, and upserts the result. A discovery
-failure is classified and the existing anchor may be marked down; it is not
-silently treated as a healthy anchor.
+the supported SEP endpoints and assets, and upserts the result.
+
+Published anchor availability is decided by an evidence-based state machine
+(`lib/stellar/anchorHealth.ts`, policy in
+[anchor-health-policy.md](anchor-health-policy.md)). Discovery failures are
+classified as transient, deterministic, or unknown, and a destructive
+transition (`DEGRADED`, `DOWN`) requires consecutive-failure or sustained-window
+evidence; a single transient timeout never marks a healthy anchor down.
+Recovery to `LIVE` requires repeated successful evidence. The bounded
+per-anchor evidence row (`anchor_health_states`) makes transitions
+deterministic across process restarts and horizontal execution. Status is
+observational health of discovery only — not a claim about transfer success or
+trustworthiness.
 
 The corridor registry and anchor-to-corridor mappings in
 `constants/corridors.ts` are synchronized in the same job. Corridor rows are

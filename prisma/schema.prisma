@@ -47,23 +47,47 @@ enum ReputationState {
 }
 
 model Anchor {
-  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug              String       @unique
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String            @unique
   name              String
-  homeDomain        String       @map("home_domain")
-  tomlUrl           String       @map("toml_url")
-  seps              Int[]        @default([])
-  isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
-  status            AnchorStatus @default(UNKNOWN)
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  homeDomain        String            @map("home_domain")
+  tomlUrl           String            @map("toml_url")
+  seps              Int[]             @default([])
+  isTransferCapable Boolean           @default(false) @map("is_transfer_capable")
+  status            AnchorStatus      @default(UNKNOWN)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   corridors        AnchorCorridor[]
   rateSnapshots    RateSnapshot[]
   transferOutcomes TransferOutcome[]
   reputationScore  ReputationScore?
+  healthState      AnchorHealthState?
 
   @@map("anchors")
+}
+
+/// Bounded, per-anchor health evidence for deterministic availability
+/// transitions. Counters and timestamps only — no error text — so the pure
+/// state machine in lib/stellar/anchorHealth.ts makes identical transitions
+/// across process restarts and horizontal execution. One row per anchor.
+model AnchorHealthState {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId             String       @unique @map("anchor_id") @db.Uuid
+  status               AnchorStatus
+  consecutiveFailures  Int          @default(0) @map("consecutive_failures")
+  lastFailureClass     String?      @map("last_failure_class")
+  lastFailureCode      String?      @map("last_failure_code")
+  consecutiveSuccesses Int          @default(0) @map("consecutive_successes")
+  lastObservedAt       DateTime?    @map("last_observed_at") @db.Timestamptz(6)
+  lastSuccessAt        DateTime?    @map("last_success_at") @db.Timestamptz(6)
+  lastFailureAt        DateTime?    @map("last_failure_at") @db.Timestamptz(6)
+  lastTransitionAt     DateTime?    @map("last_transition_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Cascade)
+
+  @@map("anchor_health_states")
 }
 
 model Corridor {
