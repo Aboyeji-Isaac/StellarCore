@@ -93,6 +93,14 @@ Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
 
+Production PostgreSQL connections are enforced to certificate-verified TLS by
+application policy (`lib/database/tlsPolicy.ts`, policy in
+[database-tls-policy.md](database-tls-policy.md)): TLS parameters are stripped
+from the connection URL, an explicit verified-TLS ssl object is supplied to
+the driver, and production startup fails fast on configuration that disables
+TLS or bypasses verification, except through a separately gated emergency
+mode that never permits plaintext.
+
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal
 identifiers, and use no-store behavior where data is dynamic. The
