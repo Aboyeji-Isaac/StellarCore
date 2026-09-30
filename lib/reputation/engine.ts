@@ -41,6 +41,9 @@ export async function evaluateAnchorReputation(
   try {
     const persisted = await repository.upsertScore({
       anchorId: evidence.anchorId,
+      evaluatedAt,
+      outcomeWindowStart,
+      evidence,
       calculation,
     });
     return Object.freeze({ ok: true, calculation, persisted });

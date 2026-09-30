@@ -12,21 +12,34 @@ test("controlled evidence composes through calculation and current-score persist
     anchorId: "controlled-anchor-id",
     anchorSlug: "controlled-anchor",
     status: "LIVE",
-    corridorSlugs: Object.freeze(["corridor-a", "corridor-b"]),
+    corridors: Object.freeze([
+      Object.freeze({ corridorId: "corridor-a-id", slug: "corridor-a" }),
+      Object.freeze({ corridorId: "corridor-b-id", slug: "corridor-b" }),
+    ]),
     latestRates: Object.freeze([
-      Object.freeze({ corridorSlug: "corridor-a", capturedAt: NOW }),
       Object.freeze({
+        rateSnapshotId: "rate-a-id",
+        corridorId: "corridor-a-id",
+        corridorSlug: "corridor-a",
+        capturedAt: NOW,
+      }),
+      Object.freeze({
+        rateSnapshotId: "rate-b-id",
+        corridorId: "corridor-b-id",
         corridorSlug: "corridor-b",
         capturedAt: new Date(NOW.getTime() - 120_001),
       }),
     ]),
     transferOutcomes: Object.freeze(Array.from({ length: 30 }, (_, index) =>
       Object.freeze({
+        transferOutcomeId: `outcome-${index}`,
+        corridorId: "corridor-a-id",
         status: index < 24 ? "COMPLETED" as const : "ERROR" as const,
         settlementMs: 1_000,
         slippage: 0,
         recordedAt: new Date(NOW.getTime() - index * 1_000),
       }))),
+    outsideOutcomeCount: 0,
   });
   const repository: ReputationRepository = Object.freeze({
     readEvidence: async () => evidence,
@@ -36,6 +49,8 @@ test("controlled evidence composes through calculation and current-score persist
         id: "current-score",
         anchorSlug: calculation.anchorSlug,
         computedAt: new Date(calculation.computedAt),
+        manifestId: "manifest-id",
+        manifestSchemaVersion: 1,
       });
     },
   });

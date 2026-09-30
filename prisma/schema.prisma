@@ -46,6 +46,47 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+/// Classification of one piece of evidence named by a manifest. ELIGIBLE
+/// evidence contributed to the calculation; EXCLUDED evidence was read but did
+/// not; OUTSIDE_WINDOW evidence was read but sits outside the relevant window.
+enum ReputationEvidenceEligibility {
+  ELIGIBLE       @map("eligible")
+  EXCLUDED       @map("excluded")
+  OUTSIDE_WINDOW @map("outside_window")
+
+  @@map("reputation_evidence_eligibility")
+}
+
+/// Versioned vocabulary explaining why a manifest member was excluded. The
+/// vocabulary is versioned as a whole through
+/// ReputationEvidenceManifest.reasonCodeVocabularyVersion so a reason code is
+/// never reinterpreted after the fact. Codes whose underlying concept (for
+/// example non-destructive invalidation) is not yet implemented are reserved
+/// here but only emitted once that concept exists.
+enum ReputationEvidenceReasonCode {
+  NONE                    @map("none")
+  STALE_RATE              @map("stale_rate")
+  FUTURE_TIMESTAMP        @map("future_timestamp")
+  INVALID_TIMESTAMP       @map("invalid_timestamp")
+  OUTSIDE_OUTCOME_WINDOW  @map("outside_outcome_window")
+  INVALIDATED_OBSERVATION @map("invalidated_observation")
+  UNKNOWN_AUTHORITY       @map("unknown_authority")
+  RETIRED_OR_NON_MEMBER   @map("retired_or_non_member")
+
+  @@map("reputation_evidence_reason_code")
+}
+
+/// Lifecycle state of an anchor–corridor relationship as recorded at
+/// evaluation time. MEMBER is the only state emitted while registry
+/// lifecycle semantics are limited to current synchronized memberships.
+enum ReputationCorridorMembership {
+  MEMBER     @map("member")
+  RETIRED    @map("retired")
+  NON_MEMBER @map("non_member")
+
+  @@map("reputation_corridor_membership")
+}
+
 enum RefreshRunState {
   RUNNING             @map("running")
   SUCCEEDED           @map("succeeded")
@@ -77,10 +118,11 @@ model Anchor {
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  corridors        AnchorCorridor[]
-  rateSnapshots    RateSnapshot[]
-  transferOutcomes TransferOutcome[]
-  reputationScore  ReputationScore?
+  corridors                    AnchorCorridor[]
+  rateSnapshots                RateSnapshot[]
+  transferOutcomes             TransferOutcome[]
+  reputationScore              ReputationScore?
+  reputationEvidenceManifests  ReputationEvidenceManifest[]
 
   @@map("anchors")
 }
@@ -93,9 +135,12 @@ model Corridor {
   countryTo     String @map("country_to")
   slug          String @unique
 
-  anchors          AnchorCorridor[]
-  rateSnapshots    RateSnapshot[]
-  transferOutcomes TransferOutcome[]
+  anchors              AnchorCorridor[]
+  rateSnapshots        RateSnapshot[]
+  transferOutcomes     TransferOutcome[]
+  evidenceCorridorMembers ReputationEvidenceCorridorMember[]
+  evidenceRateMembers     ReputationEvidenceRateMember[]
+  evidenceOutcomeMembers  ReputationEvidenceOutcomeMember[]
 
   @@map("corridors")
 }
@@ -124,8 +169,9 @@ model RateSnapshot {
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
 
-  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor         Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor       Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  manifestMembers ReputationEvidenceRateMember[]
 
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
@@ -155,8 +201,9 @@ model TransferOutcome {
   slippage     Float
   recordedAt   DateTime       @default(now()) @map("recorded_at") @db.Timestamptz(6)
 
-  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor          Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor        Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  manifestMembers ReputationEvidenceOutcomeMember[]
 
   @@index([anchorId, recordedAt(sort: Desc)], map: "transfer_outcomes_anchor_id_recorded_at_idx")
   @@map("transfer_outcomes")
@@ -178,9 +225,113 @@ model ReputationScore {
   state          ReputationState      @default(INSUFFICIENT_DATA)
   computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
 
-  anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor            Anchor                       @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  evidenceManifests ReputationEvidenceManifest[]
 
   @@map("reputation_scores")
+}
+
+/// Immutable, append-only evidence-set manifest written atomically with every
+/// newly persisted reputation evaluation. It names the exact persisted rate
+/// snapshots, transfer outcomes, corridor memberships, and anchor state that
+/// were read for that evaluation, with stable IDs and bounded classification
+/// metadata only — never copied raw SEP responses, secrets, or mutable display
+/// text. A missing manifest means a legacy evaluation whose membership is
+/// unknown; that membership is never reconstructed from current state.
+model ReputationEvidenceManifest {
+  id                          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reputationScoreId           String         @map("reputation_score_id") @db.Uuid
+  anchorId                    String         @map("anchor_id") @db.Uuid
+  anchorStatus                AnchorStatus   @map("anchor_status")
+  manifestSchemaVersion       Int            @map("manifest_schema_version")
+  reasonCodeVocabularyVersion Int            @map("reason_code_vocabulary_version")
+  scoringPolicyVersion        String         @map("scoring_policy_version")
+  freshnessPolicyVersion      String         @map("freshness_policy_version")
+  configurationRevision       String         @map("configuration_revision")
+  evaluatedAt                 DateTime       @map("evaluated_at") @db.Timestamptz(6)
+  outcomeWindowStart          DateTime       @map("outcome_window_start") @db.Timestamptz(6)
+  corridorCount               Int            @map("corridor_count")
+  latestRateCount             Int            @map("latest_rate_count")
+  freshRateCount              Int            @map("fresh_rate_count")
+  outcomeCount                Int            @map("outcome_count")
+  completedOutcomeCount       Int            @map("completed_outcome_count")
+  outsideOutcomeCount         Int            @map("outside_outcome_count")
+  minimumOutcomeCount         Int            @map("minimum_outcome_count")
+  createdAt                   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reputationScore ReputationScore          @relation(fields: [reputationScoreId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor          Anchor                   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridorMembers ReputationEvidenceCorridorMember[]
+  rateMembers     ReputationEvidenceRateMember[]
+  outcomeMembers  ReputationEvidenceOutcomeMember[]
+
+  @@index([anchorId, evaluatedAt(sort: Desc)], map: "reputation_evidence_manifests_anchor_evaluated_idx")
+  @@index([reputationScoreId, evaluatedAt(sort: Desc)], map: "reputation_evidence_manifests_score_evaluated_idx")
+  @@map("reputation_evidence_manifests")
+}
+
+/// One anchor–corridor membership used by an evaluation. Referential
+/// integrity pins the corridor; retirement/non-member states are reserved for
+/// when registry lifecycle semantics land.
+model ReputationEvidenceCorridorMember {
+  id         String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  manifestId String                         @map("manifest_id") @db.Uuid
+  corridorId String                         @map("corridor_id") @db.Uuid
+  membership ReputationCorridorMembership
+  reasonCode ReputationEvidenceReasonCode   @map("reason_code")
+  ordinal    Int
+
+  manifest ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor                    @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([manifestId, ordinal], map: "reputation_evidence_corridor_members_manifest_ordinal_key")
+  @@unique([manifestId, corridorId], map: "reputation_evidence_corridor_members_manifest_corridor_key")
+  @@map("reputation_evidence_corridor_members")
+}
+
+/// One rate snapshot named by an evaluation's manifest. capturedAt and ageMs
+/// are bounded classification inputs; the snapshot itself is never mutated.
+model ReputationEvidenceRateMember {
+  id             String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  manifestId     String                         @map("manifest_id") @db.Uuid
+  rateSnapshotId String                         @map("rate_snapshot_id") @db.Uuid
+  corridorId     String                         @map("corridor_id") @db.Uuid
+  capturedAt     DateTime                       @map("captured_at") @db.Timestamptz(6)
+  ageMs          Int?                           @map("age_ms")
+  eligibility    ReputationEvidenceEligibility
+  reasonCode     ReputationEvidenceReasonCode   @map("reason_code")
+  ordinal        Int
+
+  manifest     ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rateSnapshot RateSnapshot                @relation(fields: [rateSnapshotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor     Corridor                    @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([manifestId, ordinal], map: "reputation_evidence_rate_members_manifest_ordinal_key")
+  @@unique([manifestId, rateSnapshotId], map: "reputation_evidence_rate_members_manifest_snapshot_key")
+  @@map("reputation_evidence_rate_members")
+}
+
+/// One transfer outcome named by an evaluation's manifest. Eligibility mirrors
+/// the engine's timestamp filter; a manifest with zero in-window outcomes
+/// records that truthfully and never creates synthetic outcomes.
+model ReputationEvidenceOutcomeMember {
+  id                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  manifestId        String                         @map("manifest_id") @db.Uuid
+  transferOutcomeId String                         @map("transfer_outcome_id") @db.Uuid
+  corridorId        String                         @map("corridor_id") @db.Uuid
+  status            TransferStatus
+  recordedAt        DateTime                       @map("recorded_at") @db.Timestamptz(6)
+  eligibility       ReputationEvidenceEligibility
+  reasonCode        ReputationEvidenceReasonCode   @map("reason_code")
+  ordinal           Int
+
+  manifest        ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  transferOutcome TransferOutcome            @relation(fields: [transferOutcomeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor        Corridor                   @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([manifestId, ordinal], map: "reputation_evidence_outcome_members_manifest_ordinal_key")
+  @@unique([manifestId, transferOutcomeId], map: "reputation_evidence_outcome_members_manifest_outcome_key")
+  @@map("reputation_evidence_outcome_members")
 }
 
 /// Durable ledger for the authenticated scheduled refresh. Exactly one row is

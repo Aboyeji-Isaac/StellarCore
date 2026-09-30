@@ -140,12 +140,18 @@ function evidence(options: {
     anchorId: "anchor-id",
     anchorSlug: "anchor",
     status: options.status ?? "LIVE",
-    corridorSlugs: Object.freeze([...(options.corridors ?? [])]),
+    corridors: Object.freeze((options.corridors ?? []).map((slug) => Object.freeze({
+      corridorId: `corridor-${slug}-id`,
+      slug,
+    }))),
     latestRates: Object.freeze((options.rates ?? []).map((rate) => Object.freeze({
+      rateSnapshotId: `rate-${rate.corridorSlug}-id`,
+      corridorId: `corridor-${rate.corridorSlug}-id`,
       corridorSlug: rate.corridorSlug,
       capturedAt: new Date(NOW.getTime() - rate.ageMs),
     }))),
     transferOutcomes: Object.freeze([...(options.transferOutcomes ?? [])]),
+    outsideOutcomeCount: 0,
   });
 }
 
@@ -163,6 +169,8 @@ function outcome(
   slippage = 0,
 ): ReputationEvidence["transferOutcomes"][number] {
   return Object.freeze({
+    transferOutcomeId: `outcome-${status}-${index}`,
+    corridorId: "corridor-a-id",
     status,
     settlementMs,
     slippage,

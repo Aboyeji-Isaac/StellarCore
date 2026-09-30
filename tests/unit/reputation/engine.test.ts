@@ -44,6 +44,8 @@ test("persistence upserts current score rather than appending history", async ()
         id: rowId,
         anchorSlug: calculation.anchorSlug,
         computedAt: new Date(calculation.computedAt),
+        manifestId: "manifest-id",
+        manifestSchemaVersion: 1,
       });
     },
   });
@@ -115,9 +117,10 @@ function sparseEvidence(): ReputationEvidence {
     anchorId: "anchor-id",
     anchorSlug: "anchor",
     status: "LIVE",
-    corridorSlugs: Object.freeze([]),
+    corridors: Object.freeze([]),
     latestRates: Object.freeze([]),
     transferOutcomes: Object.freeze([]),
+    outsideOutcomeCount: 0,
   });
 }
 
@@ -126,5 +129,7 @@ function persisted() {
     id: "score-id",
     anchorSlug: "anchor",
     computedAt: NOW,
+    manifestId: "manifest-id",
+    manifestSchemaVersion: 1,
   });
 }

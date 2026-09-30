@@ -20,17 +20,25 @@ function evidence(
     anchorId: "anchor-id",
     anchorSlug: "anchor",
     status,
-    corridorSlugs: Object.freeze(["corridor"]),
+    corridors: Object.freeze([Object.freeze({
+      corridorId: "corridor-id",
+      slug: "corridor",
+    })]),
     latestRates: Object.freeze([Object.freeze({
+      rateSnapshotId: "rate-id",
+      corridorId: "corridor-id",
       corridorSlug: "corridor",
       capturedAt: new Date(NOW.getTime() - rateAgeMs),
     })]),
     transferOutcomes: Object.freeze(Array.from({ length: 30 }, (_, index) =>
       Object.freeze({
+        transferOutcomeId: `outcome-${index}`,
+        corridorId: "corridor-id",
         status: outcomeStatus,
         settlementMs: 1_000,
         slippage: 0,
         recordedAt: new Date(NOW.getTime() - index),
       }))),
+    outsideOutcomeCount: 0,
   });
 }

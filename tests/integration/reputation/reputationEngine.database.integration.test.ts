@@ -69,16 +69,37 @@ test("isolated database evidence persists one current ReputationScore row", {
       evaluatedAt: new Date(evaluatedAt.getTime() + 1_000),
     });
     const after = await db.reputationScore.count({ where: { anchorId: anchor.id } });
+    const manifests = await db.reputationEvidenceManifest.findMany({
+      where: { anchorId: anchor.id },
+      orderBy: [{ evaluatedAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        manifestSchemaVersion: true,
+        outcomeCount: true,
+        rateMembers: { select: { eligibility: true } },
+      },
+    });
 
     assert.equal(before, 0);
     assert.equal(after, 1);
     assert.equal(first.ok, true);
     assert.equal(second.ok, true);
+    assert.equal(manifests.length, 2);
+    assert.equal(manifests.every((m) => m.manifestSchemaVersion === 1), true);
+    assert.equal(manifests.every((m) => m.outcomeCount === 30), true);
+    assert.equal(manifests.every((m) => m.rateMembers.length === 1), true);
     if (first.ok && second.ok) {
       assert.equal(first.calculation.score, 95);
       assert.equal(first.persisted?.id, second.persisted?.id);
+      assert.equal(first.persisted?.manifestId, manifests[0]?.id);
+      assert.equal(second.persisted?.manifestId, manifests[1]?.id);
+      assert.notEqual(first.persisted?.manifestId, second.persisted?.manifestId);
     }
   } finally {
+    await db.reputationEvidenceOutcomeMember.deleteMany({ where: { manifest: { anchor: { slug: anchorSlug } } } });
+    await db.reputationEvidenceRateMember.deleteMany({ where: { manifest: { anchor: { slug: anchorSlug } } } });
+    await db.reputationEvidenceCorridorMember.deleteMany({ where: { manifest: { anchor: { slug: anchorSlug } } } });
+    await db.reputationEvidenceManifest.deleteMany({ where: { anchor: { slug: anchorSlug } } });
     await db.reputationScore.deleteMany({ where: { anchor: { slug: anchorSlug } } });
     await db.transferOutcome.deleteMany({ where: { anchor: { slug: anchorSlug } } });
     await db.rateSnapshot.deleteMany({ where: { anchor: { slug: anchorSlug } } });

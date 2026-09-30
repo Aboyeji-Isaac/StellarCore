@@ -11,6 +11,16 @@ with your pull request.
 
 ### Added
 
+- Immutable, versioned evidence-set manifests persisted atomically with every
+  new reputation evaluation. Each manifest names the exact persisted rate
+  snapshots, transfer outcomes, corridor memberships, and anchor state read for
+  that evaluation, classifies each candidate deterministically as eligible,
+  excluded, or outside the relevant window, and records the evaluation time,
+  scoring/freshness policy versions, and reviewed configuration revision.
+  Legacy evaluations without a manifest remain readable with explicit
+  legacy/unknown lineage rather than reconstructed membership.
+- `npm run reputation:manifest` to print one bounded, sanitized evidence-set
+  manifest for an evaluation id or an anchor's latest evaluation.
 - Distributed locking and a resumable refresh-run ledger for the scheduled
   refresh. A session-scoped PostgreSQL advisory lock returns a non-error
   `already_running` result on contention, every attempt persists durable run

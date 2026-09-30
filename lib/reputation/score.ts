@@ -23,7 +23,7 @@ export function calculateReputation(
     throw new Error("Invalid reputation evaluation time");
   }
 
-  const corridorSlugs = new Set(input.corridorSlugs);
+  const corridorSlugs = new Set(input.corridors.map(({ slug }) => slug));
   const latestRates = selectLatestPerCorridor(input.latestRates)
     .filter(({ corridorSlug }) => corridorSlugs.has(corridorSlug));
   const freshRateCount = latestRates.filter(({ capturedAt }) =>

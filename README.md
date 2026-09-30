@@ -387,6 +387,11 @@ npm run verify:latest-rates
 # Recompute current reputation rows from the local database
 npm run verify:reputation
 
+# Print the bounded, sanitized evidence-set manifest for one evaluation,
+# or the latest manifest for an anchor
+npm run reputation:manifest -- <evaluationId>
+npm run reputation:manifest -- --anchor <anchorSlug>
+
 # Inspect persisted scheduled-refresh runs, or resume a terminal run
 npm run refresh:runs -- list 20
 npm run refresh:runs -- show <runId>
@@ -446,6 +451,14 @@ unchanged. It performs no SEP-38 request or database write.
 MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network
 request, upserts each anchor's single current `ReputationScore`, and prints only
 safe structured evidence and results.
+
+`reputation:manifest` is a read-only inspection of one persisted evidence-set
+manifest, either by evaluation id or the latest for an anchor. It prints only
+stable IDs, enum classifications, timestamps, and bounded counts — never raw
+amounts or mutable display text — caps member lists, and performs no live SEP
+call, recalculation, or write. An evaluation created before manifests existed
+prints explicit legacy/unknown lineage rather than inferring membership from
+current database state.
 
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret

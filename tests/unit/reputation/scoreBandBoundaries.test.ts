@@ -110,11 +110,17 @@ function evidence(
     anchorId: "anchor-id",
     anchorSlug: "anchor",
     status,
-    corridorSlugs: Object.freeze(["corridor"]),
+    corridors: Object.freeze([Object.freeze({
+      corridorId: "corridor-id",
+      slug: "corridor",
+    })]),
     latestRates: Object.freeze([Object.freeze({
+      rateSnapshotId: "rate-id",
+      corridorId: "corridor-id",
       corridorSlug: "corridor",
       capturedAt: new Date(NOW.getTime() - rateAgeMs),
     })]),
+    outsideOutcomeCount: 0,
     transferOutcomes: Object.freeze([
       ...Array.from({ length: completedCount }, (_, index) =>
         outcome("COMPLETED", index)),
@@ -129,6 +135,8 @@ function outcome(
   index: number,
 ): ReputationEvidence["transferOutcomes"][number] {
   return Object.freeze({
+    transferOutcomeId: `outcome-${status}-${index}`,
+    corridorId: "corridor-id",
     status,
     settlementMs: 1_000,
     slippage: 0,
