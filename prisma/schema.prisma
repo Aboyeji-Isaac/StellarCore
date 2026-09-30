@@ -21,6 +21,21 @@ enum AnchorStatus {
   @@map("anchor_status")
 }
 
+enum Sep1ObservationAssessment {
+  NO_BASELINE
+  MATCHES_BASELINE
+  CHANGED_UNREVIEWED
+
+  @@map("sep1_observation_assessment")
+}
+
+enum Sep1ReviewDecision {
+  APPROVED
+  REJECTED
+
+  @@map("sep1_review_decision")
+}
+
 enum TransferStatus {
   COMPLETED
   PARTIAL
@@ -62,6 +77,8 @@ model Anchor {
   rateSnapshots    RateSnapshot[]
   transferOutcomes TransferOutcome[]
   reputationScore  ReputationScore?
+  sep1Observations Sep1DiscoveryObservation[]
+  sep1Reviews      Sep1MetadataReview[]
 
   @@map("anchors")
 }
@@ -162,4 +179,61 @@ model ReputationScore {
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+/// Append-only record of one successful SEP-1 discovery (fetch + parse). It is
+/// an anchor-controlled assertion, not proof that an advertised capability
+/// works. `metadata` is canonical, sanitized JSON (no raw TOML, no URL
+/// userinfo/fragments, hashed query values); `digest` and `sensitiveDigest`
+/// are versioned SHA-256 hashes (see lib/stellar/sep1History.ts). Fetch or
+/// parse failures are never stored here. UPDATE/DELETE are rejected by a
+/// database trigger. `assessment`/`diff` record the comparison against the
+/// approved baseline that was in force when the observation was made.
+model Sep1DiscoveryObservation {
+  id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId          String                    @map("anchor_id") @db.Uuid
+  canonicalVersion  Int                       @map("canonical_version")
+  digest            String                    @db.Char(64)
+  sensitiveDigest   String                    @map("sensitive_digest") @db.Char(64)
+  tomlUrl           String                    @map("toml_url")
+  metadata          Json
+  assessment        Sep1ObservationAssessment
+  diff              Json
+  baselineReviewId  String?                   @map("baseline_review_id") @db.Uuid
+  fetchedAt         DateTime                  @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  anchor         Anchor              @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  baselineReview Sep1MetadataReview? @relation("BaselineReview", fields: [baselineReviewId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviews        Sep1MetadataReview[] @relation("ReviewedObservation")
+
+  @@index([anchorId, fetchedAt(sort: Desc)], map: "sep1_discovery_observations_anchor_fetched_idx")
+  @@index([anchorId, digest], map: "sep1_discovery_observations_anchor_digest_idx")
+  @@map("sep1_discovery_observations")
+}
+
+/// Append-only operator decision on one specific observation digest. The
+/// approved baseline for an anchor is the sensitive metadata of the newest
+/// APPROVED review's observation; anchors with no APPROVED review have no
+/// baseline (legacy anchors are never back-filled from today's TOML). Approval
+/// means maintainers reviewed that observed metadata, not that the anchor is
+/// reachable or its quotes are correct.
+model Sep1MetadataReview {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorId          String             @map("anchor_id") @db.Uuid
+  observationId     String             @map("observation_id") @db.Uuid
+  observationDigest String             @map("observation_digest") @db.Char(64)
+  sensitiveDigest   String             @map("sensitive_digest") @db.Char(64)
+  decision          Sep1ReviewDecision
+  actor             String
+  reference         String
+  reason            String
+  reviewedFields    String[]           @default([]) @map("reviewed_fields")
+  reviewedAt        DateTime           @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+
+  anchor      Anchor                     @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  observation Sep1DiscoveryObservation   @relation("ReviewedObservation", fields: [observationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  baselineFor Sep1DiscoveryObservation[] @relation("BaselineReview")
+
+  @@index([anchorId, decision, reviewedAt(sort: Desc)], map: "sep1_metadata_reviews_anchor_decision_reviewed_idx")
+  @@map("sep1_metadata_reviews")
 }

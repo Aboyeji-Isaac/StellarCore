@@ -20,6 +20,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
+- `npm run review:sep1 -- <list|approve|reject> ...` is the protected operator CLI that lists SEP-1 discovery history and approves or rejects a specific observation digest (actor, reference, and reason required); it needs `DATABASE_URL` and there is no public equivalent.
 - `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database.
 
 Do not add undocumented scripts; update this guide and the README when commands change.

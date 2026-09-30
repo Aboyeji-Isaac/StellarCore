@@ -112,6 +112,42 @@ The bootstrap synchronization parses the reviewed registry's TOML files and extr
 - API endpoints for rate quotes
 - Transfer instruction URLs
 
+#### Review-gated SEP-1 history
+
+Every successful discovery appends an immutable, versioned observation
+(`sep1_discovery_observations`): canonical, sanitized metadata, fetch time, and
+deterministic SHA-256 digests. Canonicalization (v1) trims and NFC-normalizes
+strings, sorts keys/assets, normalizes URLs, drops URL userinfo/fragments and
+replaces query values with bounded hashes, so equivalent TOML yields the same
+digest and no secrets or raw TOML are stored. Parse/network failures create no
+observation; they remain typed discovery failures.
+
+Security-sensitive fields are the network passphrase, signing key, the six
+advertised SEP endpoints, and exact asset identities (code + issuer). The
+approved baseline is the newest `APPROVED` operator review
+(`sep1_metadata_reviews`, append-only). A fresh observation that differs from
+the baseline is retained with a field-level diff, but it is quarantined: the
+last approved public `Anchor` projection and status are left untouched, and
+`npm run snapshot:rates` refuses that anchor (`SEP1_REVIEW_REQUIRED`) instead of
+using the newly advertised quote endpoint. Quarantine is not an anchor `DOWN`
+signal and not a registry retirement. Migrated legacy anchors have **no**
+approved baseline (`SEP1_BASELINE_UNAVAILABLE`); history is never reconstructed
+from today's TOML, so rate capture for an anchor resumes only after an operator
+approves a newly observed digest. Approval means maintainers reviewed that
+observed metadata, not that the anchor is reachable or its quotes are correct.
+Public reads use persisted approved state and never fetch TOML.
+
+Operators review through the protected CLI (needs `DATABASE_URL`; there is no
+public mutation endpoint):
+
+```bash
+npm run review:sep1 -- list <anchor-slug>
+npm run review:sep1 -- approve <anchor-slug> <observation-digest> --actor <id> --reference <ref> --reason "<text>"
+npm run review:sep1 -- reject  <anchor-slug> <observation-digest> --actor <id> --reference <ref> --reason "<text>"
+```
+
+`bootstrap:registry` output lists `quarantinedSlugs` separately from failures.
+
 `isTransferCapable` is derived from `SEP_6`, `SEP_24`, or `SEP_31`. It is stored metadata, not proof that StellarCore can execute or observe transfers. The public dashboard shows persisted anchors and reviewed corridor associations; it does not infer new corridors from a TOML file.
 
 ```typescript
@@ -370,6 +406,9 @@ Open [http://localhost:3000](http://localhost:3000).
 ```bash
 # Bootstrap the reviewed anchor and corridor registry
 npm run bootstrap:registry
+
+# Review a changed (quarantined) or first-seen SEP-1 observation
+npm run review:sep1 -- list <anchor-slug>
 
 # Manually verify reviewed live SEP-38 sources and append snapshots
 npm run snapshot:rates

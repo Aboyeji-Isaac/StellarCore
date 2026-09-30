@@ -8,6 +8,8 @@ import {
   getSep38Prices,
   parseSep38AssetIdentifier,
 } from "@/lib/stellar/sep38";
+import { assessAgainstApprovedBaseline } from "@/lib/stellar/sep1HistoryRepository";
+import type { Sep1Assessment } from "@/lib/stellar/sep1History";
 import type {
   PreparedLiveRateCandidate,
   ReviewedLiveRateSource,
@@ -19,7 +21,23 @@ import type { Sep38IndicativePrice } from "@/types/sep38";
 export type LiveRateSourceDependencies = Readonly<{
   discover: typeof discoverAnchor;
   prices: typeof getSep38Prices;
+  /**
+   * Read-only comparison of the fresh discovery with the approved SEP-1
+   * baseline. Rate capture proceeds only for MATCHES_BASELINE.
+   */
+  assessSep1: (
+    anchorSlug: string,
+    discovered: Awaited<ReturnType<typeof discoverAnchor>>,
+  ) => Promise<Readonly<{ assessment: Sep1Assessment }>>;
 }>;
+
+async function assessSep1FromDatabase(
+  anchorSlug: string,
+  discovered: Awaited<ReturnType<typeof discoverAnchor>>,
+) {
+  const { db } = await import("@/lib/dbClient");
+  return assessAgainstApprovedBaseline(db, anchorSlug, discovered);
+}
 
 export class LiveRateSourceError extends Error {
   constructor(readonly code: string) {
@@ -33,6 +51,7 @@ export async function buildReviewedLiveRateCandidates(
   dependencies: LiveRateSourceDependencies = {
     discover: discoverAnchor,
     prices: getSep38Prices,
+    assessSep1: assessSep1FromDatabase,
   },
 ): Promise<readonly PreparedLiveRateCandidate[]> {
   const candidates: PreparedLiveRateCandidate[] = [];
@@ -46,6 +65,13 @@ export async function buildReviewedLiveRateCandidates(
     parseDatabaseDecimal(source.sellAmount);
 
     const discovered = await dependencies.discover(anchor);
+    const { assessment } = await dependencies.assessSep1(source.anchorSlug, discovered);
+    if (assessment === "NO_BASELINE") {
+      throw new LiveRateSourceError("SEP1_BASELINE_UNAVAILABLE");
+    }
+    if (assessment === "CHANGED_UNREVIEWED") {
+      throw new LiveRateSourceError("SEP1_REVIEW_REQUIRED");
+    }
     const quoteServer = discovered.endpoints.anchorQuoteServer;
     if (!quoteServer) throw new LiveRateSourceError("SEP38_NOT_ADVERTISED");
     const prices = await dependencies.prices(

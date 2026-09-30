@@ -5,6 +5,8 @@ import {
   Sep1DiscoveryError,
   type Sep1ErrorCode,
 } from "@/lib/stellar/sep1";
+import { recordSep1Observation } from "@/lib/stellar/sep1HistoryRepository";
+import type { Sep1Assessment, Sep1FieldDiff } from "@/lib/stellar/sep1History";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -18,6 +20,16 @@ export type PersistedAnchor = Readonly<{
   seps: readonly number[];
   isTransferCapable: boolean;
   status: AnchorStatus;
+  /**
+   * Result of the SEP-1 review gate for this discovery. Absent when the
+   * persister did not record history. CHANGED_UNREVIEWED means the observation
+   * was retained but the public projection was NOT updated.
+   */
+  discovery?: Readonly<{
+    digest: string;
+    assessment: Sep1Assessment;
+    diff: readonly Sep1FieldDiff[];
+  }>;
 }>;
 
 export type AnchorSyncFailureCode =
@@ -38,6 +50,12 @@ export type AnchorSyncResult = Readonly<{
   failed: number;
   successfulSlugs: readonly string[];
   failures: readonly AnchorSyncFailure[];
+  /**
+   * Anchors whose fresh SEP-1 metadata changed a sensitive field without
+   * review. Distinct from failures: discovery succeeded, the observation is
+   * retained, and the last approved projection is kept.
+   */
+  quarantinedSlugs: readonly string[];
 }>;
 
 export type AnchorSyncDependencies = Readonly<{
@@ -69,14 +87,39 @@ export async function persistDiscoveredAnchor(
     status: AnchorStatus.LIVE,
   };
 
-  const persisted = await db.anchor.upsert({
-    where: { slug: anchor.slug },
-    create: { slug: anchor.slug, ...data },
-    update: data,
-    select: ANCHOR_SELECT,
-  });
+  return db.$transaction(async (tx) => {
+    const existing = await tx.anchor.findUnique({
+      where: { slug: anchor.slug },
+      select: { id: true },
+    });
+    // The anchor row must exist to own history; a brand-new anchor has no
+    // approved baseline, so its first projection is created as before.
+    const row = existing ?? await tx.anchor.create({
+      data: { slug: anchor.slug, ...data },
+      select: { id: true },
+    });
+    const recorded = await recordSep1Observation(tx, row.id, anchor);
+    const discovery = Object.freeze({
+      digest: recorded.digest,
+      assessment: recorded.assessment,
+      diff: recorded.diff,
+    });
 
-  return freezePersistedAnchor(persisted);
+    // Quarantine: keep the last approved public projection untouched (and do
+    // not change status; a metadata change is not an availability signal).
+    const persisted = recorded.assessment === "CHANGED_UNREVIEWED"
+      ? await tx.anchor.findUniqueOrThrow({
+          where: { slug: anchor.slug },
+          select: ANCHOR_SELECT,
+        })
+      : await tx.anchor.update({
+          where: { slug: anchor.slug },
+          data,
+          select: ANCHOR_SELECT,
+        });
+
+    return freezePersistedAnchor(persisted, discovery);
+  });
 }
 
 export async function markAnchorDownIfExists(slug: string): Promise<boolean> {
@@ -95,6 +138,7 @@ export async function syncAnchorRegistry(
 ): Promise<AnchorSyncResult> {
   const successfulSlugs: string[] = [];
   const failures: AnchorSyncFailure[] = [];
+  const quarantinedSlugs: string[] = [];
 
   for (const entry of entries) {
     let discovered: DiscoveredAnchor;
@@ -114,8 +158,11 @@ export async function syncAnchorRegistry(
     }
 
     try {
-      await dependencies.persist(discovered);
+      const persisted = await dependencies.persist(discovered);
       successfulSlugs.push(entry.slug);
+      if (persisted?.discovery?.assessment === "CHANGED_UNREVIEWED") {
+        quarantinedSlugs.push(entry.slug);
+      }
     } catch {
       failures.push(
         Object.freeze({
@@ -134,6 +181,7 @@ export async function syncAnchorRegistry(
     failed: failures.length,
     successfulSlugs: Object.freeze(successfulSlugs),
     failures: Object.freeze(failures),
+    quarantinedSlugs: Object.freeze(quarantinedSlugs),
   });
 }
 
@@ -158,17 +206,21 @@ async function safelyMarkDown(
   }
 }
 
-function freezePersistedAnchor(anchor: {
-  slug: string;
-  name: string;
-  homeDomain: string;
-  tomlUrl: string;
-  seps: number[];
-  isTransferCapable: boolean;
-  status: AnchorStatus;
-}): PersistedAnchor {
+function freezePersistedAnchor(
+  anchor: {
+    slug: string;
+    name: string;
+    homeDomain: string;
+    tomlUrl: string;
+    seps: number[];
+    isTransferCapable: boolean;
+    status: AnchorStatus;
+  },
+  discovery?: PersistedAnchor["discovery"],
+): PersistedAnchor {
   return Object.freeze({
     ...anchor,
     seps: Object.freeze([...anchor.seps]),
+    ...(discovery ? { discovery } : {}),
   });
 }

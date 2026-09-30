@@ -87,6 +87,8 @@ npm run bootstrap:registry
 
 It uses the existing reviewed registries and synchronization logic to discover/upsert anchors, upsert corridors, and reconcile associations. It prints safe structured results and exits nonzero for failures. It is never called by a web request, build, or cron route.
 
+After the SEP-1 history migration, existing anchors have no approved SEP-1 baseline and `npm run snapshot:rates` (and the scheduled refresh) will report `SEP1_BASELINE_UNAVAILABLE` for them. Run the bootstrap to record a first observation, inspect it with `npm run review:sep1 -- list <anchor-slug>`, then approve the digest with `npm run review:sep1 -- approve <anchor-slug> <digest> --actor ... --reference ... --reason ...` from a protected operator environment. Later sensitive metadata changes are quarantined the same way until reviewed.
+
 ## Production registry bootstrap workflow (GitHub Actions)
 
 The bootstrap above is also implemented as a manual GitHub Actions workflow:

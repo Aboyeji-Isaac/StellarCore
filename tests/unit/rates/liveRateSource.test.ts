@@ -19,8 +19,12 @@ import type { RateEngineResult } from "@/types/rates";
 
 const QUOTE_SERVER = "https://anchor.zeam.money/sep38";
 
-function dependencies(pairAdvertised = true): LiveRateSourceDependencies {
+function dependencies(
+  pairAdvertised = true,
+  assessment: "NO_BASELINE" | "MATCHES_BASELINE" | "CHANGED_UNREVIEWED" = "MATCHES_BASELINE",
+): LiveRateSourceDependencies {
   return {
+    assessSep1: async () => ({ assessment }),
     discover: async (entry) => Object.freeze({
       ...entry,
       tomlUrl: `https://${entry.homeDomain}/.well-known/stellar.toml`,
@@ -144,4 +148,27 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
   }]);
   assert.equal(JSON.stringify(summary).includes("sourceAmount"), false);
   assert.equal(JSON.stringify(summary).includes("quoteServer"), false);
+});
+
+test("candidate construction refuses an unreviewed sensitive SEP-1 change before any quote call", async () => {
+  let pricesCalled = false;
+  const base = dependencies(true, "CHANGED_UNREVIEWED");
+  await assert.rejects(
+    buildReviewedLiveRateCandidates(REVIEWED_LIVE_RATE_SOURCES, {
+      ...base,
+      prices: async (...args) => { pricesCalled = true; return base.prices(...args); },
+    }),
+    (error) => error instanceof LiveRateSourceError && error.code === "SEP1_REVIEW_REQUIRED",
+  );
+  assert.equal(pricesCalled, false);
+});
+
+test("candidate construction refuses anchors with no approved SEP-1 baseline", async () => {
+  await assert.rejects(
+    buildReviewedLiveRateCandidates(
+      REVIEWED_LIVE_RATE_SOURCES,
+      dependencies(true, "NO_BASELINE"),
+    ),
+    (error) => error instanceof LiveRateSourceError && error.code === "SEP1_BASELINE_UNAVAILABLE",
+  );
 });

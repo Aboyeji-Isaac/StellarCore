@@ -43,6 +43,7 @@ test("a successful discovery is persisted and reported", async () => {
     failed: 0,
     successfulSlugs: ["moneygram"],
     failures: [],
+    quarantinedSlugs: [],
   });
 });
 
@@ -195,3 +196,23 @@ function toPersisted(anchor: DiscoveredAnchor): PersistedAnchor {
     status: AnchorStatus.LIVE,
   });
 }
+
+test("a quarantined discovery is reported separately from failures", async () => {
+  const dependencies = createDependencies({
+    persist: async (anchor) => Object.freeze({
+      ...toPersisted(anchor),
+      discovery: Object.freeze({
+        digest: "a".repeat(64),
+        assessment: "CHANGED_UNREVIEWED" as const,
+        diff: Object.freeze([]),
+      }),
+    }),
+  });
+
+  const result = await syncAnchorRegistry([MONEYGRAM], dependencies);
+
+  assert.equal(result.succeeded, 1);
+  assert.equal(result.failed, 0);
+  assert.deepEqual(result.failures, []);
+  assert.deepEqual(result.quarantinedSlugs, ["moneygram"]);
+});
