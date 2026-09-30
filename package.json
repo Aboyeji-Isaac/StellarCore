@@ -23,7 +23,8 @@
     "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
     "stamp:environment": "tsx scripts/stamp-database-environment.ts",
     "release:manifest": "tsx scripts/release-cli.ts generate",
-    "verify:release": "tsx scripts/release-cli.ts verify"
+    "verify:release": "tsx scripts/release-cli.ts verify",
+    "diagnose:bloat": "tsx scripts/diagnose-db-bloat.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
