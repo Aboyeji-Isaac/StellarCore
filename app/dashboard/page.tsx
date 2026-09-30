@@ -43,8 +43,10 @@ export default function DashboardPage() {
               Anchors
             </h2>
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-[var(--muted)]">
-              Status describes persisted synchronization state. Advertised interfaces reflect the last successful
-              SEP-1 synchronization, not current operation or availability.
+              Status describes persisted synchronization evidence. Repeated or sustained SEP-1 discovery
+              failures are required before a status changes, and a single failure never publishes an
+              unhealthy state. Advertised interfaces reflect the last successful SEP-1 synchronization,
+              not current operation or availability.
             </p>
             <div className="mt-4">
               <Suspense fallback={<SectionSkeleton label="anchors" />}>
