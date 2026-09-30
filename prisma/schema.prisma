@@ -31,6 +31,15 @@ enum TransferStatus {
   @@map("transfer_status")
 }
 
+enum RateAnomalyStatus {
+  CONSISTENT         @map("consistent")
+  QUARANTINED        @map("quarantined")
+  INSUFFICIENT_PEERS @map("insufficient_peers")
+  UNASSESSABLE       @map("unassessable")
+
+  @@map("rate_anomaly_status")
+}
+
 enum ReputationScoreBand {
   GREEN @map("green")
   AMBER @map("amber")
@@ -113,8 +122,9 @@ model RateSnapshot {
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
 
-  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor             Anchor                  @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor           Corridor                @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anomalyAssessments RateAnomalyAssessment[]
 
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
@@ -132,6 +142,34 @@ model RateSnapshot {
   /// scan replaces the bitmap heap scan over the anchor's whole history.
   @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
   @@map("rate_snapshots")
+}
+
+/// Append-only cross-source anomaly verdicts for one rate snapshot (issue
+/// #186). Rows are never updated or deleted: the newest row per snapshot
+/// (assessedAt DESC, id DESC) is the current verdict, and earlier rows remain
+/// as history, so a recovery from quarantine never erases the quarantine. The
+/// snapshot itself is never modified. Each row records the criterion version,
+/// baseline, tolerance, window, and exact peer snapshot ids needed to
+/// reconstruct the decision.
+model RateAnomalyAssessment {
+  id                      String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshotId              String            @map("snapshot_id") @db.Uuid
+  status                  RateAnomalyStatus
+  reason                  String?
+  criterionVersion        String            @map("criterion_version")
+  baselineRate            Decimal?          @map("baseline_rate") @db.Decimal(38, 18)
+  toleranceBps            Int               @map("tolerance_bps")
+  contemporaneityWindowMs Int               @map("contemporaneity_window_ms")
+  independentPeerCount    Int               @map("independent_peer_count")
+  agreeingPeerCount       Int               @map("agreeing_peer_count")
+  peerSnapshotIds         String[]          @map("peer_snapshot_ids") @db.Uuid
+  assessedAt              DateTime          @map("assessed_at") @db.Timestamptz(6)
+
+  snapshot RateSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([snapshotId, assessedAt(sort: Desc), id(sort: Desc)], map: "rate_anomaly_assessments_latest_idx")
+  @@index([status, assessedAt(sort: Desc)], map: "rate_anomaly_assessments_status_idx")
+  @@map("rate_anomaly_assessments")
 }
 
 model TransferOutcome {

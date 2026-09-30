@@ -1,3 +1,4 @@
+import type { CorridorAnomalyAssessmentSummary } from "@/lib/rates/anomalyAssessment";
 import type { RateEngineFailure } from "@/types/rates";
 
 export type ScheduledRateFailure = RateEngineFailure | Readonly<{
@@ -21,6 +22,7 @@ export type ScheduledRefreshResult = Readonly<{
     skipped: number;
     suppressed?: number;
     failures: readonly ScheduledRateFailure[];
+    anomalyAssessment?: CorridorAnomalyAssessmentSummary;
   }>;
   reputation: Readonly<{
     attempted: number;

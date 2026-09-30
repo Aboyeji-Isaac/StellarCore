@@ -1,3 +1,4 @@
+import { assessRateAnomalies } from "@/lib/rates/anomaly";
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
@@ -8,6 +9,7 @@ import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
   LatestRateRepositoryObservation,
+  AppliedRateAnomalyVerdict,
   LatestRateSourceObservation,
 } from "@/types/latestRates";
 
@@ -46,11 +48,13 @@ export async function readLatestCorridorRate(
       ({ anchorSlug }) =>
         !suppressedKeys.has(`${anchorSlug}\0${corridor.slug}`),
     );
-    const median = computeFreshMedian(latest.map((observation) => ({
+    const anomalies = applyAnomalyVerdicts(latest);
+    const median = computeFreshMedian(latest.map((observation, index) => ({
       anchorSlug: observation.anchorSlug,
       corridorSlug: corridor.slug,
       rate: observation.rate,
       capturedAt: observation.capturedAt,
+      quarantined: anomalies[index]!.status === "quarantined",
     })), evaluatedAt);
 
     const observations = Object.freeze(latest.map((observation, index) => {
@@ -71,6 +75,7 @@ export async function readLatestCorridorRate(
         ...(medianSource.exclusionReason
           ? { exclusionReason: medianSource.exclusionReason }
           : {}),
+        anomaly: anomalies[index]!,
       }) satisfies LatestRateSourceObservation;
     }));
 
@@ -94,6 +99,30 @@ export async function readLatestCorridorRate(
   } catch (error) {
     return failure(corridorSlug, isTransientDatabaseFailure(error) ? "DATABASE_UNAVAILABLE" : "READ_FAILURE");
   }
+}
+
+/**
+ * The newest persisted assessment governs. A snapshot with no assessment yet
+ * (written before this layer existed, or whose assessment write failed) gets
+ * the identical deterministic criterion over the same latest-per-anchor set,
+ * so the gate fails closed rather than silently admitting it.
+ */
+export function applyAnomalyVerdicts(
+  latest: readonly LatestRateRepositoryObservation[],
+): readonly AppliedRateAnomalyVerdict[] {
+  const evaluated = assessRateAnomalies(latest.map((observation) => ({
+    id: observation.id,
+    independenceKey: observation.anchorSlug,
+    rate: observation.rate,
+    capturedAt: observation.capturedAt,
+  })));
+  return Object.freeze(latest.map((observation, index) => {
+    if (observation.anomaly) {
+      return Object.freeze({ ...observation.anomaly, origin: "persisted" as const });
+    }
+    const { status, reason } = evaluated[index]!;
+    return Object.freeze({ status, reason, origin: "evaluated" as const });
+  }));
 }
 
 /**

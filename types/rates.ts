@@ -26,9 +26,15 @@ export type MedianSource = Readonly<{
   corridorSlug: string;
   rate: string;
   capturedAt: Date | string;
+  /**
+   * Set by the anomaly layer (issue #186). A quarantined source is retained as
+   * evidence but can never be counted toward the median or its threshold.
+   */
+  quarantined?: boolean;
 }>;
 
 export type MedianExclusionReason =
+  | "quarantined"
   | "stale"
   | "future_timestamp"
   | "invalid_timestamp"
@@ -39,6 +45,7 @@ export type MedianSourceResult = Readonly<{
   corridorSlug: string;
   rate: string;
   capturedAt: Date | string;
+  quarantined?: boolean;
   included: boolean;
   exclusionReason?: MedianExclusionReason;
 }>;
@@ -127,4 +134,48 @@ export type RateEngineResult = Readonly<{
   snapshots: readonly PersistedRateSnapshot[];
   failures: readonly RateEngineFailure[];
   skippedSources: readonly RateEngineSkippedSource[];
+}>;
+
+/**
+ * Cross-source anomaly verdicts (issue #186). Only "quarantined" removes an
+ * observation from median eligibility; "insufficient_peers" and
+ * "unassessable" deliberately carry no anomaly verdict.
+ */
+export type RateAnomalyStatus =
+  | "consistent"
+  | "quarantined"
+  | "insufficient_peers"
+  | "unassessable";
+
+export type RateAnomalyReason =
+  | "deviates_from_peer_consensus"
+  | "fewer_than_minimum_independent_peers"
+  | "no_peer_consensus"
+  | "invalid_rate"
+  | "invalid_timestamp";
+
+export type RateAnomalyObservation = Readonly<{
+  id: string;
+  /**
+   * The unit of independence. On main this is the anchor slug, the same unit
+   * selectLatestPerAnchor and the median count; observations sharing a key
+   * never corroborate each other.
+   */
+  independenceKey: string;
+  rate: string;
+  capturedAt: Date | string;
+}>;
+
+export type RateAnomalyAssessment = Readonly<{
+  observationId: string;
+  independenceKey: string;
+  status: RateAnomalyStatus;
+  reason: RateAnomalyReason | null;
+  criterionVersion: string;
+  baselineRate: string | null;
+  toleranceBps: number;
+  contemporaneityWindowMs: number;
+  independentPeerCount: number;
+  agreeingPeerCount: number;
+  peerObservationIds: readonly string[];
 }>;

@@ -244,6 +244,22 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   assert.equal(JSON.stringify(body).includes("bigint"), false);
 });
 
+test("serializer marks quarantined evidence ineligible without leaking internal diagnostics", () => {
+  const quarantined = observation("outlier", "17", "fresh", 0, false, "quarantined");
+  const body = serializeRates(readResult({
+    totalIndependentSources: 1,
+    observations: [quarantined],
+    exclusions: [quarantined],
+  }));
+
+  assert.equal(body.observations[0]?.eligibleForMedian, false);
+  assert.equal(body.observations[0]?.exclusionReason, "quarantined");
+  assert.equal(body.observations[0]?.rate, "17");
+  const serialized = JSON.stringify(body);
+  assert.equal(serialized.includes("anomaly"), false);
+  assert.equal(serialized.includes("deviates_from_peer_consensus"), false);
+});
+
 function readResult(
   overrides: Partial<LatestCorridorRate>,
 ): LatestCorridorRate {
@@ -273,7 +289,12 @@ function observation(
   freshnessState: "fresh" | "stale" | "future" | "invalid",
   ageMs: number | null,
   included: boolean,
-  exclusionReason?: "stale" | "future_timestamp" | "invalid_timestamp" | "invalid_rate",
+  exclusionReason?:
+    | "quarantined"
+    | "stale"
+    | "future_timestamp"
+    | "invalid_timestamp"
+    | "invalid_rate",
   anchorName = `${anchorSlug} persisted`,
 ) {
   return Object.freeze({
@@ -289,5 +310,16 @@ function observation(
     ageMs,
     included,
     ...(exclusionReason ? { exclusionReason } : {}),
+    anomaly: exclusionReason === "quarantined"
+      ? Object.freeze({
+        status: "quarantined" as const,
+        reason: "deviates_from_peer_consensus" as const,
+        origin: "persisted" as const,
+      })
+      : Object.freeze({
+        status: "insufficient_peers" as const,
+        reason: "fewer_than_minimum_independent_peers" as const,
+        origin: "evaluated" as const,
+      }),
   });
 }

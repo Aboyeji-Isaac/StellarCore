@@ -1,3 +1,4 @@
+import type { CorridorAnomalyAssessmentSummary } from "@/lib/rates/anomalyAssessment";
 import type { RateCandidate, RateEngineResult } from "@/types/rates";
 import type { Sep38AssetIdentifier } from "@/types/sep38";
 
@@ -34,4 +35,6 @@ export type SafeLiveRateRunSummary = Readonly<{
   }>[];
   failures: RateEngineResult["failures"];
   skippedSources: RateEngineResult["skippedSources"];
+  /** Cross-source anomaly pass over corridors that received snapshots (#186). */
+  anomalyAssessment?: CorridorAnomalyAssessmentSummary;
 }>;

@@ -1,4 +1,25 @@
-import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
+import type {
+  MedianExclusionReason,
+  RateAnomalyReason,
+  RateAnomalyStatus,
+  RateFreshnessState,
+} from "@/types/rates";
+
+/** The newest persisted anomaly verdict for one snapshot (issue #186). */
+export type PersistedRateAnomalyVerdict = Readonly<{
+  status: RateAnomalyStatus;
+  reason: RateAnomalyReason | null;
+}>;
+
+/**
+ * The anomaly verdict the read model applied. "persisted" is the newest
+ * append-only assessment row; "evaluated" means no row existed yet and the
+ * identical deterministic criterion was applied at read time, so an
+ * unassessed snapshot can never bypass the anomaly gate.
+ */
+export type AppliedRateAnomalyVerdict = PersistedRateAnomalyVerdict & Readonly<{
+  origin: "persisted" | "evaluated";
+}>;
 
 export type LatestRateRepositoryCorridor = Readonly<{
   id: string;
@@ -18,6 +39,7 @@ export type LatestRateRepositoryObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date | string;
+  anomaly?: PersistedRateAnomalyVerdict | null;
 }>;
 
 export type LatestRateRepository = Readonly<{
@@ -42,6 +64,8 @@ export type LatestRateSourceObservation = Readonly<{
   ageMs: number | null;
   included: boolean;
   exclusionReason?: MedianExclusionReason;
+  /** Internal diagnostics only; never serialized by the public rates API. */
+  anomaly: AppliedRateAnomalyVerdict;
 }>;
 
 export type LatestCorridorRate = Readonly<{

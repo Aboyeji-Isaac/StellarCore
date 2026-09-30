@@ -78,6 +78,7 @@ function toScheduledRates(summary: SafeLiveRateRunSummary): ScheduledRefreshResu
       ? { suppressed: summary.suppressed }
       : {}),
     failures: Object.freeze(summary.failures.map((failure) => Object.freeze({ ...failure }))),
+    ...(summary.anomalyAssessment ? { anomalyAssessment: summary.anomalyAssessment } : {}),
   });
 }
 

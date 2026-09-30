@@ -5,6 +5,10 @@ import {
   fetchReviewedIndicativeRate,
   formatLiveRateRunSummary,
 } from "@/lib/rates/liveRateSource";
+import {
+  assessCorridorAnomalies,
+  type CorridorAnomalyAssessmentSummary,
+} from "@/lib/rates/anomalyAssessment";
 import { runRateEngine } from "@/lib/rates/rateEngine";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
 import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
@@ -24,6 +28,9 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
+  assessAnomalies?: (
+    corridorSlugs: readonly string[],
+  ) => Promise<CorridorAnomalyAssessmentSummary>;
 }>;
 
 /**
@@ -50,12 +57,36 @@ export async function snapshotReviewedLiveRates(
 
   const candidates = await dependencies.buildCandidates(eligibleSources);
   const summary = await dependencies.executeCandidates(candidates);
-  if (suppressed.length === 0) return summary;
+
+  // The anomaly pass runs after persistence, over the corridors that actually
+  // received snapshots, so verdicts reflect freshly persisted evidence. It
+  // never changes the run's evidence counts; it only appends verdict rows and
+  // reports them. A corridors-only pass is skipped: nothing new to assess.
+  if (
+    !dependencies.assessAnomalies ||
+    (summary.snapshots.length === 0 && suppressed.length === 0)
+  ) {
+    return suppressed.length === 0
+      ? summary
+      : Object.freeze({
+        ...summary,
+        totalCandidates: summary.totalCandidates + suppressed.length,
+        suppressed: suppressed.length,
+      });
+  }
+  const anomalyAssessment = await dependencies.assessAnomalies(
+    summary.snapshots.map(({ corridorSlug }) => corridorSlug),
+  );
 
   return Object.freeze({
     ...summary,
-    totalCandidates: summary.totalCandidates + suppressed.length,
-    suppressed: suppressed.length,
+    ...(suppressed.length > 0
+      ? {
+        totalCandidates: summary.totalCandidates + suppressed.length,
+        suppressed: suppressed.length,
+      }
+      : {}),
+    anomalyAssessment,
   });
 }
 
@@ -69,4 +100,5 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
     }),
   ),
+  assessAnomalies: (corridorSlugs) => assessCorridorAnomalies(corridorSlugs),
 }) satisfies SnapshotReviewedLiveRatesDependencies;

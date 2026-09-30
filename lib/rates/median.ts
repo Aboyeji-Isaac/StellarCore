@@ -28,6 +28,7 @@ export function computeFreshMedian(
     if (freshness.state === "stale") reason = "stale";
     if (freshness.state === "future") reason = "future_timestamp";
     if (freshness.state === "invalid") reason = "invalid_timestamp";
+    if (!reason && source.quarantined === true) reason = "quarantined";
 
     let decimal: ExactDecimal | undefined;
     if (!reason) {
