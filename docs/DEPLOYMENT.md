@@ -18,6 +18,37 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
+## Runtime configuration fingerprints
+
+Every production deployment is bound to the reviewed non-secret runtime configuration it was built and tested against. The binding is a canonical fingerprint over approved non-secret configuration and policy identifiers, emitted during build/release and recomputed at runtime to detect drift.
+
+The fingerprint is derived from a canonical model of non-secret operational configuration and policy inputs. It is stable across ordering of inputs, excludes secret values, and includes presence/version metadata where needed. Secret values cannot be reconstructed from the fingerprint input or output.
+
+The fingerprint is bound to the deployment revision by emitting it during build/release and associating it with the deployed revision. At runtime/startup, the fingerprint is recomputed and compared to the expected value.
+
+### Mismatch policy
+
+When the runtime fingerprint differs from the expected fingerprint emitted at build/release time, the deployment fails or degrades according to this documented policy:
+
+- Unexpected non-secret policy/config drift is detected.
+- The deployment fails closed for authenticated internal mutation boundaries and cron refreshes.
+- Public read-only routes may degrade rather than fail when the drift is limited to non-security operational configuration.
+- The active fingerprint is surfaced safely in internal operational diagnostics.
+
+### Intentional configuration updates
+
+Intentional configuration updates flow through reviewed fingerprint changes:
+
+1. Update the non-secret runtime configuration or policy identifiers in a reviewed change.
+2. Regenerate the expected fingerprint during build/release.
+3. Review the fingerprint change alongside the configuration change.
+4. Roll out the reviewed fingerprint change with the deployment revision.
+5. Verify the runtime fingerprint matches the expected fingerprint after deployment.
+
+### Operational diagnostics
+
+The active fingerprint is surfaced safely in internal operational diagnostics. It is a non-secret derived value and must not be used to reconstruct secret values.
+
 ## Migration strategy
 
 1. Configure the server-only runtime `DATABASE_URL` for the production deployment, and separately configure the protected GitHub Actions `production` environment's direct Prisma Postgres credential as its `DATABASE_URL` secret.
@@ -31,7 +62,7 @@ Do not run `prisma migrate dev`, `prisma db push`, reset commands, or `migrate d
 
 The protected step above is implemented as a manual GitHub Actions workflow:
 `.github/workflows/deploy-production-migrations.yml`. It is triggered only by
-`workflow_dispatch` and is intentionally separate from Vercel builds, so a
+workflow_dispatch` and is intentionally separate from Vercel builds, so a
 preview or an ordinary build can never mutate the production database. It runs
 exactly `npx prisma migrate deploy` on `ubuntu-latest` with Node.js 22 after
 `npm ci`, uses least-privilege `contents: read` permissions, a 10-minute job
@@ -39,7 +70,7 @@ timeout, and a non-cancelling `production-database-migration` concurrency group
 so two migration runs can never overlap.
 
 The `production` environment's `DATABASE_URL` secret is supplied to both the
-dependency-installation step and the migration step. `npm ci` runs the
+Dependency-installation step and the migration step. `npm ci` runs the
 `postinstall` script (`prisma generate`), which loads `prisma.config.ts`, and
 that configuration resolves `DATABASE_URL`; without the secret the install step
 fails with `PrismaConfigEnvError: Cannot resolve environment variable:
@@ -51,7 +82,8 @@ One-time setup (repository admin):
 1. Open the GitHub repository **Settings**.
 2. Under **Environments**, create a GitHub Actions environment named
    `production`.
-3. In that environment, add an environment secret named `DATABASE_URL`.
+3. In that environment, add an environment secret named
+   `DATABASE_URL`.
 4. Set it to the **direct** PostgreSQL connection string suitable for Prisma
    Migrate (a `postgres://` / `postgresql://` URL, not a pooled/PgBouncer
    endpoint). Do not put this value in any repository file.
@@ -82,7 +114,7 @@ Preview deployments must not receive the production `DATABASE_URL` or `CRON_SECR
 After migrations, run the explicit, idempotent command once in the protected production job environment:
 
 ```bash
-npm run bootstrap:registry
+^pm run bootstrap:registry
 ```
 
 It uses the existing reviewed registries and synchronization logic to discover/upsert anchors, upsert corridors, and reconcile associations. It prints safe structured results and exits nonzero for failures. It is never called by a web request, build, or cron route.
@@ -91,7 +123,7 @@ It uses the existing reviewed registries and synchronization logic to discover/u
 
 The bootstrap above is also implemented as a manual GitHub Actions workflow:
 `.github/workflows/bootstrap-production-registry.yml`. It is triggered only by
-`workflow_dispatch` and is intentionally separate from Vercel builds, preview
+workflow_dispatch` and is intentionally separate from Vercel builds, preview
 deployments, the migration workflow, and the scheduled refresh, so none of
 those can mutate the production registry. It runs exactly
 `npm run bootstrap:registry` on `ubuntu-latest` with Node.js 22 after `npm ci`,
@@ -126,8 +158,8 @@ Running the bootstrap:
 3. Select the **Bootstrap production registry** workflow.
 4. Choose **Run workflow** on the intended branch and confirm.
 5. Confirm the **Bootstrap registry** step succeeds; the run log prints a safe
-   structured JSON summary of anchor and corridor synchronization. A nonzero
-   exit means at least one entry failed to synchronize — resolve it and
+   structured JSON summary of anchor and corridor synchronization. A nonzero exit
+   means at least one entry failed to synchronize — resolve it and
    re-run.
 6. Only then continue to the application deployment and scheduled refresh
    described below.
@@ -142,8 +174,8 @@ The locally verified run took about ten seconds. At the current reviewed scope o
 
 1. Apply committed migrations with the **Deploy production migrations**
    workflow (`.github/workflows/deploy-production-migrations.yml`).
-2. Synchronize the reviewed registry with the **Bootstrap production registry**
-   workflow (`.github/workflows/bootstrap-production-registry.yml`) and resolve
+2. Synchronize the reviewed registry with the **Bootstrap production registry** workflow
+   (`.github/workflows/bootstrap-production-registry.yml`) and resolve
    any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
 4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
