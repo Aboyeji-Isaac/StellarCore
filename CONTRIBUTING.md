@@ -32,8 +32,27 @@ npm test
 ```
 
 Open a pull request from your fork's branch into `main`. Describe what changed,
-include relevant tests and evidence, and reference the issue being resolved when
-applicable, for example `Closes #12`.
+include relevant tests and evidence, reference the issue being resolved when
+applicable (for example `Closes #12`), and add a changelog entry under
+`Unreleased` when applicable — see [Changelog](#changelog) below.
+
+## Changelog
+
+[`CHANGELOG.md`](CHANGELOG.md) tracks notable changes in a lightweight
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) style. If your pull
+request is meaningful to users, contributors, or reviewers — a new feature, a
+fix, a behavior change, or a notable piece of documentation — add an entry
+under the `Unreleased` section in the same pull request:
+
+1. Choose the matching subsection — `Added`, `Changed`, `Fixed`, `Deprecated`,
+   or `Removed` — creating it if it does not exist yet.
+2. Write one concise bullet in the past tense, describing the change from the
+   reader's perspective, and reference the issue or PR number when applicable.
+3. Do not edit dated release sections or invent version numbers; maintainers
+   move entries into a dated release when that release ships.
+
+Small typo fixes and changes that are purely internal to CI or tooling do not
+need an entry.
 
 ## Protected Main Branch
 

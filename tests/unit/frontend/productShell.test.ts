@@ -159,3 +159,12 @@ test("hero map distinguishes reviewed geography without inventing live movement"
   assert.match(landingSource, /Persisted observations are not[\s\S]*plotted/);
   assert.doesNotMatch(landingSource, /flow-dot|motionPath|corridor-echo|LIVE DATA/);
 });
+
+test("evidence ticker hides duplicate loop items from screen readers with aria-hidden", () => {
+  assert.match(
+    landingSource,
+    /<div aria-hidden="true"[^>]*>[\s\S]*?INSPECTION_AREAS\.map\(/,
+  );
+  assert.doesNotMatch(landingSource, /const stream = \[\.\.\.INSPECTION_AREAS/);
+});
+
