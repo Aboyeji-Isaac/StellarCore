@@ -1,4 +1,4 @@
-# StellarCore
+#StellarCore
 
 **The intelligence layer for Stellar anchors.**
 
