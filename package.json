@@ -19,6 +19,7 @@
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
+    "benchmark:latest-observations": "tsx scripts/benchmark-latest-observations.ts",
     "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
   },
   "dependencies": {
