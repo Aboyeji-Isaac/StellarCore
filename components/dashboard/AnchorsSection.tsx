@@ -8,13 +8,13 @@ import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates
 function statusPresentation(status: PublicAnchorStatus) {
   switch (status) {
     case "LIVE":
-      return { tone: "positive" as const, label: "Synced" };
+      return { tone: "positive" as const, label: "Last sync succeeded" };
     case "DEGRADED":
-      return { tone: "warning" as const, label: "Sync degraded" };
+      return { tone: "warning" as const, label: "Repeated sync failures" };
     case "DOWN":
-      return { tone: "negative" as const, label: "Sync failed" };
+      return { tone: "negative" as const, label: "Sustained sync failures" };
     case "UNKNOWN":
-      return { tone: "neutral" as const, label: "Sync unknown" };
+      return { tone: "neutral" as const, label: "No sync evidence yet" };
   }
 }
 

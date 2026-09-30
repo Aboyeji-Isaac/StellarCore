@@ -104,13 +104,14 @@ test("dashboard shell retains the four evidence sections and avoids live metadat
   assert.doesNotMatch(dashboardSource, /description:\s*"[^"]*\blive\b/i);
 });
 
-test("successful persisted anchor synchronization is presented as synced, not live availability", () => {
+test("successful persisted anchor synchronization is presented as an evidence-based status, not live availability", () => {
   assert.match(
     anchorsSource,
-    /case "LIVE":[\s\S]*?label: "Synced"/,
+    /case "LIVE":[\s\S]*?label: "Last sync succeeded"/,
   );
   assert.doesNotMatch(anchorsSource, /label=\{anchor\.status\}/);
-  assert.match(dashboardSource, /Status describes persisted synchronization state/);
+  assert.match(dashboardSource, /Status describes persisted synchronization evidence/);
+  assert.match(dashboardSource, /a single failure never publishes an\s+unhealthy state/);
   assert.match(dashboardSource, /not current operation or availability/);
 });
 

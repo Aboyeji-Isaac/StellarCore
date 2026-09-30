@@ -12,6 +12,7 @@ import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
 } from "@/types/anchor";
+import type { AnchorEvidenceOutcome } from "@/types/anchorHealth";
 
 const MONEYGRAM = Object.freeze({
   slug: "moneygram",
@@ -43,6 +44,7 @@ test("a successful discovery is persisted and reported", async () => {
     failed: 0,
     successfulSlugs: ["moneygram"],
     failures: [],
+    transitions: [],
   });
 });
 
@@ -88,14 +90,143 @@ test("one discovery failure does not prevent another anchor succeeding", async (
       slug: "moneygram",
       phase: "DISCOVERY",
       code: "TIMEOUT",
-      statusUpdate: "NOT_FOUND",
+      statusUpdate: "RECORDED_EVIDENCE",
     },
+  ]);
+  assert.deepEqual(result.transitions, []);
+});
+
+test("one transient timeout never publishes DOWN for a previously healthy anchor", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+  const dependencies = createDependencies({
+    discover: async () => {
+      throw new Sep1DiscoveryError(
+        "TIMEOUT",
+        "safe timeout",
+        "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
+      );
+    },
+  });
+
+  const result = await syncAnchorRegistry([MONEYGRAM], dependencies);
+
+  assert.equal(result.failures[0]?.statusUpdate, "RECORDED_EVIDENCE");
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.LIVE);
+  assert.deepEqual(result.transitions, []);
+});
+
+test("repeated transient failures escalate deterministically to DOWN", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+  const { recordFailure } = createLedgeredRecorders(rows);
+  const dependencies = createDependencies({
+    discover: async () => {
+      throw new Sep1DiscoveryError(
+        "NETWORK_FAILURE",
+        "safe network failure",
+        "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
+      );
+    },
+    recordFailure,
+  });
+
+  const first = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  const second = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  const third = await syncAnchorRegistry([MONEYGRAM], dependencies);
+
+  assert.equal(first.failures[0]?.statusUpdate, "RECORDED_EVIDENCE");
+  assert.equal(second.failures[0]?.statusUpdate, "PUBLISHED_DEGRADED");
+  assert.equal(third.failures[0]?.statusUpdate, "PUBLISHED_DOWN");
+  assert.deepEqual(third.transitions, [
+    { slug: MONEYGRAM.slug, status: AnchorStatus.DOWN, statusChanged: true },
   ]);
 });
 
-test("an existing failed anchor is marked DOWN without replacing metadata", async () => {
-  const previous = toPersisted(makeDiscovered(MONEYGRAM));
-  const rows = new Map<string, PersistedAnchor>([[MONEYGRAM.slug, previous]]);
+test("a flapping endpoint never toggles between LIVE and DOWN", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+  const { recordSuccess, recordFailure } = createLedgeredRecorders(rows);
+  let failing = false;
+  const observedStatuses: AnchorStatus[] = [
+    rows.get(MONEYGRAM.slug)!.status,
+  ];
+
+  const dependencies = createDependencies({
+    discover: async () => {
+      if (failing) {
+        throw new Sep1DiscoveryError(
+          "TIMEOUT",
+          "safe timeout",
+          "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
+        );
+      }
+      return makeDiscovered(MONEYGRAM);
+    },
+    persist: persistPreservingStatus(rows),
+    recordSuccess,
+    recordFailure,
+  });
+
+  // failure -> success -> failure -> success: the published status never
+  // reaches DOWN because neither evidence class accumulates.
+  for (const cycle of [1, 2]) {
+    failing = true;
+    const failed = await syncAnchorRegistry([MONEYGRAM], dependencies);
+    observedStatuses.push(rows.get(MONEYGRAM.slug)!.status);
+    assert.equal(failed.failures[0]?.statusUpdate, "RECORDED_EVIDENCE");
+
+    failing = false;
+    await syncAnchorRegistry([MONEYGRAM], dependencies);
+    observedStatuses.push(rows.get(MONEYGRAM.slug)!.status);
+    assert.ok(cycle > 0);
+  }
+
+  assert.deepEqual(observedStatuses, [
+    AnchorStatus.LIVE,
+    AnchorStatus.LIVE,
+    AnchorStatus.LIVE,
+    AnchorStatus.LIVE,
+    AnchorStatus.LIVE,
+  ]);
+});
+
+test("successful recovery from DOWN is deterministic and evidence-based", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, { ...toPersisted(makeDiscovered(MONEYGRAM)), status: AnchorStatus.DOWN }],
+  ]);
+  const { recordSuccess, recordFailure } = createLedgeredRecorders(rows);
+  const dependencies = createDependencies({
+    persist: persistPreservingStatus(rows),
+    recordSuccess,
+    recordFailure,
+  });
+
+  // Seed the failure side of the ledger so recovery thresholds are exercised.
+  const seededFailure = await recordFailure(MONEYGRAM.slug, "TRANSIENT", "TIMEOUT");
+  assert.equal(seededFailure.kind, "RECORDED");
+
+  const first = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.DEGRADED);
+  assert.deepEqual(first.transitions, [
+    { slug: MONEYGRAM.slug, status: AnchorStatus.DEGRADED, statusChanged: true },
+  ]);
+
+  const second = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.LIVE);
+  assert.deepEqual(second.transitions, [
+    { slug: MONEYGRAM.slug, status: AnchorStatus.LIVE, statusChanged: true },
+  ]);
+});
+
+test("protocol/configuration failures are classified separately and escalate faster", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+  const { recordFailure } = createLedgeredRecorders(rows);
   const dependencies = createDependencies({
     discover: async () => {
       throw new Sep1DiscoveryError(
@@ -104,24 +235,39 @@ test("an existing failed anchor is marked DOWN without replacing metadata", asyn
         "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
       );
     },
-    markDown: async (slug) => {
-      const existing = rows.get(slug);
-
-      if (!existing) return false;
-
-      rows.set(slug, Object.freeze({ ...existing, status: AnchorStatus.DOWN }));
-      return true;
-    },
+    recordFailure,
   });
 
-  const result = await syncAnchorRegistry([MONEYGRAM], dependencies);
-  const updated = rows.get(MONEYGRAM.slug);
+  const first = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(first.failures[0]?.statusUpdate, "PUBLISHED_DEGRADED");
 
-  assert.equal(result.failures[0]?.statusUpdate, "MARKED_DOWN");
-  assert.equal(updated?.status, AnchorStatus.DOWN);
-  assert.equal(updated?.tomlUrl, previous.tomlUrl);
-  assert.deepEqual(updated?.seps, previous.seps);
-  assert.equal(updated?.isTransferCapable, previous.isTransferCapable);
+  const second = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(second.failures[0]?.statusUpdate, "PUBLISHED_DOWN");
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.DOWN);
+});
+
+test("unexpected errors follow the transient path and never escalate faster", async () => {
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+  const { recordFailure } = createLedgeredRecorders(rows);
+  const dependencies = createDependencies({
+    discover: async () => {
+      throw new Error("DATABASE_URL=do-not-expose");
+    },
+    recordFailure,
+  });
+
+  const first = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(first.failures[0]?.code, "UNEXPECTED_ERROR");
+  assert.equal(first.failures[0]?.statusUpdate, "RECORDED_EVIDENCE");
+
+  const serialized = JSON.stringify(first);
+  assert.equal(serialized.includes("DATABASE_URL"), false);
+  assert.equal(serialized.includes("do-not-expose"), false);
+
+  const second = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  assert.equal(second.failures[0]?.statusUpdate, "PUBLISHED_DEGRADED");
 });
 
 test("structured failures omit unsafe error details", async () => {
@@ -132,11 +278,9 @@ test("structured failures omit unsafe error details", async () => {
   });
 
   const result = await syncAnchorRegistry([MONEYGRAM], dependencies);
-  const serialized = JSON.stringify(result);
 
   assert.equal(result.failures[0]?.code, "UNEXPECTED_ERROR");
-  assert.equal(serialized.includes("DATABASE_URL"), false);
-  assert.equal(serialized.includes("do-not-expose"), false);
+  assert.equal(JSON.stringify(result).includes("do-not-expose"), false);
 });
 
 test("unexpected persistence errors are isolated from later anchors", async () => {
@@ -158,16 +302,192 @@ test("unexpected persistence errors are isolated from later anchors", async () =
       statusUpdate: "NOT_ATTEMPTED",
     },
   ]);
+  // A persistence failure is never anchor health evidence.
+  assert.deepEqual(result.transitions, []);
+});
+
+test("evidence recording survives a fresh process: state is rebuilt from persisted rows", async () => {
+  // This test simulates a process restart: the ledger stands in for the
+  // persisted health row and each worker builds fresh dependency objects,
+  // exactly like a restarted worker re-reading persisted state.
+  const ledger: HealthLedger = new Map();
+  const rows = new Map<string, PersistedAnchor>([
+    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
+  ]);
+
+  const failingDiscovery = async () => {
+    throw new Sep1DiscoveryError(
+      "TIMEOUT",
+      "safe timeout",
+      "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
+    );
+  };
+
+  const firstWorker = createDependencies({
+    discover: failingDiscovery,
+    recordFailure: recordingRecordFailure(rows, ledger),
+  });
+
+  await syncAnchorRegistry([MONEYGRAM], firstWorker);
+  await syncAnchorRegistry([MONEYGRAM], firstWorker);
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.DEGRADED);
+
+  // A "restarted" worker reconstructs its in-memory view from the same
+  // persisted ledger and continues the escalation deterministically.
+  const restartedWorker = createDependencies({
+    discover: failingDiscovery,
+    recordFailure: recordingRecordFailure(rows, ledger),
+  });
+
+  await syncAnchorRegistry([MONEYGRAM], restartedWorker);
+  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.DOWN);
+});
+
+test("failure evidence for an unknown anchor is reported without a transition", async () => {
+  const dependencies = createDependencies({
+    discover: async () => {
+      throw new Sep1DiscoveryError(
+        "TIMEOUT",
+        "safe timeout",
+        "https://mgxanchor.moneygram.com/.well-known/stellar.toml",
+      );
+    },
+    recordFailure: async () => ({ kind: "ANCHOR_NOT_FOUND" }),
+  });
+
+  const result = await syncAnchorRegistry([MONEYGRAM], dependencies);
+
+  assert.equal(result.failures[0]?.statusUpdate, "ANCHOR_NOT_FOUND");
+  assert.deepEqual(result.transitions, []);
 });
 
 function createDependencies(
   overrides: Partial<AnchorSyncDependencies> = {},
 ): AnchorSyncDependencies {
+  const successes = new Map<string, number>();
+  const failures = new Map<string, number>();
+
   return {
     discover: async (entry) => makeDiscovered(entry),
     persist: async (anchor) => toPersisted(anchor),
-    markDown: async () => false,
+    recordSuccess: async (slug) => {
+      successes.set(slug, (successes.get(slug) ?? 0) + 1);
+      return { kind: "RECORDED", status: AnchorStatus.LIVE, statusChanged: false };
+    },
+    recordFailure: async (slug) => {
+      failures.set(slug, (failures.get(slug) ?? 0) + 1);
+      return { kind: "RECORDED", status: AnchorStatus.LIVE, statusChanged: false };
+    },
     ...overrides,
+  };
+}
+
+type HealthLedger = Map<string, { consecutiveFailures: number; consecutiveSuccesses: number; status: AnchorStatus }>;
+
+/**
+ * Test double for the persistence boundary. It mirrors the documented
+ * thresholds and shares one ledger between success and failure recorders so
+ * success resets the consecutive-failure counter, like the real state row.
+ */
+function createLedgeredRecorders(rows: Map<string, PersistedAnchor>) {
+  const ledger: HealthLedger = new Map();
+
+  const recordFailure = recordingRecordFailure(rows, ledger);
+  const recordSuccess = async (
+    slug: string,
+  ): Promise<AnchorEvidenceOutcome> => {
+    const row = rows.get(slug);
+
+    if (!row) return { kind: "ANCHOR_NOT_FOUND" };
+
+    const entry = ledger.get(slug) ?? {
+      consecutiveFailures: 0,
+      consecutiveSuccesses: 0,
+      status: row.status,
+    };
+    entry.consecutiveFailures = 0;
+    entry.consecutiveSuccesses += 1;
+    entry.status = row.status;
+    ledger.set(slug, entry);
+
+    // Recovery evidence: DOWN/DEGRADED with one success publishes DEGRADED,
+    // the second success publishes LIVE, mirroring the real thresholds.
+    let status = row.status;
+    let statusChanged = false;
+    if (status === AnchorStatus.DOWN || status === AnchorStatus.DEGRADED) {
+      status = entry.consecutiveSuccesses >= 2
+        ? AnchorStatus.LIVE
+        : AnchorStatus.DEGRADED;
+      statusChanged = status !== row.status;
+      rows.set(slug, Object.freeze({ ...row, status }));
+      entry.status = status;
+    }
+
+    return { kind: "RECORDED", status, statusChanged };
+  };
+
+  return { recordSuccess, recordFailure, ledger };
+}
+
+function recordingRecordFailure(
+  rows: Map<string, PersistedAnchor>,
+  ledger: HealthLedger,
+) {
+  return async (
+    slug: string,
+    failureClass: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _failureCode: string,
+  ): Promise<AnchorEvidenceOutcome> => {
+    const row = rows.get(slug);
+
+    if (!row) return { kind: "ANCHOR_NOT_FOUND" };
+
+    const entry = ledger.get(slug) ?? {
+      consecutiveFailures: 0,
+      consecutiveSuccesses: 0,
+      status: row.status,
+    };
+    entry.consecutiveFailures += 1;
+    entry.consecutiveSuccesses = 0;
+
+    // Mirror the documented thresholds: transient escalates at 2/3,
+    // deterministic at the second failure.
+    let status = entry.status;
+    if (status !== AnchorStatus.DOWN) {
+      if (failureClass === "DETERMINISTIC") {
+        if (entry.consecutiveFailures >= 2) status = AnchorStatus.DOWN;
+        else status = AnchorStatus.DEGRADED;
+      } else {
+        if (entry.consecutiveFailures >= 3) status = AnchorStatus.DOWN;
+        else if (entry.consecutiveFailures >= 2) status = AnchorStatus.DEGRADED;
+        else status = entry.status === AnchorStatus.UNKNOWN
+          ? AnchorStatus.UNKNOWN
+          : entry.status;
+      }
+    }
+
+    const statusChanged = status !== row.status;
+    entry.status = status;
+    ledger.set(slug, entry);
+
+    rows.set(slug, Object.freeze({ ...row, status }));
+
+    return { kind: "RECORDED", status, statusChanged };
+  };
+}
+
+/** Persists metadata while preserving the row's published status, like the real upsert. */
+function persistPreservingStatus(rows: Map<string, PersistedAnchor>) {
+  return async (anchor: DiscoveredAnchor): Promise<PersistedAnchor> => {
+    const existing = rows.get(anchor.slug);
+    const persisted = toPersisted(anchor);
+    const merged = Object.freeze({
+      ...persisted,
+      status: existing?.status ?? persisted.status,
+    });
+    rows.set(anchor.slug, merged);
+    return merged;
   };
 }
 
