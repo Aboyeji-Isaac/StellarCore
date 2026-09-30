@@ -1,4 +1,16 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import {
+  classifyTransferOutcome,
+  MAX_REPORTED_INTEGRITY_ISSUES,
+  reportEvidenceIntegrityIssues,
+  type EvidenceIntegrityIssue,
+} from "@/lib/evidence/integrity";
+import {
+  RATE_SNAPSHOT_CORRUPTION_CLASS,
+  toSnapshotIssue,
+  VALID_RATE_SNAPSHOT,
+  type CorruptSnapshotRow,
+} from "@/lib/evidence/rateSnapshotValidity";
 import type {
   PersistedReputationScore,
   ReputationEvidence,
@@ -22,7 +34,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
     });
     if (!anchor) return null;
 
-    const [latestRates, transferOutcomes] = await Promise.all([
+    const [latestRates, corruptSnapshots, transferOutcomeRows] = await Promise.all([
       db.$queryRaw<LatestRateRow[]>(Prisma.sql`
         SELECT DISTINCT ON (corridor.slug)
           corridor.slug AS "corridorSlug",
@@ -30,19 +42,56 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
         FROM rate_snapshots AS snapshot
         INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
         WHERE snapshot.anchor_id = ${anchor.id}::uuid
+          AND ${VALID_RATE_SNAPSHOT}
         ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
+      `),
+      db.$queryRaw<CorruptSnapshotRow[]>(Prisma.sql`
+        SELECT
+          snapshot.id::text AS id,
+          ${RATE_SNAPSHOT_CORRUPTION_CLASS} AS class,
+          ${anchorSlug} AS "anchorSlug",
+          corridor.slug AS "corridorSlug",
+          count(*) OVER () AS total
+        FROM rate_snapshots AS snapshot
+        INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
+        WHERE snapshot.anchor_id = ${anchor.id}::uuid
+          AND NOT ${VALID_RATE_SNAPSHOT}
+        ORDER BY snapshot.id
+        LIMIT ${MAX_REPORTED_INTEGRITY_ISSUES}
       `),
       db.transferOutcome.findMany({
         where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
         orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
         select: {
+          id: true,
           status: true,
           settlementMs: true,
           slippage: true,
           recordedAt: true,
+          corridor: { select: { slug: true } },
         },
       }),
     ]);
+
+    // Corrupt outcomes are excluded, never normalized into plausible values.
+    const issues: EvidenceIntegrityIssue[] = corruptSnapshots.map(toSnapshotIssue);
+    let corruptTotal = corruptSnapshots.length > 0
+      ? Number(corruptSnapshots[0]!.total)
+      : 0;
+    const transferOutcomes = transferOutcomeRows.filter((outcome) => {
+      const corruption = classifyTransferOutcome(outcome);
+      if (corruption === null) return true;
+      corruptTotal += 1;
+      issues.push(Object.freeze({
+        source: "transfer_outcome",
+        class: corruption,
+        recordId: outcome.id,
+        anchorSlug: anchor.slug,
+        corridorSlug: outcome.corridor.slug,
+      }));
+      return false;
+    });
+    reportEvidenceIntegrityIssues(issues, corruptTotal);
 
     return Object.freeze({
       anchorId: anchor.id,

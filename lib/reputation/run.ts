@@ -39,7 +39,13 @@ export async function evaluatePersistedAnchorReputations(
   let succeeded = 0;
 
   for (const anchorSlug of anchorSlugs) {
-    const result = await dependencies.evaluate(anchorSlug, { evaluatedAt });
+    let result: ReputationEvaluationResult;
+    try {
+      result = await dependencies.evaluate(anchorSlug, { evaluatedAt });
+    } catch {
+      // An unexpected failure on one anchor must not abort the others.
+      result = Object.freeze({ ok: false, anchorSlug, code: "EVALUATION_FAILURE" });
+    }
     if (result.ok) {
       succeeded += 1;
       continue;

@@ -4,6 +4,7 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
+import { reportEvidenceIntegrityIssues } from "@/lib/evidence/integrity";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   AnchorApiResult,
@@ -87,6 +88,7 @@ export function serializeAnchors(
   records: readonly AnchorDirectoryRecord[],
 ): PublicAnchorsResponse {
   const anchors = Object.freeze([...records]
+    .filter((record) => isServableAnchor(record))
     .sort((left, right) => left.slug.localeCompare(right.slug))
     .map((record) => {
       const seps = sortedSeps(record.seps);
@@ -102,6 +104,25 @@ export function serializeAnchors(
     }));
 
   return Object.freeze({ anchors, count: anchors.length });
+}
+
+/**
+ * An anchor whose stable identity or shape is corrupt is left out of the list
+ * (and reported by slug only) instead of failing the response for every anchor.
+ */
+function isServableAnchor(record: AnchorDirectoryRecord): boolean {
+  const servable = typeof record.slug === "string"
+    && isValidAnchorSlug(record.slug)
+    && Array.isArray(record.seps)
+    && record.seps.every((sep) => Number.isInteger(sep));
+  if (!servable) {
+    reportEvidenceIntegrityIssues([Object.freeze({
+      source: "anchor",
+      class: "OUT_OF_RANGE",
+      ...(typeof record.slug === "string" ? { anchorSlug: record.slug.slice(0, MAX_ANCHOR_SLUG_LENGTH) } : {}),
+    })]);
+  }
+  return servable;
 }
 
 export function serializeAnchorDetail(

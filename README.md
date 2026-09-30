@@ -240,6 +240,30 @@ Rate preparation failures are returned as a safe rate failure while reputation
 evaluation still runs. A fatal reputation-run failure returns a safe HTTP 500;
 ```
 
+### Corrupt Persisted Evidence
+
+```
+Persisted evidence can violate application expectations (legacy rows, or rows
+altered outside the application). Reads contain it per record:
+
+  - Rate snapshots with a non-finite captured_at, a NaN amount or rate, a
+    non-positive rate or amount, or a negative fee are excluded in SQL, so they
+    can never win the "latest" selection and shadow valid history.
+  - Transfer outcomes with an invalid timestamp, a non-finite slippage, a
+    non-integer or negative settlement time are dropped before scoring.
+  - A reputation score with an unusable computed_at is presented as
+    not_evaluated; an anchor with a malformed slug or SEP list is left out of
+    the anchors list. Neither fails the response for other anchors.
+  - An unexpected failure while evaluating one anchor is recorded as
+    EVALUATION_FAILURE and the run continues with the remaining anchors.
+
+Invalid evidence is never normalized into a plausible value. Public responses
+never carry raw database errors or corrupt values. Each contained read emits
+one bounded structured log line (event "evidence_integrity": total, and at most
+20 issues of source, class INVALID_TIMESTAMP | INVALID_NUMBER | OUT_OF_RANGE,
+record id, anchor slug, corridor slug) and never row contents.
+```
+
 ### Reputation Computation Flow
 
 ```

@@ -95,5 +95,6 @@ export type ReputationEvaluationResult =
         | "ANCHOR_NOT_FOUND"
         | "INVALID_EVALUATION_TIME"
         | "EVIDENCE_READ_FAILURE"
+        | "EVALUATION_FAILURE"
         | "PERSISTENCE_FAILURE";
     }>;

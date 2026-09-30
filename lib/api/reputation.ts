@@ -1,5 +1,9 @@
 import { isValidAnchorSlug } from "@/lib/api/anchors";
 import {
+  isValidInstant,
+  reportEvidenceIntegrityIssues,
+} from "@/lib/evidence/integrity";
+import {
   PRISMA_REPUTATION_API_REPOSITORY,
   type ReputationApiAnchorRecord,
   type ReputationApiRepository,
@@ -70,7 +74,16 @@ export function serializeReputationList(
 export function serializeReputation(record: ReputationApiAnchorRecord): PublicReputation {
   const anchor = Object.freeze({ slug: record.slug, name: record.name });
   const persisted = record.reputationScore;
-  if (!persisted) {
+  if (persisted && !isValidInstant(persisted.computedAt)) {
+    // A score without a trustworthy computation time cannot be presented as
+    // current evidence; report it internally and treat it as not evaluated.
+    reportEvidenceIntegrityIssues([Object.freeze({
+      source: "reputation_score",
+      class: "INVALID_TIMESTAMP",
+      anchorSlug: record.slug,
+    })]);
+  }
+  if (!persisted || !isValidInstant(persisted.computedAt)) {
     return Object.freeze({
       anchor,
       state: "not_evaluated",

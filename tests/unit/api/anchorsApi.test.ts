@@ -9,6 +9,10 @@ import {
   serializeAnchorDetail,
   serializeAnchors,
 } from "@/lib/api/anchors";
+import {
+  setEvidenceIntegritySink,
+  type EvidenceIntegrityEvent,
+} from "@/lib/evidence/integrity";
 import type {
   AnchorDetailRecord,
   AnchorDirectoryRecord,
@@ -21,6 +25,23 @@ test("empty persisted directory is a successful immutable response", async () =>
   assert.deepEqual(result, { status: 200, body: { anchors: [], count: 0 } });
   assert.equal(Object.isFrozen(result.body), true);
   if (result.status === 200) assert.equal(Object.isFrozen(result.body.anchors), true);
+});
+
+test("a corrupt anchor record is left out and reported by slug while others are still listed", () => {
+  const events: EvidenceIntegrityEvent[] = [];
+  const previous = setEvidenceIntegritySink((event) => events.push(event));
+  try {
+    const body = serializeAnchors([
+      summary("good", [1], 1),
+      summary("Bad Slug!", [1], 1),
+      summary("bad-seps", [1.5, Number.NaN], 1),
+    ]);
+    assert.deepEqual(body.anchors.map(({ slug }) => slug), ["good"]);
+    assert.equal(body.count, 1);
+  } finally {
+    setEvidenceIntegritySink(previous);
+  }
+  assert.equal(events.length, 2);
 });
 
 test("one anchor serializes sorted SEPs and corridor count without UUIDs", () => {

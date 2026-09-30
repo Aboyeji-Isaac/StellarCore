@@ -9,6 +9,10 @@ import {
   serializeReputation,
   serializeReputationList,
 } from "@/lib/api/reputation";
+import {
+  setEvidenceIntegritySink,
+  type EvidenceIntegrityEvent,
+} from "@/lib/evidence/integrity";
 import type {
   ReputationApiAnchorRecord,
   ReputationApiRepository,
@@ -147,6 +151,34 @@ test("repository failures are safe and routes are GET-only dynamic no-store hand
   });
   assert.equal(response.status, 400);
   assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("a corrupt persisted score is contained: the anchor stays listed as not_evaluated and others are unaffected", async () => {
+  const events: EvidenceIntegrityEvent[] = [];
+  const previous = setEvidenceIntegritySink((event) => events.push(event));
+  try {
+    const result = await getReputationApiResult({
+      repository: repository([
+        anchor("good", score()),
+        anchor("bad", score({ computedAt: new Date(NaN), compositeScore: 99 })),
+      ]),
+    });
+    assert.equal(result.status, 200);
+    if (result.status !== 200) return;
+    assert.equal(result.body.count, 2);
+    const bad = result.body.reputation.find((entry) => entry.anchor.slug === "bad")!;
+    assert.deepEqual(
+      { state: bad.state, score: bad.score, computedAt: bad.computedAt },
+      { state: "not_evaluated", score: null, computedAt: null },
+    );
+    assert.equal(result.body.reputation.find((entry) => entry.anchor.slug === "good")!.score, 90);
+    assert.equal(JSON.stringify(result.body).includes("99"), false);
+  } finally {
+    setEvidenceIntegritySink(previous);
+  }
+  assert.deepEqual(events.map(({ issues }) => issues), [[
+    { source: "reputation_score", class: "INVALID_TIMESTAMP", anchorSlug: "bad" },
+  ]]);
 });
 
 function anchor(

@@ -9,8 +9,15 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Fixed
+
+- Corrupt persisted evidence is now contained per record instead of shadowing
+  valid history, being coerced into scores or rates, or failing whole reads:
+  invalid rate snapshots and transfer outcomes are excluded, an unusable
+  reputation score or malformed anchor no longer fails the public lists, and an
+  unexpected failure on one anchor no longer aborts the reputation run.
+  Contained records are reported through a bounded, identifier-only
+  `evidence_integrity` log event.
 
 ## [Prior work] — 2026-09-25
 

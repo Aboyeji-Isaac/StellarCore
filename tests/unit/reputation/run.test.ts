@@ -65,3 +65,22 @@ test("explicit anchor slugs preserve the shared evaluation path without listing 
   assert.equal(listed, false);
   assert.deepEqual(result, { attempted: 1, succeeded: 1, failed: 0, failures: [] });
 });
+
+test("an unexpected throw on one anchor is contained and the rest are still evaluated", async () => {
+  const result = await evaluatePersistedAnchorReputations({
+    evaluatedAt: EVALUATED_AT,
+    dependencies: Object.freeze({
+      listAnchorSlugs: async () => ["a", "b", "c"],
+      evaluate: async (slug) => {
+        if (slug === "b") throw new Error("boom with row contents");
+        return Object.freeze({ ok: true as const, calculation: {} as never, persisted: null });
+      },
+    }),
+  });
+  assert.deepEqual(result, {
+    attempted: 3,
+    succeeded: 2,
+    failed: 1,
+    failures: [{ anchorSlug: "b", code: "EVALUATION_FAILURE" }],
+  });
+});

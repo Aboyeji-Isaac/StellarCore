@@ -33,7 +33,12 @@ export async function evaluateAnchorReputation(
   }
   if (!evidence) return failure(anchorSlug, "ANCHOR_NOT_FOUND");
 
-  const calculation = calculateReputation(evidence, evaluatedAt);
+  let calculation;
+  try {
+    calculation = calculateReputation(evidence, evaluatedAt);
+  } catch {
+    return failure(anchorSlug, "EVALUATION_FAILURE");
+  }
   if (options.persist === false) {
     return Object.freeze({ ok: true, calculation, persisted: null });
   }
