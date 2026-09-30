@@ -1,3 +1,5 @@
+import type { PublicApiErrorEnvelope } from "@/types/api/errors";
+
 export type PublicReputationState =
   | "not_evaluated"
   | "insufficient_evidence"
@@ -39,12 +41,12 @@ export type PublicReputationDetailResponse = Readonly<{
   reputation: PublicReputation;
 }>;
 
-export type ReputationApiErrorResponse = Readonly<{
-  error: Readonly<{
-    code: "invalid_anchor_slug" | "anchor_not_found" | "internal_error";
-    message: string;
-  }>;
-}>;
+export type ReputationApiErrorCode =
+  | "invalid_anchor_slug"
+  | "anchor_not_found"
+  | "internal_error";
+
+export type ReputationApiErrorResponse = PublicApiErrorEnvelope<ReputationApiErrorCode>;
 
 export type ReputationApiListResult =
   | Readonly<{ status: 200; body: PublicReputationListResponse }>

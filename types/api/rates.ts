@@ -1,3 +1,4 @@
+import type { PublicApiErrorEnvelope } from "@/types/api/errors";
 import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
 
 export type PublicRateObservation = Readonly<{
@@ -51,12 +52,7 @@ export type RatesApiErrorCode =
   | "corridor_not_found"
   | "internal_error";
 
-export type RatesApiErrorResponse = Readonly<{
-  error: Readonly<{
-    code: RatesApiErrorCode;
-    message: string;
-  }>;
-}>;
+export type RatesApiErrorResponse = PublicApiErrorEnvelope<RatesApiErrorCode>;
 
 export type RatesApiResult =
   | Readonly<{ status: 200; body: PublicRatesResponse }>

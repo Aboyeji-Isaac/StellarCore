@@ -1,4 +1,5 @@
 import type { PublicAnchorStatus } from "@/types/api/anchors";
+import type { PublicApiErrorEnvelope } from "@/types/api/errors";
 
 export type PublicCorridor = Readonly<{
   slug: string;
@@ -36,19 +37,9 @@ export type CorridorApiErrorCode =
   | "corridor_not_found"
   | "internal_error";
 
-export type CorridorsApiErrorResponse = Readonly<{
-  error: Readonly<{
-    code: "internal_error";
-    message: string;
-  }>;
-}>;
+export type CorridorsApiErrorResponse = PublicApiErrorEnvelope<"internal_error">;
 
-export type CorridorApiErrorResponse = Readonly<{
-  error: Readonly<{
-    code: CorridorApiErrorCode;
-    message: string;
-  }>;
-}>;
+export type CorridorApiErrorResponse = PublicApiErrorEnvelope<CorridorApiErrorCode>;
 
 export type CorridorsApiResult =
   | Readonly<{ status: 200; body: PublicCorridorsResponse }>

@@ -457,6 +457,47 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+### Error contract
+
+Every public API error uses one documented envelope:
+
+```json
+{
+  "error": {
+    "code": "corridor_not_found",
+    "message": "Corridor not found."
+  }
+}
+```
+
+The top level is exactly `error`; `error` contains exactly `code` and `message`.
+`code` is a stable, machine-readable string from one bounded registry shared by
+all public routes; `message` is a bounded, human-readable English string. Error
+responses never contain stack traces, database or ORM errors, raw upstream
+responses, secrets, JWTs, or internal endpoint details. Successful response
+payloads are not wrapped by this envelope and their shapes are unchanged.
+
+Each registered code maps to exactly one HTTP status class:
+
+| HTTP | Code | Meaning |
+|---|---|---|
+| 400 | `missing_corridor` | The `/api/rates` corridor query parameter is absent or empty. |
+| 400 | `invalid_corridor` | The `/api/rates` corridor slug is malformed or too long. |
+| 400 | `invalid_corridor_slug` | A corridor slug path segment is malformed. |
+| 400 | `invalid_anchor_slug` | An anchor slug path segment is malformed. |
+| 404 | `anchor_not_found` | No persisted anchor matches the valid slug. |
+| 404 | `corridor_not_found` | No persisted corridor matches the valid slug. |
+| 429 | `rate_limited` | Reserved class for throttling (rate limiting lands separately). |
+| 500 | `internal_error` | An unexpected internal failure was mapped to a bounded response. |
+| 503 | `upstream_unavailable` | Reserved class for unavailable evidence or upstream dependencies. |
+
+The `429` and `503` classes are defined by the contract now so clients can
+handle them without code changes once throttling and upstream health behavior
+land; no current public route emits them yet. Internal failures are logged
+server-side with their original error through a reporter seam before the
+bounded envelope is returned, so debuggability never depends on response
+bodies. All route-specific error codes below are members of this registry.
+
 ### `GET /api/anchors`
 
 Returns the public directory of anchors currently persisted by StellarCore,

@@ -1,3 +1,5 @@
+import type { PublicApiErrorEnvelope } from "@/types/api/errors";
+
 export type PublicAnchorStatus = "LIVE" | "DEGRADED" | "DOWN" | "UNKNOWN";
 
 export type PublicAnchorSummary = Readonly<{
@@ -42,12 +44,7 @@ export type AnchorsApiErrorCode =
   | "anchor_not_found"
   | "internal_error";
 
-export type AnchorsApiErrorResponse = Readonly<{
-  error: Readonly<{
-    code: AnchorsApiErrorCode;
-    message: string;
-  }>;
-}>;
+export type AnchorsApiErrorResponse = PublicApiErrorEnvelope<AnchorsApiErrorCode>;
 
 export type AnchorsApiResult =
   | Readonly<{ status: 200; body: PublicAnchorsResponse }>

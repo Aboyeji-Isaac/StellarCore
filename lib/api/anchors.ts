@@ -5,6 +5,11 @@ import {
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
 import { transferCapable } from "@/lib/stellar/anchors";
+import {
+  consolePublicApiErrorReporter,
+  publicApiErrorResult,
+  type PublicApiErrorReporter,
+} from "@/lib/api/errors";
 import type {
   AnchorApiResult,
   AnchorsApiResult,
@@ -19,6 +24,7 @@ const MAX_ANCHOR_SLUG_LENGTH = 100;
 
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -37,8 +43,9 @@ export async function getAnchorsApiResult(
       status: 200,
       body: serializeAnchors(await repository.findAll()),
     });
-  } catch {
-    return internalError();
+  } catch (error) {
+    reportError(dependencies, error, "anchors.list");
+    return publicApiErrorResult("internal_error", "Unable to load anchors.");
   }
 }
 
@@ -47,15 +54,10 @@ export async function getAnchorApiResult(
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorApiResult> {
   if (!isValidAnchorSlug(slug)) {
-    return Object.freeze({
-      status: 400,
-      body: Object.freeze({
-        error: Object.freeze({
-          code: "invalid_anchor_slug",
-          message: "A valid anchor slug is required.",
-        }),
-      }),
-    });
+    return publicApiErrorResult(
+      "invalid_anchor_slug",
+      "A valid anchor slug is required.",
+    );
   }
 
   try {
@@ -63,23 +65,16 @@ export async function getAnchorApiResult(
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
     const anchor = await repository.findBySlug(slug);
     if (!anchor) {
-      return Object.freeze({
-        status: 404,
-        body: Object.freeze({
-          error: Object.freeze({
-            code: "anchor_not_found",
-            message: "Anchor not found.",
-          }),
-        }),
-      });
+      return publicApiErrorResult("anchor_not_found", "Anchor not found.");
     }
 
     return Object.freeze({
       status: 200,
       body: Object.freeze({ anchor: serializeAnchorDetail(anchor) }),
     });
-  } catch {
-    return internalError();
+  } catch (error) {
+    reportError(dependencies, error, "anchors.detail");
+    return publicApiErrorResult("internal_error", "Unable to load anchors.");
   }
 }
 
@@ -133,19 +128,13 @@ function sortedSeps(seps: readonly number[]): readonly number[] {
   return Object.freeze([...seps].sort((left, right) => left - right));
 }
 
-function internalError(): Readonly<{
-  status: 500;
-  body: Readonly<{
-    error: Readonly<{ code: "internal_error"; message: string }>;
-  }>;
-}> {
-  return Object.freeze({
-    status: 500,
-    body: Object.freeze({
-      error: Object.freeze({
-        code: "internal_error",
-        message: "Unable to load anchors.",
-      }),
-    }),
+function reportError(
+  dependencies: AnchorsApiDependencies,
+  error: unknown,
+  operation: string,
+): void {
+  (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
+    operation,
+    code: "internal_error",
   });
 }

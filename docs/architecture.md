@@ -85,9 +85,12 @@ database is the boundary between maintenance engines and read consumers.
 
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal
-identifiers, and use no-store behavior where data is dynamic. The
-server-rendered `/dashboard` uses the same read models, so the UI and public
-API present the same persisted evidence and uncertainty semantics.
+identifiers, and use no-store behavior where data is dynamic. Failures use one
+shared public error envelope with a bounded registry of machine-readable codes
+(see the README API reference), built through a common helper; the original
+error is reported through a separate logging seam so response bodies stay
+safe. The server-rendered `/dashboard` uses the same read models, so the UI
+and public API present the same persisted evidence and uncertainty semantics.
 
 ## Scheduled refresh and operations
 

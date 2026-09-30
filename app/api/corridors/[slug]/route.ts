@@ -1,4 +1,5 @@
 import { getCorridorApiResult } from "@/lib/api/corridors";
+import { publicApiJsonResponse } from "@/lib/api/http";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,5 @@ export async function GET(
   const { slug } = await context.params;
   const result = await getCorridorApiResult(slug);
 
-  return Response.json(result.body, {
-    status: result.status,
-    headers: { "Cache-Control": "no-store" },
-  });
+  return publicApiJsonResponse(result);
 }
