@@ -402,6 +402,9 @@ npx tsc --noEmit
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 
+# Opt-in two-install dependency reproducibility proof for release builds
+npm run verify:install-reproducibility
+
 ```
 
 `snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
@@ -439,6 +442,16 @@ safe structured evidence and results.
 prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
+
+`verify:install-reproducibility` runs at least two isolated clean `npm ci`
+installs from one reviewed git ref in scrubbed temp sandboxes and proves the
+resulting dependency graphs, physical installs, and generated artifacts are
+identical and match the reviewed lockfile. Lockfile/package divergence fails
+verification, toolchain versions are recorded, nondeterministic noise is
+excluded by documented normalization only, and mismatches produce a bounded
+diff report in `.reports/install-reproducibility/`. See
+`docs/dependency-install-reproducibility.md`. It is opt-in and is not run by
+`npm test`, `npm run build`, or `postinstall`.
 
 ## Production deployment
 
