@@ -365,6 +365,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Hit a snag during setup? See [docs/troubleshooting.md](docs/troubleshooting.md) for verified workarounds.
+
 ### Running Sync Jobs Locally
 
 ```bash
