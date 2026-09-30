@@ -8,6 +8,16 @@ import type {
 
 type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
+/**
+ * Raw SQL boundary for reputation evidence reads.
+ *
+ * Safety notes:
+ * - The anchor Uuid is passed as a Prisma parameter (${anchor.id}), not interpolated
+ *   into the SQL text.
+ * - All table and column names are constant literals in this file. If a future performance
+ *   change needs a dynamic identifier, use `resolveRawIdentifier` from
+ *   `@/lib/db/rawSqlGuardrails`, which enforces the approved allowlist.
+ */
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
     const { db } = await import("@/lib/dbClient");
@@ -61,7 +71,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
           settlementMs: outcome.settlementMs,
           slippage: outcome.slippage,
           recordedAt: new Date(outcome.recordedAt.getTime()),
-        }))),
+        })),
     }) satisfies ReputationEvidence;
   },
 

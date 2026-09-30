@@ -79,3 +79,33 @@ knows published advisories (no zero-days, no malicious-package heuristics);
 gitleaks' entropy rules can miss short, low-entropy passwords — mitigated
 here by the manual credential-URL pass; history from squashed/rebased-away
 commits that were never pushed to this repository is not observable.
+
+## 3. Raw SQL boundary audit — Prisma `$queryRaw` / `$executeRaw`
+
+Companion audit to the dependency and secrets passes above, covering every
+raw-SQL boundary in the repository. Scope: `$queryRaw`, `$queryRawUnsafe`,
+`$executeRaw`, `$executeRawUnsafe`, `Prisma.sql`, `Prisma.raw`,
+`Prisma.join`, and `Prisma.raw`-style template helpers.
+
+### 3.1 Inventory of raw SQL call sites
+
+| Location | API | Purpose | Reviewed |
+| -------- | --- | ------- | -------- |
+| `lib/db/latest-observation.ts` | `Prisma.sql` + `$queryRaw` | Latest observation per asset via `DISTINCT ON` | ✅ parameterized |
+| `lib/db/latest-observation.ts` | `Prisma.sql` + `$queryRaw` | Latest observation filtered by asset slug | ✅ parameterized |
+| `lib/db/search.ts` | `Prisma.sql` + `$queryRaw` | Full-text/ILIKE search over observations | ✅ parameterized |
+| `lib/db/aggregates.ts` | `Prisma.sql` + `$queryRaw` | Time-bucketed aggregates for charts | ✅ parameterized |
+
+No call site in the repository currently uses `$queryRawUnsafe`,
+`$executeRawUnsafe`, `Prisma.raw`, or string-concatenated SQL. This is the
+baseline the guardrails below are designed to preserve.
+
+### 3.2 Approved parameterization patterns
+
+**Values (always parameterized).** Every user-controlled value — slugs,
+search terms, filter strings, pagination cursors, timestamps — must be
+passed through a `Prisma.sql` template placeholder (`${value}`), never
+concatenated into the SQL string. Prisma emits these as bound parameters
+on the wire, so injection payloads cannot alter query structure.
+
+
