@@ -65,3 +65,4 @@ rejected.
 StellarCore depends on trustworthy, verifiable information. Pull requests that
 fabricate data, bypass validation, or present unverified information as fact
 will not be merged, regardless of code quality.
+...
