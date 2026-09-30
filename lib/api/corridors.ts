@@ -5,7 +5,17 @@ import {
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
+import {
+  measureResponseBytes,
+  responseTooLargeError,
+  RESPONSE_BUDGETS,
+} from "@/lib/api/responseSizeEnforcer";
 import { transferCapable } from "@/lib/stellar/anchors";
+import {
+  decodeCursor,
+  paginate,
+  validatePaginationParams,
+} from "@/types/pagination";
 import type {
   CorridorApiResult,
   CorridorsApiResult,
@@ -33,14 +43,45 @@ export function isValidCorridorSlug(slug: string): boolean {
 }
 
 export async function getCorridorsApiResult(
+  limit: number | null = null,
+  after: string | null = null,
   dependencies: CorridorsApiDependencies = {},
 ): Promise<CorridorsApiResult> {
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
+
+    const allCorridors = await repository.findAll();
+    const pagination = validatePaginationParams(limit, after, 500);
+    const decodedCursor = pagination.after ? decodeCursor(pagination.after) : null;
+
+    if (pagination.after && !decodedCursor) {
+      return Object.freeze({
+        status: 400,
+        body: Object.freeze({
+          error: Object.freeze({
+            code: "invalid_pagination_cursor",
+            message: "The pagination cursor is invalid.",
+          }),
+        }),
+      });
+    }
+
+    const paginated = paginate(allCorridors, {
+      limit: pagination.limit,
+      after: decodedCursor,
+    });
+
+    const body = serializeCorridors(paginated.items, paginated.next, pagination.limit);
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.corridors.maxBytes) {
+      return responseTooLargeError() as CorridorsApiResult;
+    }
+
     return Object.freeze({
       status: 200,
-      body: serializeCorridors(await repository.findAll()),
+      body,
     });
   } catch {
     return Object.freeze({
@@ -76,9 +117,16 @@ export async function getCorridorApiResult(
       return errorResult(404, "corridor_not_found", "Corridor not found.");
     }
 
+    const body = Object.freeze({ corridor: serializeCorridorDetail(corridor) });
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.corridorDetail.maxBytes) {
+      return responseTooLargeError() as CorridorApiResult;
+    }
+
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ corridor: serializeCorridorDetail(corridor) }),
+      body,
     });
   } catch {
     return errorResult(500, "internal_error", "Unable to load corridor.");
@@ -87,6 +135,8 @@ export async function getCorridorApiResult(
 
 export function serializeCorridors(
   records: readonly CorridorDirectoryRecord[],
+  nextCursor: string | null = null,
+  limit: number = 100,
 ): PublicCorridorsResponse {
   const corridors = Object.freeze([...records]
     .sort((left, right) => left.slug.localeCompare(right.slug))
@@ -99,7 +149,12 @@ export function serializeCorridors(
       anchorCount: record.anchorCount,
     }) satisfies PublicCorridor));
 
-  return Object.freeze({ corridors, count: corridors.length });
+  return Object.freeze({
+    corridors,
+    count: corridors.length,
+    limit,
+    ...(nextCursor ? { next: nextCursor } : {}),
+  });
 }
 
 export function serializeCorridorDetail(

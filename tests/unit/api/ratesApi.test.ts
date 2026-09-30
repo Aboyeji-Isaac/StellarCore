@@ -35,7 +35,7 @@ test("route is request-dynamic and explicitly prevents freshness caching", async
 });
 
 test("service maps unknown corridors and read failures to safe errors", async () => {
-  const missing = await getRatesApiResult(CORRIDOR, {
+  const missing = await getRatesApiResult(CORRIDOR, null, null, {
     now: () => NOW,
     readLatestRate: async (slug) => ({
       ok: false,
@@ -46,7 +46,7 @@ test("service maps unknown corridors and read failures to safe errors", async ()
   assert.equal(missing.status, 404);
   assert.equal(missing.body.error.code, "corridor_not_found");
 
-  const failed = await getRatesApiResult(CORRIDOR, {
+  const failed = await getRatesApiResult(CORRIDOR, null, null, {
     now: () => NOW,
     readLatestRate: async () => {
       throw new Error("DATABASE_URL=secret stack trace");
@@ -61,7 +61,7 @@ test("service maps unknown corridors and read failures to safe errors", async ()
 
 test("one source is a successful insufficient response with string decimals", async () => {
   let usedEvaluationTime: Date | undefined;
-  const result = await getRatesApiResult(CORRIDOR, {
+  const result = await getRatesApiResult(CORRIDOR, null, null, {
     now: () => NOW,
     readLatestRate: async (_slug, { evaluatedAt }) => {
       usedEvaluationTime = evaluatedAt;
@@ -103,7 +103,7 @@ test("one source is a successful insufficient response with string decimals", as
 
 test("persisted corridor and anchor identity do not require static registry entries", async () => {
   const corridorSlug = "persisted-asset-aa-fiat-bb";
-  const result = await getRatesApiResult(corridorSlug, {
+  const result = await getRatesApiResult(corridorSlug, null, null, {
     now: () => NOW,
     readLatestRate: async () => readResult({
       corridor: Object.freeze({
@@ -150,7 +150,7 @@ test("persisted corridor and anchor identity do not require static registry entr
 });
 
 test("configured candidates without observations do not become persisted evidence", async () => {
-  const result = await getRatesApiResult(CORRIDOR, {
+  const result = await getRatesApiResult(CORRIDOR, null, null, {
     now: () => NOW,
     readLatestRate: async () => readResult({ observations: Object.freeze([]) }),
   });
@@ -187,7 +187,12 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
       observation("anchor-c", "9", "stale", 120_001, false, "stale"),
       observation("anchor-d", "8", "future", -1, false, "future_timestamp"),
     ],
-  }));
+  }), [
+    observation("zeam", "0.100000000000000001", "fresh", 1, true),
+    observation("anchor-b", "0.100000000000000002", "fresh", 2, true),
+    observation("anchor-c", "9", "stale", 120_001, false, "stale"),
+    observation("anchor-d", "8", "future", -1, false, "future_timestamp"),
+  ]);
 
   assert.equal(body.medianRate, "0.1000000000000000015");
   assert.equal(body.observations[2]?.freshness.state, "stale");
@@ -214,8 +219,10 @@ test("serializer exposes an exact healthy median and normalized exclusions", () 
   assert.equal(Object.isFrozen(body.medianRequirement), true);
   assert.deepEqual(Object.keys(body).sort(), [
     "corridor",
+    "count",
     "evaluatedAt",
     "freshSourceCount",
+    "limit",
     "medianRate",
     "medianRequirement",
     "observations",

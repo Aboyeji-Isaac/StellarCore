@@ -17,8 +17,8 @@ import type {
 const COMPUTED_AT = new Date("2026-08-31T13:54:34.979Z");
 
 test("empty anchor directory is a successful immutable reputation response", async () => {
-  const result = await getReputationApiResult({ repository: repository([]) });
-  assert.deepEqual(result, { status: 200, body: { reputation: [], count: 0 } });
+  const result = await getReputationApiResult(null, null, { repository: repository([]) });
+  assert.deepEqual(result, { status: 200, body: { reputation: [], count: 0, limit: 100 } });
   assert.equal(Object.isFrozen(result.body), true);
   if (result.status === 200) assert.equal(Object.isFrozen(result.body.reputation), true);
 });
@@ -125,7 +125,7 @@ test("detail validates slugs before repository access and distinguishes unknown 
 });
 
 test("repository failures are safe and routes are GET-only dynamic no-store handlers", async () => {
-  const list = await getReputationApiResult({
+  const list = await getReputationApiResult(null, null, {
     repository: repository([], null, new Error("DATABASE_URL=secret")),
   });
   const detail = await getAnchorReputationApiResult("zeam", {

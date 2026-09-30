@@ -29,7 +29,7 @@ test("persisted corridor rows and junction counts compose without rate history",
     ],
   };
 
-  const result = await getCorridorsApiResult({ repository });
+  const result = await getCorridorsApiResult(null, null, { repository });
 
   assert.equal(result.status, 200);
   if (result.status !== 200) return;

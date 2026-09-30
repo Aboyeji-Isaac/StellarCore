@@ -4,6 +4,16 @@ import {
   type ReputationApiAnchorRecord,
   type ReputationApiRepository,
 } from "@/lib/api/reputationRepository";
+import {
+  measureResponseBytes,
+  responseTooLargeError,
+  RESPONSE_BUDGETS,
+} from "@/lib/api/responseSizeEnforcer";
+import {
+  decodeCursor,
+  paginate,
+  validatePaginationParams,
+} from "@/types/pagination";
 import type {
   PublicReputation,
   PublicReputationListResponse,
@@ -19,11 +29,37 @@ export type ReputationApiDependencies = Readonly<{
 }>;
 
 export async function getReputationApiResult(
+  limit: number | null = null,
+  after: string | null = null,
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiListResult> {
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    return Object.freeze({ status: 200, body: serializeReputationList(await repository.findAll()) });
+
+    const allRecords = await repository.findAll();
+    const pagination = validatePaginationParams(limit, after, 500);
+    const decodedCursor = pagination.after ? decodeCursor(pagination.after) : null;
+
+    if (pagination.after && !decodedCursor) {
+      return Object.freeze({
+        status: 400,
+        body: errorBody("invalid_pagination_cursor", "The pagination cursor is invalid."),
+      });
+    }
+
+    const paginated = paginate(allRecords, {
+      limit: pagination.limit,
+      after: decodedCursor,
+    });
+
+    const body = serializeReputationList(paginated.items, paginated.next, pagination.limit);
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.reputation.maxBytes) {
+      return responseTooLargeError() as ReputationApiListResult;
+    }
+
+    return Object.freeze({ status: 200, body });
   } catch {
     return listInternalError();
   }
@@ -49,9 +85,17 @@ export async function getAnchorReputationApiResult(
         body: errorBody("anchor_not_found", "Anchor not found."),
       });
     }
+
+    const body = Object.freeze({ reputation: serializeReputation(record) });
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.reputationDetail.maxBytes) {
+      return responseTooLargeError() as ReputationApiDetailResult;
+    }
+
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ reputation: serializeReputation(record) }),
+      body,
     });
   } catch {
     return detailInternalError();
@@ -60,11 +104,18 @@ export async function getAnchorReputationApiResult(
 
 export function serializeReputationList(
   records: readonly ReputationApiAnchorRecord[],
+  nextCursor: string | null = null,
+  limit: number = 100,
 ): PublicReputationListResponse {
   const reputation = Object.freeze([...records]
     .sort((left, right) => left.slug.localeCompare(right.slug))
     .map(serializeReputation));
-  return Object.freeze({ reputation, count: reputation.length });
+  return Object.freeze({
+    reputation,
+    count: reputation.length,
+    limit,
+    ...(nextCursor ? { next: nextCursor } : {}),
+  });
 }
 
 export function serializeReputation(record: ReputationApiAnchorRecord): PublicReputation {

@@ -20,7 +20,7 @@ test("controlled persisted current rows are exposed without scoring evidence rea
     },
   };
 
-  const list = await getReputationApiResult({ repository });
+  const list = await getReputationApiResult(null, null, { repository });
   const detail = await getAnchorReputationApiResult("established", { repository });
   const empty = await getAnchorReputationApiResult("unevaluated", { repository });
 

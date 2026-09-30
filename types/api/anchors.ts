@@ -31,6 +31,8 @@ export type PublicAnchorDetail = Readonly<{
 export type PublicAnchorsResponse = Readonly<{
   anchors: readonly PublicAnchorSummary[];
   count: number;
+  limit: number;
+  next?: string;
 }>;
 
 export type PublicAnchorResponse = Readonly<{
@@ -39,7 +41,9 @@ export type PublicAnchorResponse = Readonly<{
 
 export type AnchorsApiErrorCode =
   | "invalid_anchor_slug"
+  | "invalid_pagination_cursor"
   | "anchor_not_found"
+  | "response_too_large"
   | "internal_error";
 
 export type AnchorsApiErrorResponse = Readonly<{
@@ -51,8 +55,9 @@ export type AnchorsApiErrorResponse = Readonly<{
 
 export type AnchorsApiResult =
   | Readonly<{ status: 200; body: PublicAnchorsResponse }>
+  | Readonly<{ status: 400 | 413; body: AnchorsApiErrorResponse }>
   | Readonly<{ status: 500; body: AnchorsApiErrorResponse }>;
 
 export type AnchorApiResult =
   | Readonly<{ status: 200; body: PublicAnchorResponse }>
-  | Readonly<{ status: 400 | 404 | 500; body: AnchorsApiErrorResponse }>;
+  | Readonly<{ status: 400 | 404 | 413 | 500; body: AnchorsApiErrorResponse }>;

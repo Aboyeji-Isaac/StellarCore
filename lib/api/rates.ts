@@ -1,6 +1,16 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
+import {
+  measureResponseBytes,
+  responseTooLargeError,
+  RESPONSE_BUDGETS,
+} from "@/lib/api/responseSizeEnforcer";
+import {
+  decodeCursor,
+  paginate,
+  validatePaginationParams,
+} from "@/types/pagination";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
 import type {
   PublicRateObservation,
@@ -22,6 +32,8 @@ export type RatesApiDependencies = Readonly<{
 
 export async function getRatesApiResult(
   corridorParameter: string | null,
+  limit: number | null = null,
+  after: string | null = null,
   dependencies: RatesApiDependencies = {},
 ): Promise<RatesApiResult> {
   const validation = validateCorridorParameter(corridorParameter);
@@ -44,15 +56,66 @@ export async function getRatesApiResult(
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 
+  // Paginate observations by anchor slug (map observations to have slug field for pagination)
+  const observationsForPagination = result.observations.map((obs) => ({
+    ...obs,
+    slug: obs.anchorSlug,
+  }));
+
+  const pagination = validatePaginationParams(limit, after, 500);
+  const decodedCursor = pagination.after ? decodeCursor(pagination.after) : null;
+
+  if (pagination.after && !decodedCursor) {
+    return errorResult(400, "invalid_pagination_cursor", "The pagination cursor is invalid.");
+  }
+
+  const paginated = paginate(observationsForPagination, {
+    limit: pagination.limit,
+    after: decodedCursor,
+  });
+
+  // Extract just the original observations in paginated order
+  const paginatedObservations = paginated.items.map(({ snapshotId, anchorSlug, anchorName, rate, sourceAmount, destinationAmount, fee, capturedAt, freshnessState, ageMs, included, exclusionReason }) => ({
+    snapshotId,
+    anchorSlug,
+    anchorName,
+    rate,
+    sourceAmount,
+    destinationAmount,
+    fee,
+    capturedAt,
+    freshnessState,
+    ageMs,
+    included,
+    ...(exclusionReason ? { exclusionReason } : {}),
+  }));
+
   try {
-    return Object.freeze({ status: 200, body: serializeRates(result) });
+    const body = serializeRates(
+      result,
+      paginatedObservations,
+      paginated.next,
+      pagination.limit,
+    );
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.rates.maxBytes) {
+      return responseTooLargeError();
+    }
+
+    return Object.freeze({ status: 200, body });
   } catch {
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 }
 
-export function serializeRates(result: LatestCorridorRate): PublicRatesResponse {
-  const observations = Object.freeze(result.observations.map((observation) => {
+export function serializeRates(
+  result: LatestCorridorRate,
+  paginatedObservations: readonly (typeof result.observations)[number][],
+  nextCursor: string | null = null,
+  limit: number = 100,
+): PublicRatesResponse {
+  const observations = Object.freeze(paginatedObservations.map((observation) => {
     const serialized = Object.freeze({
       anchor: Object.freeze({
         slug: observation.anchorSlug,
@@ -96,6 +159,9 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
       minimumFreshIndependentSources: MIN_FRESH_SOURCES,
     }),
     observations,
+    count: paginatedObservations.length,
+    limit,
+    ...(nextCursor ? { next: nextCursor } : {}),
   });
 }
 

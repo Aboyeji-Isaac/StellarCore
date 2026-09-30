@@ -16,11 +16,11 @@ import type {
 } from "@/lib/api/corridorRepository";
 
 test("empty persisted directory is a successful immutable response", async () => {
-  const result = await getCorridorsApiResult({
+  const result = await getCorridorsApiResult(null, null, {
     repository: { findAll: async () => [] },
   });
 
-  assert.deepEqual(result, { status: 200, body: { corridors: [], count: 0 } });
+  assert.deepEqual(result, { status: 200, body: { corridors: [], count: 0, limit: 100 } });
   assert.equal(Object.isFrozen(result.body), true);
   if (result.status === 200) assert.equal(Object.isFrozen(result.body.corridors), true);
 });
@@ -38,6 +38,7 @@ test("one corridor serializes its association count without internal ids", () =>
       anchorCount: 2,
     }],
     count: 1,
+    limit: 100,
   });
   assert.equal("id" in body.corridors[0]!, false);
   assert.doesNotThrow(() => JSON.stringify(body));

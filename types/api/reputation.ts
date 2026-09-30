@@ -33,6 +33,8 @@ export type PublicReputation = Readonly<{
 export type PublicReputationListResponse = Readonly<{
   reputation: readonly PublicReputation[];
   count: number;
+  limit: number;
+  next?: string;
 }>;
 
 export type PublicReputationDetailResponse = Readonly<{
@@ -41,15 +43,16 @@ export type PublicReputationDetailResponse = Readonly<{
 
 export type ReputationApiErrorResponse = Readonly<{
   error: Readonly<{
-    code: "invalid_anchor_slug" | "anchor_not_found" | "internal_error";
+    code: "invalid_anchor_slug" | "invalid_pagination_cursor" | "anchor_not_found" | "response_too_large" | "internal_error";
     message: string;
   }>;
 }>;
 
 export type ReputationApiListResult =
   | Readonly<{ status: 200; body: PublicReputationListResponse }>
+  | Readonly<{ status: 400 | 413; body: ReputationApiErrorResponse }>
   | Readonly<{ status: 500; body: ReputationApiErrorResponse }>;
 
 export type ReputationApiDetailResult =
   | Readonly<{ status: 200; body: PublicReputationDetailResponse }>
-  | Readonly<{ status: 400 | 404 | 500; body: ReputationApiErrorResponse }>;
+  | Readonly<{ status: 400 | 404 | 413 | 500; body: ReputationApiErrorResponse }>;

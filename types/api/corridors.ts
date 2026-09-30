@@ -25,6 +25,8 @@ export type PublicCorridorDetail = PublicCorridor & Readonly<{
 export type PublicCorridorsResponse = Readonly<{
   corridors: readonly PublicCorridor[];
   count: number;
+  limit: number;
+  next?: string;
 }>;
 
 export type PublicCorridorResponse = Readonly<{
@@ -33,12 +35,14 @@ export type PublicCorridorResponse = Readonly<{
 
 export type CorridorApiErrorCode =
   | "invalid_corridor_slug"
+  | "invalid_pagination_cursor"
   | "corridor_not_found"
+  | "response_too_large"
   | "internal_error";
 
 export type CorridorsApiErrorResponse = Readonly<{
   error: Readonly<{
-    code: "internal_error";
+    code: "invalid_pagination_cursor" | "response_too_large" | "internal_error";
     message: string;
   }>;
 }>;
@@ -52,8 +56,9 @@ export type CorridorApiErrorResponse = Readonly<{
 
 export type CorridorsApiResult =
   | Readonly<{ status: 200; body: PublicCorridorsResponse }>
+  | Readonly<{ status: 400 | 413; body: CorridorsApiErrorResponse }>
   | Readonly<{ status: 500; body: CorridorsApiErrorResponse }>;
 
 export type CorridorApiResult =
   | Readonly<{ status: 200; body: PublicCorridorResponse }>
-  | Readonly<{ status: 400 | 404 | 500; body: CorridorApiErrorResponse }>;
+  | Readonly<{ status: 400 | 404 | 413 | 500; body: CorridorApiErrorResponse }>;

@@ -42,7 +42,7 @@ test("persisted anchors and AnchorCorridor relations are read from the database 
       data: { anchorId: anchor.id, corridorId: corridor.id },
     });
 
-    const list = await getAnchorsApiResult();
+    const list = await getAnchorsApiResult(null, null);
     const detail = await getAnchorApiResult(anchorSlug);
     const registryOnly = await getAnchorApiResult(registryOnlySlug);
 

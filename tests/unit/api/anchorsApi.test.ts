@@ -16,9 +16,9 @@ import type {
 } from "@/lib/api/anchorRepository";
 
 test("empty persisted directory is a successful immutable response", async () => {
-  const result = await getAnchorsApiResult({ repository: repository([]) });
+  const result = await getAnchorsApiResult(null, null, { repository: repository([]) });
 
-  assert.deepEqual(result, { status: 200, body: { anchors: [], count: 0 } });
+  assert.deepEqual(result, { status: 200, body: { anchors: [], count: 0, limit: 100 } });
   assert.equal(Object.isFrozen(result.body), true);
   if (result.status === 200) assert.equal(Object.isFrozen(result.body.anchors), true);
 });
@@ -37,6 +37,7 @@ test("one anchor serializes sorted SEPs and corridor count without UUIDs", () =>
       corridorCount: 1,
     }],
     count: 1,
+    limit: 100,
   });
   assert.equal("id" in body.anchors[0]!, false);
   assert.doesNotThrow(() => JSON.stringify(body));

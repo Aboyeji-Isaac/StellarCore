@@ -30,7 +30,7 @@ test("API composition preserves latest-per-anchor selection and exact median off
     findLatestObservations: async () => history,
   };
 
-  const result = await getRatesApiResult(CORRIDOR, {
+  const result = await getRatesApiResult(CORRIDOR, null, null, {
     now: () => NOW,
     readLatestRate: (slug, { evaluatedAt }) =>
       readLatestCorridorRate(slug, { repository, evaluatedAt }),
@@ -76,7 +76,7 @@ test("persisted non-registry identity serializes independently from reviewed con
     ],
   };
 
-  const result = await getRatesApiResult(corridorSlug, {
+  const result = await getRatesApiResult(corridorSlug, null, null, {
     now: () => NOW,
     readLatestRate: (slug, { evaluatedAt }) =>
       readLatestCorridorRate(slug, { repository, evaluatedAt }),

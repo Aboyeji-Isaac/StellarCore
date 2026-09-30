@@ -37,7 +37,7 @@ test("persisted anchor records and junctions compose without registry or history
     },
   };
 
-  const list = await getAnchorsApiResult({ repository });
+  const list = await getAnchorsApiResult(null, null, { repository });
   const detail = await getAnchorApiResult("persisted-anchor", { repository });
   const registryOnly = await getAnchorApiResult("registry-only", { repository });
 

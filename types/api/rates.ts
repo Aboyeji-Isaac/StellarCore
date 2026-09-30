@@ -43,12 +43,17 @@ export type PublicRatesResponse = Readonly<{
   reviewedCandidateConfiguration: PublicReviewedCandidateConfiguration;
   medianRequirement: PublicMedianRequirement;
   observations: readonly PublicRateObservation[];
+  count: number;
+  limit: number;
+  next?: string;
 }>;
 
 export type RatesApiErrorCode =
   | "missing_corridor"
   | "invalid_corridor"
+  | "invalid_pagination_cursor"
   | "corridor_not_found"
+  | "response_too_large"
   | "internal_error";
 
 export type RatesApiErrorResponse = Readonly<{
@@ -60,4 +65,4 @@ export type RatesApiErrorResponse = Readonly<{
 
 export type RatesApiResult =
   | Readonly<{ status: 200; body: PublicRatesResponse }>
-  | Readonly<{ status: 400 | 404 | 500; body: RatesApiErrorResponse }>;
+  | Readonly<{ status: 400 | 413 | 404 | 500; body: RatesApiErrorResponse }>;

@@ -4,7 +4,17 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
+import {
+  measureResponseBytes,
+  responseTooLargeError,
+  RESPONSE_BUDGETS,
+} from "@/lib/api/responseSizeEnforcer";
 import { transferCapable } from "@/lib/stellar/anchors";
+import {
+  decodeCursor,
+  paginate,
+  validatePaginationParams,
+} from "@/types/pagination";
 import type {
   AnchorApiResult,
   AnchorsApiResult,
@@ -28,14 +38,45 @@ export function isValidAnchorSlug(slug: string): boolean {
 }
 
 export async function getAnchorsApiResult(
+  limit: number | null = null,
+  after: string | null = null,
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorsApiResult> {
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
+
+    const allAnchors = await repository.findAll();
+    const pagination = validatePaginationParams(limit, after, 500);
+    const decodedCursor = pagination.after ? decodeCursor(pagination.after) : null;
+
+    if (pagination.after && !decodedCursor) {
+      return Object.freeze({
+        status: 400,
+        body: Object.freeze({
+          error: Object.freeze({
+            code: "invalid_pagination_cursor",
+            message: "The pagination cursor is invalid.",
+          }),
+        }),
+      });
+    }
+
+    const paginated = paginate(allAnchors, {
+      limit: pagination.limit,
+      after: decodedCursor,
+    });
+
+    const body = serializeAnchors(paginated.items, paginated.next, pagination.limit);
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.anchors.maxBytes) {
+      return responseTooLargeError() as AnchorsApiResult;
+    }
+
     return Object.freeze({
       status: 200,
-      body: serializeAnchors(await repository.findAll()),
+      body,
     });
   } catch {
     return internalError();
@@ -74,9 +115,16 @@ export async function getAnchorApiResult(
       });
     }
 
+    const body = Object.freeze({ anchor: serializeAnchorDetail(anchor) });
+    const responseBytes = measureResponseBytes(body);
+
+    if (responseBytes > RESPONSE_BUDGETS.anchorDetail.maxBytes) {
+      return responseTooLargeError() as AnchorApiResult;
+    }
+
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ anchor: serializeAnchorDetail(anchor) }),
+      body,
     });
   } catch {
     return internalError();
@@ -85,6 +133,8 @@ export async function getAnchorApiResult(
 
 export function serializeAnchors(
   records: readonly AnchorDirectoryRecord[],
+  nextCursor: string | null = null,
+  limit: number = 100,
 ): PublicAnchorsResponse {
   const anchors = Object.freeze([...records]
     .sort((left, right) => left.slug.localeCompare(right.slug))
@@ -101,7 +151,12 @@ export function serializeAnchors(
       }) satisfies PublicAnchorSummary;
     }));
 
-  return Object.freeze({ anchors, count: anchors.length });
+  return Object.freeze({
+    anchors,
+    count: anchors.length,
+    limit,
+    ...(nextCursor ? { next: nextCursor } : {}),
+  });
 }
 
 export function serializeAnchorDetail(
