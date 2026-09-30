@@ -108,7 +108,11 @@ export async function requestSep10Token(
     normalized.webAuthEndpoint,
   );
 
-  validateSep10Challenge(challenge.transaction, normalized);
+  // Identity of the exact challenge the server issued for this exchange.
+  const originalChallengeHash = validateSep10Challenge(
+    challenge.transaction,
+    normalized,
+  );
 
   let signedTransaction: string;
   try {
@@ -129,7 +133,7 @@ export async function requestSep10Token(
     throw signingFailure(normalized.webAuthEndpoint);
   }
 
-  validateSignedChallenge(signedTransaction, normalized);
+  validateSignedChallenge(signedTransaction, normalized, originalChallengeHash);
 
   const tokenResponse = await requestJson(
     normalized.webAuthEndpoint,
@@ -149,7 +153,11 @@ export async function requestSep10Token(
       homeDomain: normalized.homeDomain,
       expectedSubject: expectedSubject(normalized),
     },
-    { now: dependencies.now?.() },
+    {
+      now: dependencies.now?.(),
+      // Claim parsing only; this is not JWT signature verification.
+      expectedClientDomain: normalized.clientDomain,
+    },
   );
 }
 
@@ -266,7 +274,7 @@ function normalizeConfig(config: Sep10AuthConfig): Sep10AuthConfig {
 function validateSep10Challenge(
   transaction: string,
   config: Sep10AuthConfig,
-): void {
+): string {
   try {
     const webAuthDomain = new URL(config.webAuthEndpoint).hostname;
     const parsed = WebAuth.readChallengeTx(
@@ -286,6 +294,13 @@ function validateSep10Challenge(
     ) {
       throw new Error("challenge identity mismatch");
     }
+
+    // SDK transaction hash: covers the transaction body under the configured
+    // network passphrase and excludes signatures, so added signatures are fine.
+    const hash: unknown = parsed.tx.hash();
+    return typeof hash === "string"
+      ? hash
+      : Buffer.from(hash as Uint8Array).toString("hex");
   } catch {
     throw invalidChallenge(config.webAuthEndpoint);
   }
@@ -336,6 +351,7 @@ function matchesClientDomainOperation(
 function validateSignedChallenge(
   transaction: string,
   config: Sep10AuthConfig,
+  originalChallengeHash: string,
 ): void {
   try {
     requireSafeString(
@@ -344,7 +360,10 @@ function validateSignedChallenge(
       "SIGNING_FAILURE",
       MAX_XDR_BYTES,
     );
-    validateSep10Challenge(transaction, config);
+    const signedHash = validateSep10Challenge(transaction, config);
+    if (signedHash !== originalChallengeHash) {
+      throw new Error("signed challenge body differs from original");
+    }
   } catch {
     throw signingFailure(config.webAuthEndpoint);
   }
