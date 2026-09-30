@@ -50,6 +50,51 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   assert.equal(result, expected);
 });
 
+test("anomaly assessment runs after persistence for each corridor that received snapshots", async () => {
+  const events: string[] = [];
+  const anomalyAssessment = Object.freeze({
+    corridorsAssessed: 1,
+    assessmentsAppended: 2,
+    quarantined: Object.freeze([]),
+    failures: Object.freeze([]),
+  });
+  const result = await snapshotReviewedLiveRates({
+    assertConfiguration: () => undefined,
+    buildCandidates: async () => [],
+    executeCandidates: async () => {
+      events.push("execute");
+      return Object.freeze({
+        ...summary(),
+        snapshots: Object.freeze([
+          { id: "s1", anchorSlug: "a", corridorSlug: "usdc-us-brl-br", rate: "1", capturedAt: "2026-09-30T00:00:00.000Z" },
+        ]),
+      });
+    },
+    assessAnomalies: async (corridorSlugs) => {
+      events.push(`assess:${corridorSlugs.join(",")}`);
+      return anomalyAssessment;
+    },
+  });
+
+  assert.deepEqual(events, ["execute", "assess:usdc-us-brl-br"]);
+  assert.equal(result.anomalyAssessment, anomalyAssessment);
+});
+
+test("anomaly assessment is skipped when no snapshot was persisted", async () => {
+  let assessed = false;
+  const result = await snapshotReviewedLiveRates({
+    assertConfiguration: () => undefined,
+    buildCandidates: async () => [],
+    executeCandidates: async () => summary(),
+    assessAnomalies: async () => {
+      assessed = true;
+      throw new Error("must not run");
+    },
+  });
+  assert.equal(assessed, false);
+  assert.equal(result.anomalyAssessment, undefined);
+});
+
 function summary(): SafeLiveRateRunSummary {
   return Object.freeze({
     totalCandidates: 0,

@@ -120,6 +120,29 @@ test("sequential duplicate invocations remain independent without duplicate work
   assert.equal(reputationRuns, 2);
 });
 
+test("anomaly quarantine diagnostics reach the internal refresh summary", async () => {
+  const anomalyAssessment = Object.freeze({
+    corridorsAssessed: 1,
+    assessmentsAppended: 1,
+    quarantined: Object.freeze([Object.freeze({
+      snapshotId: "snapshot-x",
+      anchorSlug: "outlier",
+      corridorSlug: "usdc-us-brl-br",
+      status: "quarantined" as const,
+      reason: "deviates_from_peer_consensus" as const,
+      baselineRate: "5.4",
+      independentPeerCount: 3,
+      agreeingPeerCount: 3,
+      toleranceBps: 2_000,
+    })]),
+    failures: Object.freeze([]),
+  });
+  const result = await runScheduledRefresh(dependencies({
+    snapshotRates: async () => rateSummary({ anomalyAssessment }),
+  }));
+  assert.deepEqual(result.rates.anomalyAssessment, anomalyAssessment);
+});
+
 function dependencies(overrides: Partial<ScheduledRefreshDependencies>): ScheduledRefreshDependencies {
   let clockCalls = 0;
   return Object.freeze({

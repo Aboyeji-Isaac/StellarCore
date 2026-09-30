@@ -57,7 +57,12 @@ evidence.
 
 The latest-rate read model selects the newest snapshot per anchor/corridor
 source, evaluates freshness at read time, and calculates a median only from
-the required number of fresh independent sources. Freshness is inclusive at
+the required number of fresh independent sources. Before the median, a
+deterministic cross-source anomaly layer quarantines observations that
+contradict a consensus of at least two contemporaneous independent peers.
+Quarantined snapshots stay persisted and visible, but are excluded from the
+median and its source threshold. Verdicts are appended, never rewritten, to
+`rate_anomaly_assessments`. Freshness is inclusive at
 the configured threshold; future or invalid timestamps are excluded. The
 public rates API exposes the bounded result and its freshness state without
 performing a live upstream request.

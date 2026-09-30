@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Cross-source anomaly quarantine for rate observations: structurally valid but extreme quotes that contradict agreeing independent peers are kept as evidence, recorded in an append-only assessment history, and excluded from corridor medians and their source threshold (#186).
 - Public API rate limiting, current API reference, reputation methodology documentation, and reputation property tests (#22, #24, #25, #26).
 - Anchor detail UI, median property tests, transfer-outcome webhook schema RFC, and SEP-38 USDC→BRL source research (#5, #7, #18, #21).
 - Public API reference and reputation methodology docs, verified public-route rate limiting, and reputation property coverage recovered from PR #83 (#22, #24, #25, #26).

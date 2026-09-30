@@ -179,3 +179,23 @@ export type RateAnomalyAssessment = Readonly<{
   agreeingPeerCount: number;
   peerObservationIds: readonly string[];
 }>;
+
+/** Safe internal diagnostic for one quarantined observation. No payloads. */
+export type RateAnomalyDiagnostic = Readonly<{
+  snapshotId: string;
+  anchorSlug: string;
+  corridorSlug: string;
+  status: RateAnomalyStatus;
+  reason: RateAnomalyReason | null;
+  baselineRate: string | null;
+  independentPeerCount: number;
+  agreeingPeerCount: number;
+  toleranceBps: number;
+}>;
+
+export type CorridorAnomalyAssessmentSummary = Readonly<{
+  corridorsAssessed: number;
+  assessmentsAppended: number;
+  quarantined: readonly RateAnomalyDiagnostic[];
+  failures: readonly Readonly<{ corridorSlug: string; code: "ANOMALY_ASSESSMENT_FAILURE" }>[];
+}>;

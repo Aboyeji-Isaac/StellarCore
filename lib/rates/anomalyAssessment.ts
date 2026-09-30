@@ -2,32 +2,19 @@ import { assessRateAnomalies } from "@/lib/rates/anomaly";
 import { selectLatestPerAnchor } from "@/lib/rates/latestRateReadModel";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
 import type { LatestRateRepository } from "@/types/latestRates";
-import type { RateAnomalyAssessment, RateAnomalyReason, RateAnomalyStatus } from "@/types/rates";
+import type {
+  CorridorAnomalyAssessmentSummary,
+  RateAnomalyAssessment,
+  RateAnomalyDiagnostic,
+  RateAnomalyStatus,
+} from "@/types/rates";
+
+export type { CorridorAnomalyAssessmentSummary } from "@/types/rates";
 
 export type RateAnomalyAssessmentRepository = Readonly<{
   appendAssessments: (
     rows: readonly Readonly<RateAnomalyAssessment & { assessedAt: Date }>[],
   ) => Promise<void>;
-}>;
-
-/** Safe internal diagnostic for one quarantined observation. No payloads. */
-export type RateAnomalyDiagnostic = Readonly<{
-  snapshotId: string;
-  anchorSlug: string;
-  corridorSlug: string;
-  status: RateAnomalyStatus;
-  reason: RateAnomalyReason | null;
-  baselineRate: string | null;
-  independentPeerCount: number;
-  agreeingPeerCount: number;
-  toleranceBps: number;
-}>;
-
-export type CorridorAnomalyAssessmentSummary = Readonly<{
-  corridorsAssessed: number;
-  assessmentsAppended: number;
-  quarantined: readonly RateAnomalyDiagnostic[];
-  failures: readonly Readonly<{ corridorSlug: string; code: "ANOMALY_ASSESSMENT_FAILURE" }>[];
 }>;
 
 /**

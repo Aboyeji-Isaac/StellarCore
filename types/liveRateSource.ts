@@ -1,5 +1,8 @@
-import type { CorridorAnomalyAssessmentSummary } from "@/lib/rates/anomalyAssessment";
-import type { RateCandidate, RateEngineResult } from "@/types/rates";
+import type {
+  CorridorAnomalyAssessmentSummary,
+  RateCandidate,
+  RateEngineResult,
+} from "@/types/rates";
 import type { Sep38AssetIdentifier } from "@/types/sep38";
 
 export type ReviewedLiveRateSource = Readonly<{

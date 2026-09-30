@@ -154,6 +154,19 @@ Sorted median:   1612
 
 `MIN_FRESH_SOURCES=2` is an architectural invariant. With fewer than two fresh independent sources, the API returns `insufficient_fresh_sources` and a null median. The current single reviewed Zeam source therefore remains insufficient even when fresh.
 
+#### Cross-source anomaly quarantine
+
+Before the median, each latest observation is checked against its contemporaneous independent peers (`lib/rates/anomaly.ts`, criterion `peer-median-ratio-v1`). The peers are the latest valid observation from every *other* anchor captured within the 120 s freshness window of it. An observation never contributes to its own baseline, and several rows from one anchor count as one peer.
+
+| Evidence | Verdict | Median eligibility |
+|---|---|---|
+| Fewer than 2 independent contemporaneous peers | `insufficient_peers` (`fewer_than_minimum_independent_peers`) | Unchanged; normal rules apply |
+| Peers do not agree within tolerance of their own median | `insufficient_peers` (`no_peer_consensus`) | Unchanged |
+| At least 2 peers agree, and `max(rate, baseline) / min(rate, baseline)` is at most 1.20 | `consistent` | Unchanged |
+| At least 2 peers agree, and the ratio exceeds 1.20 | `quarantined` (`deviates_from_peer_consensus`) | Excluded; never counts toward `MIN_FRESH_SOURCES` |
+
+Quarantined snapshots are never modified or deleted. They stay in the API response with `eligibleForMedian: false` and `exclusionReason: "quarantined"`. After each snapshot run, verdicts are appended to `rate_anomaly_assessments` only when the verdict changes. Each row records the baseline, tolerance, window, and peer snapshot ids used. The newest row is the current verdict, and older rows stay as history, so a recovery never erases an earlier quarantine. The internal cron summary reports quarantines under `rates.anomalyAssessment`. With exactly two sources, neither has enough peers, so the layer deliberately issues no verdict.
+
 ### 3. Reputation Scoring
 
 StellarCore's first reputation engine uses only evidence already persisted by
@@ -483,6 +496,10 @@ SEP support — that is discovered from each anchor's `stellar.toml` during
 snapshot per independent anchor, evaluates freshness at read time, computes the
 exact median when enough sources exist, and verifies the snapshot count is
 unchanged. It performs no SEP-38 request or database write.
+
+The anomaly quarantine database test is opt-in and needs a disposable,
+migrated database: `RUN_RATE_ANOMALY_DATABASE_INTEGRATION=1 npx tsx --test
+tests/integration/rates/anomalyQuarantine.database.integration.test.ts`.
 
 `verify:reputation` is a local-database-only calculation for Cowrie,
 MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network

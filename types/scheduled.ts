@@ -1,5 +1,7 @@
-import type { CorridorAnomalyAssessmentSummary } from "@/lib/rates/anomalyAssessment";
-import type { RateEngineFailure } from "@/types/rates";
+import type {
+  CorridorAnomalyAssessmentSummary,
+  RateEngineFailure,
+} from "@/types/rates";
 
 export type ScheduledRateFailure = RateEngineFailure | Readonly<{
   phase: "PREPARATION";
