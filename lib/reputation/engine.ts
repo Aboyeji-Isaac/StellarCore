@@ -4,6 +4,7 @@ import { calculateReputation } from "@/lib/reputation/score";
 import type {
   ReputationEvaluationResult,
   ReputationRepository,
+  ReputationUpsertResult,
 } from "@/types/reputation";
 
 const DAYS_TO_MS = 24 * 60 * 60 * 1_000;
@@ -38,15 +39,22 @@ export async function evaluateAnchorReputation(
     return Object.freeze({ ok: true, calculation, persisted: null });
   }
 
+  let upsertResult: ReputationUpsertResult;
   try {
-    const persisted = await repository.upsertScore({
+    upsertResult = await repository.upsertScore({
       anchorId: evidence.anchorId,
       calculation,
     });
-    return Object.freeze({ ok: true, calculation, persisted });
   } catch {
     return failure(anchorSlug, "PERSISTENCE_FAILURE");
   }
+
+  if (!upsertResult.ok) {
+    // Stale write - evaluation was valid but not persisted because a newer score exists
+    return Object.freeze({ ok: true, calculation, persisted: null });
+  }
+
+  return Object.freeze({ ok: true, calculation, persisted: upsertResult.score });
 }
 
 function failure(

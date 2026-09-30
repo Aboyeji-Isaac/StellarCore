@@ -67,6 +67,10 @@ export type PersistedReputationScore = Readonly<{
   computedAt: Date;
 }>;
 
+export type ReputationUpsertResult =
+  | Readonly<{ ok: true; score: PersistedReputationScore }>
+  | Readonly<{ ok: false; code: "STALE_WRITE"; existingComputedAt: Date }>;
+
 export type ReputationPersistenceInput = Readonly<{
   anchorId: string;
   calculation: ReputationCalculation;
@@ -79,7 +83,7 @@ export type ReputationRepository = Readonly<{
   ) => Promise<ReputationEvidence | null>;
   upsertScore: (
     input: ReputationPersistenceInput,
-  ) => Promise<PersistedReputationScore>;
+  ) => Promise<ReputationUpsertResult>;
 }>;
 
 export type ReputationEvaluationResult =
@@ -95,5 +99,6 @@ export type ReputationEvaluationResult =
         | "ANCHOR_NOT_FOUND"
         | "INVALID_EVALUATION_TIME"
         | "EVIDENCE_READ_FAILURE"
-        | "PERSISTENCE_FAILURE";
+        | "PERSISTENCE_FAILURE"
+        | "STALE_WRITE";
     }>;

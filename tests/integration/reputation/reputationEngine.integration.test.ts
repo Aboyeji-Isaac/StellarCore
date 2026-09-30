@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { evaluateAnchorReputation } from "@/lib/reputation/engine";
-import type { ReputationEvidence, ReputationRepository } from "@/types/reputation";
+import type { ReputationEvidence, ReputationRepository, ReputationUpsertResult } from "@/types/reputation";
 
 const NOW = new Date("2026-08-31T12:00:00.000Z");
 
@@ -33,10 +33,13 @@ test("controlled evidence composes through calculation and current-score persist
     upsertScore: async ({ calculation }) => {
       persistedCalculation = calculation;
       return Object.freeze({
-        id: "current-score",
-        anchorSlug: calculation.anchorSlug,
-        computedAt: new Date(calculation.computedAt),
-      });
+        ok: true,
+        score: Object.freeze({
+          id: "current-score",
+          anchorSlug: calculation.anchorSlug,
+          computedAt: new Date(calculation.computedAt),
+        }),
+      }) satisfies ReputationUpsertResult;
     },
   });
 
