@@ -12,7 +12,7 @@ Read-only anchor, corridor, rate, and reputation visibility for Stellar.
 
 ---
 
-## The Problem
+## TheProblem
 
 The Stellar network has dozens of anchors — companies like MoneyGram, Cowrie, and others that handle USDC off-ramps to local currencies across Nigeria, Kenya, Ghana, Mexico, and more. But there is no single source of truth for:
 
