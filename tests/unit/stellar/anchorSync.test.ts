@@ -124,6 +124,30 @@ test("an existing failed anchor is marked DOWN without replacing metadata", asyn
   assert.equal(updated?.isTransferCapable, previous.isTransferCapable);
 });
 
+test("egress-policy rejection is not recorded as anchor downtime", async () => {
+  let markDownCalls = 0;
+  const result = await syncAnchorRegistry([MONEYGRAM], {
+    discover: async () => {
+      throw new Sep1DiscoveryError(
+        "EGRESS_POLICY",
+        "blocked by policy",
+        "https://anchor.example/.well-known/stellar.toml",
+      );
+    },
+    persist: async () => {
+      throw new Error("must not persist");
+    },
+    markDown: async () => {
+      markDownCalls += 1;
+      return true;
+    },
+  });
+
+  assert.equal(markDownCalls, 0);
+  assert.equal(result.failures[0]?.code, "EGRESS_POLICY");
+  assert.equal(result.failures[0]?.statusUpdate, "NOT_ATTEMPTED");
+});
+
 test("structured failures omit unsafe error details", async () => {
   const dependencies = createDependencies({
     discover: async () => {

@@ -21,6 +21,7 @@ import type {
   Sep38StellarLiquidityPoolAssetIdentifier,
   Sep38SupportedPair,
 } from "@/types/sep38";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_JSON_BYTES = 100_000;
@@ -39,6 +40,7 @@ export type Sep38ErrorCode =
   | "AUTHENTICATION_REQUIRED"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "REDIRECT"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
@@ -536,7 +538,7 @@ async function requestJson(
 ): Promise<unknown> {
   const endpoint = safeEndpoint(url);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? createEgressFetch();
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Sep38ClientError(
@@ -610,6 +612,13 @@ async function requestJson(
     }
   } catch (error) {
     if (error instanceof Sep38ClientError) throw error;
+    if (error instanceof EgressPolicyError) {
+      throw new Sep38ClientError(
+        "EGRESS_POLICY",
+        "SEP-38 request blocked by outbound network policy",
+        endpoint,
+      );
+    }
 
     if (controller.signal.aborted) {
       throw new Sep38ClientError(

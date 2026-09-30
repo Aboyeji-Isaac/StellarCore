@@ -2,6 +2,7 @@ import { StrKey, WebAuth } from "@stellar/stellar-sdk";
 
 import { parseStellarAuthToken } from "@/lib/stellar/auth";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   Sep10ChallengeSigner,
   StellarAuthProvider,
@@ -26,6 +27,7 @@ export type Sep10AuthErrorCode =
   | "INVALID_CONFIGURATION"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "REDIRECT"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
@@ -95,7 +97,7 @@ export async function requestSep10Token(
   const normalized = normalizeConfig(config);
   validateDependencies(dependencies, normalized.webAuthEndpoint);
   const options = Object.freeze({
-    fetcher: dependencies.fetcher ?? fetch,
+    fetcher: dependencies.fetcher ?? createEgressFetch(),
     timeoutMs: dependencies.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
   validateTimeout(options.timeoutMs, normalized.webAuthEndpoint);
@@ -422,6 +424,13 @@ async function requestJson(
     }
   } catch (error) {
     if (error instanceof Sep10AuthError) throw error;
+    if (error instanceof EgressPolicyError) {
+      throw new Sep10AuthError(
+        "EGRESS_POLICY",
+        "SEP-10 request blocked by outbound network policy",
+        safeEndpoint(url),
+      );
+    }
     if (controller.signal.aborted) {
       throw new Sep10AuthError(
         "TIMEOUT",
