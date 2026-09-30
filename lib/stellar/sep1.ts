@@ -9,6 +9,17 @@ import type {
   Sep1Data,
 } from "@/types/anchor";
 import { parse } from "smol-toml";
+import {
+  canonicalizeSepEndpoint,
+  areSepEndpointsEquivalent,
+  SepEndpointValidationError,
+} from "@/lib/stellar/sepEndpointCanonicalization";
+
+export {
+  canonicalizeSepEndpoint,
+  areSepEndpointsEquivalent,
+  SepEndpointValidationError,
+};
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_TOML_BYTES = 100_000;
@@ -421,16 +432,13 @@ function optionalHttpsUrl(
   if (!value) return undefined;
 
   try {
-    const url = new URL(value);
-
-    if (url.protocol !== "https:") throw new Error("URL must use HTTPS");
-
-    return url.toString();
-  } catch {
+    return canonicalizeSepEndpoint(value);
+  } catch (cause) {
     throw new Sep1DiscoveryError(
       "INVALID_DATA",
-      `SEP-1 field ${key} must be a valid HTTPS URL: ${tomlUrl}`,
+      `SEP-1 field ${key} must be a valid canonical HTTPS URL: ${tomlUrl} (${cause instanceof Error ? cause.message : String(cause)})`,
       tomlUrl,
+      { cause: cause instanceof Error ? cause : undefined },
     );
   }
 }
