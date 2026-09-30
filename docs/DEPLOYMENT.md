@@ -138,6 +138,27 @@ Running the bootstrap:
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 
+## Health checks
+
+Configure platform probes or an external monitor against these public,
+read-only endpoints:
+
+- `GET /api/health/live` returns `200` with `{"status":"alive"}` while the
+   process can handle requests. It does not depend on PostgreSQL and is suitable
+   for liveness checks; it should not be used as a database-health signal.
+- `GET /api/health/ready` returns `200` with `{"status":"ready"}` only after
+   PostgreSQL answers a bounded read-only `SELECT 1`. It returns `503` with
+   `{"status":"not_ready"}` on dependency failure or after two seconds. Use it
+   for readiness/traffic admission, not liveness-triggered restarts.
+
+Both responses include `Cache-Control: no-store` and disclose no connection or
+host details. The readiness probe checks database connectivity only; it does
+not validate schema migrations, registry contents, anchor reachability, SEP
+support, or cron execution. On platforms without separate liveness and
+readiness controls, prefer readiness only for routing traffic and avoid
+configuring it to repeatedly restart a healthy process during a database
+incident.
+
 ## First production cycle
 
 1. Apply committed migrations with the **Deploy production migrations**

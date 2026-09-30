@@ -98,5 +98,13 @@ safe summary while reputation evaluation still runs; a fatal reputation
 failure produces a safe server error. The production cron invokes this route
 daily, while registry bootstrap remains a separate manual GitHub Actions job.
 
+Operational probes are available at `GET /api/health/live` and
+`GET /api/health/ready`. Liveness only confirms that the application handler
+can respond and does not load or contact PostgreSQL. Readiness performs a
+read-only `SELECT 1` through the configured Prisma connection and returns
+`503` on failure or after its two-second check budget. Both return small
+`no-store` JSON responses without infrastructure details; use liveness for
+process restart decisions and readiness for traffic admission.
+
 See the [README](../README.md) for setup, API details, and operational
 invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.
