@@ -9,8 +9,14 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Replay-resistant signed authentication for the internal cron endpoint: a
+  versioned HMAC over method, path, timestamp, nonce and body hash, a 60 s / 10 s
+  timestamp window, and single-use nonces shared across instances in the new
+  `cron_nonces` table (migration `20260930130000_add_cron_nonces`). Selected
+  with `CRON_AUTH_MODE` (`bearer` default, `either`, `signed`); existing bearer
+  deployments, including Vercel Cron, are unchanged.
 
 ## [Prior work] — 2026-09-25
 

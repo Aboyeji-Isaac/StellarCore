@@ -92,7 +92,8 @@ API present the same persisted evidence and uncertainty semantics.
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact
-`CRON_SECRET` bearer credential. It prepares and snapshots reviewed indicative
+`CRON_SECRET` bearer credential (or, when `CRON_AUTH_MODE` enables it, a
+signed single-use request). It prepares and snapshots reviewed indicative
 rates, then evaluates reputation. Rate preparation failures are returned in a
 safe summary while reputation evaluation still runs; a fatal reputation
 failure produces a safe server error. The production cron invokes this route

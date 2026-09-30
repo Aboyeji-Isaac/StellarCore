@@ -226,8 +226,16 @@ The manual, protected registry-bootstrap workflow runs `npm run bootstrap:regist
 ```
 An external scheduler invokes GET /api/internal/cron/refresh:
 
-  1. Require exactly: Authorization: Bearer <CRON_SECRET>
-       → Missing, malformed, or invalid credentials return safe 401 JSON.
+  1. Authenticate per CRON_AUTH_MODE (default bearer):
+       bearer: exactly Authorization: Bearer <CRON_SECRET>.
+       signed: a versioned HMAC-SHA256 signature over method, path and query,
+         timestamp, nonce and body hash (headers X-Cron-Timestamp,
+         X-Cron-Nonce, X-Cron-Signature: v1=<hex>). The timestamp must be at
+         most 60 s old and 10 s ahead, and each nonce is accepted once across
+         all instances (cron_nonces, retained only for the replay window).
+       either: signed when signature headers are present, otherwise bearer.
+       → Missing, malformed, expired, future-dated, replayed, or invalid
+         credentials return the same safe 401 JSON.
   2. Build only reviewed SEP-38 indicative-price candidates.
        → No firm quote endpoint is called.
   3. Fetch each prepared public indicative price and append an individual
@@ -321,6 +329,9 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional. bearer (default), either, or signed. See docs/DEPLOYMENT.md.
+CRON_AUTH_MODE="bearer"
 ```
 
 `DATABASE_URL` is server-only. The application runtime uses the connection

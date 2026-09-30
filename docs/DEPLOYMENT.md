@@ -14,7 +14,8 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | Name | Production | Secret | Purpose |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
-| `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
+| `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route; also the HMAC key for signed requests. |
+| `CRON_AUTH_MODE` | Optional | No | `bearer` (default), `either`, or `signed`. Any other value makes the refresh route fail closed with a safe 500. |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
@@ -135,6 +136,18 @@ Running the bootstrap:
 ## Scheduler
 
 `vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
+
+### Replay-resistant signed requests and cutover
+
+Vercel Cron can send only the static bearer header, so `CRON_AUTH_MODE` defaults to `bearer` and the Vercel schedule keeps working unchanged. A scheduler that can sign requests should use the versioned `v1` HMAC protocol instead, which a captured request cannot be replayed against:
+
+- Headers: `X-Cron-Timestamp` (Unix seconds), `X-Cron-Nonce` (16-64 characters of `A-Za-z0-9_-`, unique per request), `X-Cron-Signature: v1=<hex>`.
+- Signature: HMAC-SHA256 keyed with `CRON_SECRET` over these lines joined by `\n`: `stellarcore-cron`, `v1`, the upper-case method, the path plus query string (no host), the timestamp, the nonce, and the hex SHA-256 of the body (of the empty string for GET).
+- The timestamp must be at most 60 seconds old and at most 10 seconds ahead of the server clock. Keep the scheduler clock NTP-synchronized.
+- The nonce of every authenticated request is stored in `cron_nonces` until its replay window closes (timestamp + 61 s) and is deleted on the next request afterwards, so the table stays small. A nonce can be used once across all instances; a repeat is rejected. Unauthenticated requests never write to the table.
+- Malformed, expired, future-dated, tampered, and repeated requests all receive the same bounded 401 response. Secrets, signatures, and authorization headers are never logged. An unreachable nonce store fails closed with a safe 500.
+
+Cutover: deploy with the default `bearer`; switch to `either` once the scheduler signs (a request carrying signature headers is judged only as signed, so a bad signature is never rescued by a bearer header); switch to `signed` after every caller signs. Key rotation and revocation stay with #184: `v1` signs with the single `CRON_SECRET`, and a future version prefix can carry key identifiers.
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 

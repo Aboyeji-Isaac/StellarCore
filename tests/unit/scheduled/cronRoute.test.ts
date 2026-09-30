@@ -90,3 +90,59 @@ function successfulRun(overrides: Partial<ScheduledRefreshResult> = {}): Schedul
     ...overrides,
   });
 }
+
+test("signed requests: bearer mode ignores signatures, either mode prefers them, signed mode requires them", async () => {
+  const { signCronRequest } = await import("@/lib/scheduled/signedCronAuth");
+  const now = new Date("2026-09-30T12:00:00.000Z");
+  const seen = new Set<string>();
+  const nonceStore = { reserve: async (nonce: string) => !seen.has(nonce) && !!seen.add(nonce) };
+  const url = "http://localhost/api/internal/cron/refresh";
+  const signedHeaders = (nonce: string, secret = SECRET) => signCronRequest({
+    method: "GET", pathAndQuery: "/api/internal/cron/refresh", secret,
+    timestampSeconds: now.getTime() / 1_000, nonce,
+  });
+  let runs = 0;
+  const call = async (mode: "bearer" | "either" | "signed", headers: Record<string, string>) => {
+    const response = await getScheduledRefreshResponse(new Request(url, { headers }), {
+      cronSecret: SECRET, authMode: mode, nonceStore, now: () => now,
+      run: async () => { runs += 1; return successfulRun(); },
+    });
+    return response.status;
+  };
+  const bearer = { authorization: `Bearer ${SECRET}` };
+
+  assert.equal(await call("bearer", bearer), 200);
+  assert.equal(await call("bearer", signedHeaders("bearermodenonce012345")), 401);
+  assert.equal(await call("signed", bearer), 401);
+  assert.equal(await call("signed", signedHeaders("signedmodenonce012345")), 200);
+  assert.equal(await call("signed", signedHeaders("signedmodenonce012345")), 401);
+  assert.equal(await call("either", bearer), 200);
+  assert.equal(await call("either", signedHeaders("eithermodenonce012345")), 200);
+  // Signature headers make the request a signed one: a valid bearer cannot rescue a bad signature.
+  assert.equal(await call("either", { ...bearer, ...signedHeaders("eitherbadsig0123456789", "wrong-secret") }), 401);
+  assert.equal(runs, 4);
+});
+
+test("an invalid CRON_AUTH_MODE or an unavailable nonce store fails closed with a safe 500", async () => {
+  const { parseCronAuthMode } = await import("@/lib/scheduled/http");
+  assert.equal(parseCronAuthMode(undefined), "bearer");
+  assert.equal(parseCronAuthMode(""), "bearer");
+  assert.throws(() => parseCronAuthMode("sometimes"));
+
+  const { signCronRequest } = await import("@/lib/scheduled/signedCronAuth");
+  const now = new Date("2026-09-30T12:00:00.000Z");
+  let runs = 0;
+  const response = await getScheduledRefreshResponse(
+    new Request("http://localhost/api/internal/cron/refresh", {
+      headers: signCronRequest({ method: "GET", pathAndQuery: "/api/internal/cron/refresh", secret: SECRET, timestampSeconds: now.getTime() / 1_000, nonce: "unavailablenonce01234" }),
+    }),
+    {
+      cronSecret: SECRET, authMode: "signed", now: () => now,
+      nonceStore: { reserve: async () => { throw new Error("connection to db failed: password=hunter2"); } },
+      run: async () => { runs += 1; return successfulRun(); },
+    },
+  );
+  assert.equal(response.status, 500);
+  assert.equal(JSON.stringify(await response.json()).includes("hunter2"), false);
+  assert.equal(runs, 0);
+});

@@ -163,3 +163,15 @@ model ReputationScore {
 
   @@map("reputation_scores")
 }
+
+/// Single-use nonces of authenticated signed cron requests (see
+/// lib/scheduled/signedCronAuth.ts). The primary key makes replay detection
+/// atomic across instances; rows are deleted once expiresAt has passed, so
+/// retention is bounded by (authenticated request rate x replay window).
+model CronNonce {
+  nonce     String   @id
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "cron_nonces_expires_at_idx")
+  @@map("cron_nonces")
+}
