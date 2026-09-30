@@ -1,16 +1,16 @@
-# Contributing to StellarCore
+#Contributing to StellarCore
 
 Thank you for contributing to StellarCore. The project is maintained through
 reviewed pull requests so that changes remain clear, testable, and supported by
 evidence.
 
-## Getting Started
+##Getting Started
 
 Follow the setup instructions in the README's [Getting Started](README.md#getting-started)
 section. Do not request direct write access to the repository; fork it instead
 and work from your fork.
 
-## Branches
+##Branches
 
 Create a focused branch from `main` using one of these prefixes:
 
@@ -21,7 +21,7 @@ Create a focused branch from `main` using one of these prefixes:
 
 Use a short, descriptive name after the prefix, such as `docs/contributing`.
 
-## Before Opening a Pull Request
+##Before Opening a Pull Request
 
 Run these checks from the repository root:
 
@@ -36,7 +36,7 @@ include relevant tests and evidence, reference the issue being resolved when
 applicable (for example `Closes #12`), and add a changelog entry under
 `Unreleased` when applicable — see [Changelog](#changelog) below.
 
-## Changelog
+##Changelog
 
 [`CHANGELOG.md`](CHANGELOG.md) tracks notable changes in a lightweight
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) style. If your pull
@@ -54,13 +54,13 @@ under the `Unreleased` section in the same pull request:
 Small typo fixes and changes that are purely internal to CI or tooling do not
 need an entry.
 
-## Protected Main Branch
+##Protected Main Branch
 
 The `main` branch is protected. All changes must go through a pull request and
 receive approval from at least one maintainer. Direct pushes to `main` are
 rejected.
 
-## Evidence Integrity
+##Evidence Integrity
 
 StellarCore depends on trustworthy, verifiable information. Pull requests that
 fabricate data, bypass validation, or present unverified information as fact

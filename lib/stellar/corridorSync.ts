@@ -6,6 +6,7 @@ import type {
   AnchorCorridorRegistryEntry,
   CorridorRegistryEntry,
 } from "@/types/corridor";
+import { withTransactionRetry, DEFAULT_RETRY_POLICY } from "@/lib/db";
 
 export type PersistedCorridor = CorridorRegistryEntry;
 
@@ -20,6 +21,8 @@ export type CorridorSyncFailureCode =
   | "CORRIDOR_PERSISTENCE_FAILURE"
   | "ANCHOR_NOT_FOUND"
   | "CORRIDOR_NOT_FOUND"
+  | "RETRY_EXHAUSTED"
+  | "NON_RETRYABLE_ERROR"
   | "UNEXPECTED_ERROR";
 
 export type CorridorSyncFailure = Readonly<{
@@ -90,58 +93,76 @@ export async function persistAnchorCorridorAssociations(
 ): Promise<AnchorCorridorAssociationResult> {
   const { db } = await import("@/lib/dbClient");
 
-  return db.$transaction(async (transaction) => {
-    const anchor = await transaction.anchor.findUnique({
-      where: { slug: mapping.anchorSlug },
-      select: { id: true },
-    });
+  return withTransactionRetry(
+    async () => {
+      return db.$transaction(
+        async (transaction) => {
+          const anchor = await transaction.anchor.findUnique({
+            where: { slug: mapping.anchorSlug },
+            select: { id: true },
+          });
 
-    if (!anchor) {
-      throw new CorridorAssociationError("ANCHOR_NOT_FOUND");
-    }
+          if (!anchor) {
+            throw new CorridorAssociationError("ANCHOR_NOT_FOUND");
+          }
 
-    const corridors = await transaction.corridor.findMany({
-      where: { slug: { in: [...mapping.corridorSlugs] } },
-      select: { id: true, slug: true },
-    });
-    const corridorIdsBySlug = new Map(
-      corridors.map((corridor) => [corridor.slug, corridor.id]),
-    );
-    const corridorIds = mapping.corridorSlugs.map((slug) =>
-      corridorIdsBySlug.get(slug),
-    );
+          const corridors = await transaction.corridor.findMany({
+            where: { slug: { in: [...mapping.corridorSlugs] } },
+            select: { id: true, slug: true },
+          });
+          const corridorIdsBySlug = new Map(
+            corridors.map((corridor) => [corridor.slug, corridor.id]),
+          );
+          const corridorIds = mapping.corridorSlugs.map((slug) =>
+            corridorIdsBySlug.get(slug),
+          );
 
-    if (corridorIds.some((id) => id === undefined)) {
-      throw new CorridorAssociationError("CORRIDOR_NOT_FOUND");
-    }
+          if (corridorIds.some((id) => id === undefined)) {
+            throw new CorridorAssociationError("CORRIDOR_NOT_FOUND");
+          }
 
-    const desiredCorridorIds = corridorIds as string[];
-    const removed = await transaction.anchorCorridor.deleteMany({
-      where: {
-        anchorId: anchor.id,
-        corridorId: { notIn: desiredCorridorIds },
+          const desiredCorridorIds = corridorIds as string[];
+          const removed = await transaction.anchorCorridor.deleteMany({
+            where: {
+              anchorId: anchor.id,
+              corridorId: { notIn: desiredCorridorIds },
+            },
+          });
+
+          await transaction.anchorCorridor.createMany({
+            data: desiredCorridorIds.map((corridorId) => ({
+              anchorId: anchor.id,
+              corridorId,
+            })),
+            skipDuplicates: true,
+          });
+
+          const associationCount = await transaction.anchorCorridor.count({
+            where: { anchorId: anchor.id },
+          });
+
+          return freezeAssociationResult({
+            anchorSlug: mapping.anchorSlug,
+            corridorSlugs: mapping.corridorSlugs,
+            associationCount,
+            staleAssociationsRemoved: removed.count,
+          });
+        },
+        {
+          isolationLevel: "Serializable",
+        },
+      );
+    },
+    {
+      policy: {
+        ...DEFAULT_RETRY_POLICY,
+        maxAttempts: 3,
+        baseDelayMs: 50,
+        maxDelayMs: 500,
+        deadlineMs: 5000,
       },
-    });
-
-    await transaction.anchorCorridor.createMany({
-      data: desiredCorridorIds.map((corridorId) => ({
-        anchorId: anchor.id,
-        corridorId,
-      })),
-      skipDuplicates: true,
-    });
-
-    const associationCount = await transaction.anchorCorridor.count({
-      where: { anchorId: anchor.id },
-    });
-
-    return freezeAssociationResult({
-      anchorSlug: mapping.anchorSlug,
-      corridorSlugs: mapping.corridorSlugs,
-      associationCount,
-      staleAssociationsRemoved: removed.count,
-    });
-  });
+    },
+  );
 }
 
 export async function syncCorridorRegistry(
@@ -203,9 +224,18 @@ const DEFAULT_SYNC_DEPENDENCIES = Object.freeze({
 }) satisfies CorridorSyncDependencies;
 
 function classifyAssociationFailure(error: unknown): CorridorSyncFailureCode {
-  return error instanceof CorridorAssociationError
-    ? error.code
-    : "UNEXPECTED_ERROR";
+  if (error instanceof CorridorAssociationError) {
+    return error.code;
+  }
+  if (error instanceof Error) {
+    if (error.name === "RetryExhaustedError") {
+      return "RETRY_EXHAUSTED";
+    }
+    if (error.name === "NonRetryableError") {
+      return "NON_RETRYABLE_ERROR";
+    }
+  }
+  return "UNEXPECTED_ERROR";
 }
 
 function freezeAssociationResult(
