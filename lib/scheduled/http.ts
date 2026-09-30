@@ -1,5 +1,5 @@
 import { hasValidCronAuthorization } from "@/lib/scheduled/cronAuth";
-import { runScheduledRefresh } from "@/lib/scheduled/refresh";
+import { runWatchedScheduledRefresh } from "@/lib/scheduled/watchdogRun";
 import type { ScheduledRefreshResult } from "@/types/scheduled";
 
 export type ScheduledRefreshHttpDependencies = Readonly<{
@@ -19,7 +19,7 @@ export async function getScheduledRefreshResponse(
   }
 
   try {
-    const run = dependencies.run ?? runScheduledRefresh;
+    const run = dependencies.run ?? runWatchedScheduledRefresh;
     return json(await run(), 200);
   } catch {
     return json({ error: { code: "internal_error", message: "Unable to run scheduled refresh." } }, 500);

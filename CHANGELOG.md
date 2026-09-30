@@ -14,6 +14,7 @@ with your pull request.
 - Integrity-verifiable, bounded evidence export packages with streamed NDJSON members and offline verification (#202).
 - Root EditorConfig defaults for consistent cross-editor whitespace, line endings, and indentation (#257).
 - Durable three-strike suppression for deterministic scheduled source failures, reviewed reactivation tooling, and aggregate exclusion of suppressed sources (#234).
+- Durable stale-refresh watchdog: scheduled refreshes record successful, partial, or failed outcomes in a persisted heartbeat, and the authenticated `GET /api/internal/refresh/status` route reports stale evidence once the daily slot plus a two-hour grace passes without a successful run (#189).
 - Deterministic scheduled evidence-pipeline fault-injection coverage with documented recovery/failure matrix (#171).
 - Deployment-bound, secret-safe runtime configuration fingerprints with startup drift enforcement and release provenance binding (#214).
 - Repository-wide raw SQL boundary auditing with reviewed allowlists, CI enforcement, and adversarial parameterization tests (#217).

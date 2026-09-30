@@ -31,6 +31,14 @@ enum TransferStatus {
   @@map("transfer_status")
 }
 
+enum RefreshRunOutcome {
+  SUCCESSFUL @map("successful")
+  PARTIAL    @map("partial")
+  FAILED     @map("failed")
+
+  @@map("refresh_run_outcome")
+}
+
 enum ReputationScoreBand {
   GREEN @map("green")
   AMBER @map("amber")
@@ -195,4 +203,25 @@ model ScheduledSourceSuppression {
   @@unique([anchorSlug, corridorSlug], map: "scheduled_source_suppressions_source_key")
   @@index([state], map: "scheduled_source_suppressions_state_idx")
   @@map("scheduled_source_suppressions")
+}
+
+/// Durable stale-refresh watchdog heartbeat, one row per scheduled pipeline
+/// (issue #189). This is minimal health state, not a run ledger: per-run
+/// history, locking, and resumption belong to #111. lastSuccessfulRefreshAt
+/// advances only after a run completes successfully and never moves backwards.
+/// Freshness is evaluated from this row plus the current time, so it survives
+/// process restarts and deployments.
+model RefreshWatchdog {
+  pipeline                    String             @id
+  trackingSince               DateTime           @map("tracking_since") @db.Timestamptz(6)
+  lastRunId                   String?            @map("last_run_id") @db.Uuid
+  lastRunStartedAt            DateTime?          @map("last_run_started_at") @db.Timestamptz(6)
+  lastRunCompletedAt          DateTime?          @map("last_run_completed_at") @db.Timestamptz(6)
+  lastRunOutcome              RefreshRunOutcome? @map("last_run_outcome")
+  lastRunFailureCode          String?            @map("last_run_failure_code")
+  lastSuccessfulRefreshAt     DateTime?          @map("last_successful_refresh_at") @db.Timestamptz(6)
+  consecutiveUnsuccessfulRuns Int                @default(0) @map("consecutive_unsuccessful_runs")
+  updatedAt                   DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("refresh_watchdog")
 }

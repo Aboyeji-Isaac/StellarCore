@@ -122,6 +122,11 @@ rates, then evaluates reputation. Rate preparation failures are returned in a
 safe summary while reputation evaluation still runs; a fatal reputation
 failure produces a safe server error. The production cron invokes this route
 daily, while registry bootstrap remains a separate manual GitHub Actions job.
+Each run is recorded in a durable `refresh_watchdog` heartbeat row, and the
+success heartbeat advances only after a run completes successfully. The
+authenticated `GET /api/internal/refresh/status` route reports the refresh as
+stale when the next daily slot plus a two-hour grace passes without a
+successful run, even while the application itself is healthy.
 
 See the [README](../README.md) for setup, API details, and operational
 invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.

@@ -234,7 +234,13 @@ An external scheduler invokes GET /api/internal/cron/refresh:
      RateSnapshot for each successful observation.
   4. Evaluate every persisted anchor at the one run start timestamp.
        → Each calculation upserts its single current ReputationScore.
-  5. Return a bounded, no-store JSON run summary.
+  5. Record the run outcome (successful / partial / failed) in the durable
+     refresh watchdog; only a successful run advances the success heartbeat.
+  6. Return a bounded, no-store JSON run summary.
+
+Operators read freshness from GET /api/internal/refresh/status (same bearer
+credential): fresh, degraded, awaiting_first_refresh, or stale once the next
+daily slot plus a 2-hour grace passes without a successful run.
 
 Rate preparation failures are returned as a safe rate failure while reputation
 evaluation still runs. A fatal reputation-run failure returns a safe HTTP 500;
@@ -483,6 +489,10 @@ SEP support — that is discovered from each anchor's `stellar.toml` during
 snapshot per independent anchor, evaluates freshness at read time, computes the
 exact median when enough sources exist, and verifies the snapshot count is
 unchanged. It performs no SEP-38 request or database write.
+
+The refresh watchdog database test is opt-in and needs a disposable, migrated
+database: `RUN_REFRESH_WATCHDOG_DATABASE_INTEGRATION=1 npx tsx --test
+tests/integration/scheduled/refreshWatchdog.database.integration.test.ts`.
 
 `verify:reputation` is a local-database-only calculation for Cowrie,
 MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network

@@ -220,6 +220,27 @@ Running the bootstrap:
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 
+## Stale-refresh watchdog
+
+A durable heartbeat row in `refresh_watchdog` (pipeline `scheduled-refresh`) records whether scheduled refreshes are actually producing evidence. It does not rely on logs or process memory, so it survives restarts and deployments. The migration seeds the row with `tracking_since` set to the time it was applied.
+
+- The refresh route records a run's start before any work. After the run it records the outcome, classified by the evidence it produced:
+  - `successful`: no failures and at least one rate snapshot.
+  - `failed`: a fatal error, or no rate snapshot and no reputation evaluation.
+  - `partial`: anything in between.
+- `last_successful_refresh_at` advances only when a successful run completes. It never moves backwards, and failed or partial runs leave it alone.
+- The next refresh is expected at the first `0 0 * * *` UTC slot strictly after the last success (or after `tracking_since` if nothing has succeeded). `staleAt` is that slot plus a 2-hour grace. The grace covers the Hobby plan's within-the-hour invocation plus margin, since Vercel does not retry.
+- The boundary is inclusive: the status is still within its window at exactly `staleAt` and `stale` 1 ms later.
+
+`GET /api/internal/refresh/status` requires the same `Authorization: Bearer <CRON_SECRET>` header and returns no-store JSON. `state` is one of:
+
+- `fresh`
+- `degraded`: within the window, but the latest run failed or was partial.
+- `awaiting_first_refresh`
+- `stale`
+
+The response also includes `staleReason`, the latest run (`none`, `in_progress`, `successful`, `partial`, `failed`) with its failure code, `lastSuccessfulRefreshAt`, `expectedRefreshAt`, `staleAt`, and the consecutive unsuccessful run count. The endpoint only reads this row. It never creates or alters rate or reputation evidence. Per-run history, locking, and resumption remain the scope of #111, and telemetry export remains #123.
+
 ## First production cycle
 
 1. Apply committed migrations with the **Deploy production migrations**
@@ -229,7 +250,8 @@ The locally verified run took about ten seconds. At the current reviewed scope o
    any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
 4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
-5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
+5. Verify the watchdog with `GET /api/internal/refresh/status` (bearer `CRON_SECRET`): it reports `fresh` after a successful run.
+6. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
 
 ## Release SBOM and provenance (#142)
 

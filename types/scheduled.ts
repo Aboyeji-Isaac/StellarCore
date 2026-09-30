@@ -28,4 +28,9 @@ export type ScheduledRefreshResult = Readonly<{
     failed: number;
     failures: readonly ScheduledReputationFailure[];
   }>;
+  /** Durable watchdog record of this run (#189). */
+  watchdog?: Readonly<{
+    outcome: "successful" | "partial" | "failed";
+    recorded: boolean;
+  }>;
 }>;
