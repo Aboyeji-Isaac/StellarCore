@@ -382,6 +382,9 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Reconcile the reviewed registries against the local database (read-only)
+npm run registry:reconcile
 ```
 
 ### Running Tests
@@ -424,6 +427,17 @@ and which corridors have a reviewed live rate source. It requires no database,
 network, or environment secrets and writes nothing. The registry does not store
 SEP support — that is discovered from each anchor's `stellar.toml` during
 `bootstrap:registry` — so the script says so rather than guessing.
+
+`registry:reconcile` is a read-only registry-to-database reconciliation
+auditor. It compares the checked-in anchor, corridor, and membership registries
+with the persisted configuration, classifies missing, unexpected, mismatched,
+orphaned, and stale states, and prints both a human-readable report and a
+machine-readable summary. It also proposes a deterministic repair plan without
+applying it: safe actions are evidence-independent upserts, membership and
+retirement changes always require explicit maintainer review, and actions that
+could delete historical evidence are refused outright and left visible in the
+report. The script performs no writes and no network requests, needs
+`DATABASE_URL`, and exits nonzero when drift is detected.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the

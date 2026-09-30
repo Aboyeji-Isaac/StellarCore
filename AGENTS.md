@@ -16,6 +16,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm test` runs Vitest unit and integration tests.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
+- `npm run registry:reconcile` compares the reviewed registries against the persisted database configuration and prints drift findings plus a proposed repair plan; it is read-only and never applies repairs or deletes evidence. It exits nonzero when drift is detected and requires `DATABASE_URL`.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
