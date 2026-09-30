@@ -15,6 +15,8 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run build` creates a production build and catches route/type failures.
 - `npm test` runs Vitest unit and integration tests.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
+- `npm run audit:compatibility` verifies current API serializers against versioned compatibility contracts; fails if breaking changes or unreviewed regressions are detected.
+- `npm run contract:update` regenerates canonical API contract fixtures and updates the reviewed manifest; use only for intentional, reviewed contract changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.

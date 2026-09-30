@@ -1,0 +1,37 @@
+name: Audit API compatibility
+
+on:
+  pull_request:
+    paths:
+      - "app/api/**"
+      - "lib/api/**"
+      - "types/api/**"
+      - "contracts/api/**"
+      - "scripts/audit-compatibility.ts"
+      - "scripts/update-api-contracts.ts"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit public API compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Audit public API compatibility
+        run: npm run audit:compatibility

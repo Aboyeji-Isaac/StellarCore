@@ -393,6 +393,12 @@ npm test
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
 
+# Public API compatibility contract gate
+npm run audit:compatibility
+
+# Update canonical API contract fixtures (intentional reviewed changes only)
+npm run contract:update
+
 # Human-readable inspection of the checked-in anchor/corridor registry
 npm run registry:print
 
@@ -417,6 +423,15 @@ internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
 independent defense-in-depth boundaries.
+
+`audit:compatibility` verifies that StellarCore's public API serializers and error
+envelopes conform to versioned compatibility contracts (`contracts/api/v1/`). It
+detects accidental breaking changes (field removals, renames, type mutations,
+nullability regressions, status code changes, or sorting changes) before merge or
+deployment. Non-breaking additive fields are reported under the documented
+additive policy. To update contracts for intentional, reviewed changes, run
+`npm run contract:update`. See [`docs/api-compatibility.md`](docs/api-compatibility.md)
+for contract specifications, deprecation policy, and migration guidelines.
 
 `registry:print` is a read-only companion to `audit:config`. It prints the
 checked-in anchors with their home domains, the corridors mapped to each anchor,
