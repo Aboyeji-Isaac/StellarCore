@@ -11,6 +11,14 @@ with your pull request.
 
 ### Added
 
+- Per-source circuit breakers for reviewed live-rate sources: durable
+  `source_breakers` state keyed to the reviewed source identity, documented
+  closed/open/half-open thresholds, transport-versus-invalid-evidence failure
+  classification, bounded exponential cooldowns, and single recovery probes
+  that cannot fan out across instances. Breaker-suppressed sources are
+  surfaced as skips and audit events, never as fresh rate observations, and
+  median/source-authority rules are unchanged. Policy documented in
+  `docs/source-breaker-policy.md`.
 - Production PostgreSQL TLS policy: connections use certificate-verified TLS
   supplied by the application. TLS parameters are stripped from the database
   URL, production startup rejects plaintext or verification-bypass
