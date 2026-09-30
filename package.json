@@ -15,6 +15,7 @@
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
+    "restore:drill": "tsx scripts/restore-drill.ts",
     "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
   },
   "dependencies": {
