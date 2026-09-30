@@ -1,10 +1,10 @@
-# Contributing to StellarCore
+#Contributing to StellarCore
 
 Thank you for contributing to StellarCore. The project is maintained through
 reviewed pull requests so that changes remain clear, testable, and supported by
 evidence.
 
-## Getting Started
+##Getting Started
 
 Follow the setup instructions in the README's [Getting Started](README.md#getting-started)
 section. Do not request direct write access to the repository; fork it instead
