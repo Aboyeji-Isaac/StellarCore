@@ -228,6 +228,11 @@ An external scheduler invokes GET /api/internal/cron/refresh:
 
   1. Require exactly: Authorization: Bearer <CRON_SECRET>
        → Missing, malformed, or invalid credentials return safe 401 JSON.
+       → During a bounded rotation, Bearer <CRON_SECRET_PREVIOUS> also
+         authenticates until CRON_SECRET_ROTATION_UNTIL passes; after the
+         deadline the old secret is revoked deterministically. Verification is
+         timing-safe, misconfiguration fails closed, and secret values are
+         never logged. Rotation order and rollback: docs/DEPLOYMENT.md.
   2. Build only reviewed SEP-38 indicative-price candidates.
        → No firm quote endpoint is called.
   3. Fetch each prepared public indicative price and append an individual
@@ -321,6 +326,10 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional, rotation only: outgoing secret plus ISO-8601 overlap deadline.
+# CRON_SECRET_PREVIOUS and CRON_SECRET_ROTATION_UNTIL enable zero-downtime
+# rotation; the previous secret authenticates only until the deadline.
 ```
 
 `DATABASE_URL` is server-only. The application runtime uses the connection

@@ -4,6 +4,9 @@ import type { ScheduledRefreshResult } from "@/types/scheduled";
 
 export type ScheduledRefreshHttpDependencies = Readonly<{
   cronSecret?: string | undefined;
+  cronPreviousSecret?: string | undefined;
+  cronRotationUntil?: string | undefined;
+  cronNow?: () => number;
   run?: () => Promise<ScheduledRefreshResult>;
 }>;
 
@@ -14,6 +17,9 @@ export async function getScheduledRefreshResponse(
   if (!hasValidCronAuthorization(
     request.headers.get("authorization"),
     dependencies.cronSecret,
+    dependencies.cronPreviousSecret,
+    dependencies.cronRotationUntil,
+    dependencies.cronNow,
   )) {
     return json({ error: { code: "unauthorized", message: "Unauthorized." } }, 401);
   }

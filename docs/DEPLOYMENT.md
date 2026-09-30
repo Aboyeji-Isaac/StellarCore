@@ -15,6 +15,8 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
+| `CRON_SECRET_PREVIOUS` | Optional, rotation only | Yes | Outgoing secret accepted only while a bounded rotation overlap is active. Must differ from `CRON_SECRET`; requires `CRON_SECRET_ROTATION_UNTIL`. |
+| `CRON_SECRET_ROTATION_UNTIL` | Optional, rotation only | Yes | ISO-8601 UTC timestamp after which the previous secret is revoked. Required whenever `CRON_SECRET_PREVIOUS` is set. |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
@@ -135,6 +137,34 @@ Running the bootstrap:
 ## Scheduler
 
 `vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
+
+### Cron secret rotation
+
+The refresh boundary supports **zero-downtime rotation** of `CRON_SECRET` using a bounded primary/previous model:
+
+- `CRON_SECRET` is always the primary secret and authenticates normally.
+- During a planned rotation, `CRON_SECRET_PREVIOUS` may hold the outgoing secret. It authenticates only while `CRON_SECRET_ROTATION_UNTIL` (an ISO-8601 UTC timestamp) is in the future.
+- After `CRON_SECRET_ROTATION_UNTIL` passes, the previous secret is revoked deterministically — no redeploy is needed for revocation itself.
+- Configuration fails closed: a missing/blank `CRON_SECRET`, a `CRON_SECRET_PREVIOUS` without a parseable `CRON_SECRET_ROTATION_UNTIL`, a previous value equal to the primary, or a blank/whitespace value all result in HTTP 401 for every request (including the previous slot), never an open door. Validation runs on every request, so removing the rotation variables revokes the old secret immediately.
+- Verification remains timing-safe (SHA-256 digest + `timingSafeEqual`); both slots use identical comparison work. Secret values are never logged.
+
+**Planned rotation order** (avoids any authentication outage):
+
+1. Generate the new secret. Choose an overlap window long enough to cover the scheduler's longest gap between cutover steps (the daily cron makes 24–48 hours a sensible default) and short enough to bound exposure of the old secret.
+2. Deploy the **application** configuration first: set `CRON_SECRET` to the new secret, `CRON_SECRET_PREVIOUS` to the old secret, and `CRON_SECRET_ROTATION_UNTIL` to the overlap deadline, then redeploy. From this moment both secrets work.
+3. Cutover the **scheduler**: update the Vercel cron/external scheduler to send the new secret as `CRON_SECRET` and redeploy/apply it.
+4. Verify the next scheduled invocation (or a manual authorized GET) succeeds with the new secret, and that the old secret still authenticates during the window.
+5. Once the scheduler has demonstrably cut over — and in all cases before `CRON_SECRET_ROTATION_UNTIL` — remove `CRON_SECRET_PREVIOUS` and `CRON_SECRET_ROTATION_UNTIL` from the application environment and redeploy. The old secret now fails immediately.
+
+If step 5 is missed, safety degrades gracefully: the window expires on its own and the old secret stops working at `CRON_SECRET_ROTATION_UNTIL` without any action.
+
+**Emergency rollback** (suspected compromise of either secret):
+
+- If `CRON_SECRET` is compromised: immediately redeploy the application with a fresh `CRON_SECRET` (no `CRON_SECRET_PREVIOUS`), then update the scheduler to the same value. Between the two steps the cron run returns 401 — an acceptable, bounded outage for an emergency. Do not place a compromised value in `CRON_SECRET_PREVIOUS`.
+- If only `CRON_SECRET_PREVIOUS` is compromised (or you want to end an overlap early): remove `CRON_SECRET_PREVIOUS` and `CRON_SECRET_ROTATION_UNTIL` from the application environment and redeploy. The old secret is revoked on the next request; the scheduler keeps authenticating with the primary.
+- `CRON_SECRET_ROTATION_UNTIL` is a hard bound: extend it only by redeploying a deliberate, reviewed value, never to "buy time" during an incident.
+
+Rolling back an application deployment that is mid-rotation restores whichever rotation variables that artifact carries. Re-check the three variables after any rollback so the overlap window reflects reality.
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 
