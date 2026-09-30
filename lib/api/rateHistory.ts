@@ -1,4 +1,11 @@
 import { readCorridorRateHistory } from "@/lib/rates/rateHistoryReadModel";
+import {
+  FILE_STALE_EVIDENCE_STORE,
+  restoreStaleEvidence,
+  saveLastKnownGoodEvidence,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
 import type {
   CorridorRateHistory,
   CorridorRateHistoryReadResult,
@@ -23,6 +30,7 @@ export type RateHistoryApiDependencies = Readonly<{
     options: Readonly<{ evaluatedAt: Date; days: number }>,
   ) => Promise<CorridorRateHistoryReadResult>;
   now?: () => Date;
+  staleEvidenceStore?: StaleEvidenceStore;
 }>;
 
 export async function getRateHistoryApiResult(
@@ -37,6 +45,8 @@ export async function getRateHistoryApiResult(
   if (!daysValidation.ok) return daysValidation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const snapshotKey = `rate-history:v1:${corridorValidation.corridorSlug}:${daysValidation.days}`;
   const read = dependencies.readHistory ?? readCorridorRateHistory;
   let result: CorridorRateHistoryReadResult;
 
@@ -45,7 +55,17 @@ export async function getRateHistoryApiResult(
       evaluatedAt,
       days: daysValidation.days,
     });
-  } catch {
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRateHistoryResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
     return errorResult(500, "internal_error", "Unable to read rate history.");
   }
 
@@ -60,14 +80,34 @@ export async function getRateHistoryApiResult(
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
       );
     }
+    if (result.code === "DATABASE_UNAVAILABLE") {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRateHistoryResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
     return errorResult(500, "internal_error", "Unable to read rate history.");
   }
 
   try {
-    return Object.freeze({ status: 200, body: serializeRateHistory(result) });
+    const body = serializeRateHistory(result);
+    const sourceTimes = body.points
+      .flatMap(({ observations }) => observations.map(({ capturedAt }) => capturedAt))
+      .filter(isValidTimestamp);
+    await saveLastKnownGoodEvidence(store, snapshotKey, body, sourceTimes, evaluatedAt);
+    return Object.freeze({ status: 200, body });
   } catch {
     return errorResult(500, "internal_error", "Unable to read rate history.");
   }
+}
+
+function isValidTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 export function serializeRateHistory(

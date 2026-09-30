@@ -15,8 +15,18 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
+| `STALE_EVIDENCE_DIRECTORY` | Optional | No | Writable directory for bounded last-known-good public evidence snapshots. Defaults to the Node.js temporary directory. A local temporary directory is per-instance and disposable; a shared persistent mount is needed to share fallback state across instances. |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
+
+The read-only rates, rate-history, and reputation APIs can serve verified public
+snapshots for at most five minutes after a recognized transient database
+connectivity failure. These responses carry explicit stale metadata and remain
+`Cache-Control: no-store`. Snapshots preserve the evidence timestamps and are
+not inputs to rate or reputation calculations. If the snapshot directory is
+unavailable or a snapshot fails integrity, schema, provenance, or expiry checks,
+the endpoint returns its normal safe 500 response. Recovery switches directly
+back to PostgreSQL reads.
 
 ## Migration strategy
 
