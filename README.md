@@ -377,6 +377,12 @@ npm run snapshot:rates
 # Read the latest persisted rate per independent anchor without writing
 npm run verify:latest-rates
 
+# Archive old rate snapshots and transfer outcomes to prevent unbounded table growth
+npm run archive-evidence -- --dry-run
+
+# Restore archived evidence back to hot tables if needed
+npm run restore-evidence -- --dry-run
+
 # Recompute current reputation rows from the local database
 npm run verify:reputation
 

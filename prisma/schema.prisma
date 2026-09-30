@@ -163,3 +163,39 @@ model ReputationScore {
 
   @@map("reputation_scores")
 }
+
+model ArchivedRateSnapshot {
+  id                String   @id @db.Uuid
+  anchorId          String   @map("anchor_id") @db.Uuid
+  corridorId        String   @map("corridor_id") @db.Uuid
+  rate              Decimal  @db.Decimal(38, 18)
+  sourceAmount      Decimal  @map("source_amount") @db.Decimal(38, 18)
+  destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
+  fee               Decimal  @default(0) @db.Decimal(38, 18)
+  capturedAt        DateTime @map("captured_at") @db.Timestamptz(6)
+  archivedAt        DateTime @default(now()) @map("archived_at") @db.Timestamptz(6)
+
+  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([capturedAt(sort: Desc)], map: "archived_rate_snapshots_captured_at_idx")
+  @@map("archived_rate_snapshots")
+}
+
+model ArchivedTransferOutcome {
+  id           String         @id @db.Uuid
+  anchorId     String         @map("anchor_id") @db.Uuid
+  corridorId   String         @map("corridor_id") @db.Uuid
+  status       TransferStatus
+  fillRate     Float          @map("fill_rate")
+  settlementMs Int            @map("settlement_ms")
+  slippage     Float
+  recordedAt   DateTime       @map("recorded_at") @db.Timestamptz(6)
+  archivedAt   DateTime       @default(now()) @map("archived_at") @db.Timestamptz(6)
+
+  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([recordedAt(sort: Desc)], map: "archived_transfer_outcomes_recorded_at_idx")
+  @@map("archived_transfer_outcomes")
+}
