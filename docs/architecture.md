@@ -89,6 +89,25 @@ identifiers, and use no-store behavior where data is dynamic. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
 
+## Integrity audit
+
+`npm run audit:integrity` is a read-only, defense-in-depth check of the
+persisted evidence graph. It loads a bounded snapshot of anchors, corridors,
+reviewed memberships, rate snapshots, transfer outcomes, and reputation rows
+using `findMany` selects only, then evaluates the cross-table semantic
+invariants that PostgreSQL constraints cannot express: missing reviewed
+memberships, impossible anchor/corridor relationships, incompatible
+timestamps, invalid score/evidence combinations, and duplicate corridor
+identities.
+
+The pure `evaluateEvidenceIntegrity` step reports bounded, deterministic
+findings keyed by stable record identifiers, a violation code, and per-class
+remediation guidance. It never loads raw payloads into the report, never mutates
+its input, and never writes, updates, deletes, or opens a transaction. The
+JSON boundary is safe for CI and operator logs. Database constraints and
+boundary validation remain the first-line write protection; this audit detects
+drift after migrations, imports, or operational mistakes.
+
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact

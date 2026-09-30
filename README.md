@@ -285,6 +285,7 @@ stellarcore/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
 │   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
 │   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
+│   ├── integrity/          # Read-only evidence-graph integrity audit and remediation guidance
 │   └── scheduled/          # Internal cron authorization and orchestration
 ├── prisma/                 # Schema and committed migration history
 ├── scripts/                # Bootstrap, snapshot, and verification utilities
@@ -382,6 +383,9 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Read-only integrity audit of the persisted evidence graph (requires DATABASE_URL)
+npm run audit:integrity
 ```
 
 ### Running Tests
@@ -424,6 +428,8 @@ and which corridors have a reviewed live rate source. It requires no database,
 network, or environment secrets and writes nothing. The registry does not store
 SEP support — that is discovered from each anchor's `stellar.toml` during
 `bootstrap:registry` — so the script says so rather than guessing.
+
+`audit:integrity` is a read-only audit of the persisted evidence graph. It loads a bounded snapshot of anchors, corridors, reviewed memberships, rate snapshots, transfer outcomes, and reputation rows using `findMany` selects only, then checks cross-table semantic invariants that the PostgreSQL schema cannot express as simple constraints: orphan-equivalent memberships, impossible anchor/corridor relationships, incompatible timestamps, invalid score/evidence combinations, and duplicate corridor identities. It prints a bounded JSON report of stable record identifiers, violation codes, and non-destructive remediation guidance — never raw row payloads or environment values — and it performs no write, update, delete, or transaction. It exits nonzero when any violation is found so a periodic scheduler or CI job can surface drift after migrations, imports, or operational mistakes. Database constraints and boundary validation remain the first-line write protection; this audit is defense-in-depth.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the
@@ -792,6 +798,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
+- [x] Read-only evidence-graph integrity audit with bounded reports and per-class remediation guidance
 
 ### Planned/Future
 

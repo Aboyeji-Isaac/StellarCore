@@ -16,6 +16,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm test` runs Vitest unit and integration tests.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
+- `npm run audit:integrity` runs the read-only evidence-graph integrity audit against the configured database; it prints a bounded JSON report with stable record keys and remediation guidance, performs no writes, and exits nonzero when findings exist.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
@@ -30,7 +31,7 @@ Use strict TypeScript, two-space indentation, and functional React components. N
 
 ## Testing Guidelines
 
-Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses.
+Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses. The integrity database integration suite is opt-in via `RUN_INTEGRITY_DATABASE_INTEGRATION=1` and must never point at production.
 
 ## Commit & Pull Request Guidelines
 
