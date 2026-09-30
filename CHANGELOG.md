@@ -9,8 +9,15 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Evidence-based anchor availability transitions: discovery failures are
+  classified (transient / deterministic / unknown) and a destructive status
+  change requires consecutive-failure or sustained-window evidence, so one
+  transient SEP-1 timeout no longer marks a healthy anchor DOWN. Recovery to
+  LIVE requires repeated successful evidence, and bounded per-anchor health
+  rows (`anchor_health_states`) make transitions deterministic across process
+  restarts. Policy documented in `docs/anchor-health-policy.md`.
 
 ## [Prior work] — 2026-09-25
 
