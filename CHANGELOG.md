@@ -9,8 +9,18 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Hardened PostgreSQL connection pool management with bounded timeouts, TCP keepalive, connection lifetime recycling, and idle error handling.
+- Explicit classification of connection and failover errors to trigger pool eviction and fast failure without misclassifying normal query errors.
+- Bounded deadline utilities (`withDatabaseDeadline`) ensuring database operations respect request deadlines during network disruptions.
+- Transaction safety guards (`executeSafeTransaction`) guaranteeing that transactions interrupted by failover or ambiguous commits never report success without confirmation.
+- Isolated integration tests covering primary termination, endpoint switch, recovery, and storm prevention.
+- Operational documentation in `docs/database-failover.md` describing degraded behavior during failovers and recovery dynamics.
+
+### Fixed
+
+- Prevented broken pooled PostgreSQL connections from hanging indefinitely or being reused after primary termination.
 
 ## [Prior work] — 2026-09-25
 
