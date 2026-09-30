@@ -9,8 +9,12 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Idempotent rate-observation identity: `rate_snapshots.observation_key` is
+  unique, and snapshot persistence returns the stored row for a replayed
+  observation instead of inserting a duplicate. Schema migration
+  `20260930120000_add_rate_snapshot_observation_key`.
 
 ## [Prior work] — 2026-09-25
 

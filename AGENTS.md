@@ -17,6 +17,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
+- The database-backed rate-observation identity test runs only with `RUN_RATE_SNAPSHOT_IDENTITY_DATABASE_INTEGRATION=1` against a throwaway database.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.

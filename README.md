@@ -232,6 +232,15 @@ An external scheduler invokes GET /api/internal/cron/refresh:
        → No firm quote endpoint is called.
   3. Fetch each prepared public indicative price and append an individual
      RateSnapshot for each successful observation.
+       → Each observation has a deterministic identity (rate_snapshots
+         .observation_key, unique). Replaying the same observation, whether by
+         retry, restart, concurrent run, or ambiguous database result, returns
+         the stored row instead of inserting another. SEP-38 indicative prices
+         carry no quote id, so the identity is the anchor, corridor, priced
+         amounts, rate, and the instant StellarCore captured the response: a
+         new fetch is a new observation even when its numbers match. When an
+         upstream supplies a quote id, that id becomes the identity. Rows
+         written before the column existed keep a null key.
   4. Evaluate every persisted anchor at the one run start timestamp.
        → Each calculation upserts its single current ReputationScore.
   5. Return a bounded, no-store JSON run summary.

@@ -1,3 +1,4 @@
+import { deriveObservationKey } from "@/lib/rates/observationIdentity";
 import type {
   NormalizedRateObservation,
   PersistedRateSnapshot,
@@ -26,6 +27,7 @@ export async function persistRateSnapshot(
       destinationAmount: observation.destinationAmount,
       fee: observation.fee,
       capturedAt: observation.capturedAt,
+      observationKey: deriveObservationKey(observation),
     });
     const snapshot: PersistedRateSnapshot = Object.freeze({
       id: row.id,
@@ -37,7 +39,7 @@ export async function persistRateSnapshot(
       fee: row.fee.toString(),
       capturedAt: new Date(row.capturedAt.getTime()),
     });
-    return Object.freeze({ ok: true, snapshot });
+    return Object.freeze({ ok: true, snapshot, replayed: row.replayed === true });
   } catch {
     return failure("PERSISTENCE_FAILURE");
   }
@@ -62,8 +64,14 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
   },
   async createSnapshot(input) {
     const { db } = await import("@/lib/dbClient");
-    return db.rateSnapshot.create({
-      data: input,
+    // INSERT ... ON CONFLICT DO NOTHING on the unique observation_key: safe
+    // under concurrent runs and under retries after an ambiguous result.
+    const { count } = await db.rateSnapshot.createMany({
+      data: [input],
+      skipDuplicates: true,
+    });
+    const row = await db.rateSnapshot.findUniqueOrThrow({
+      where: { observationKey: input.observationKey },
       select: {
         id: true,
         rate: true,
@@ -73,6 +81,7 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
         capturedAt: true,
       },
     });
+    return { ...row, replayed: count === 0 };
   },
 });
 

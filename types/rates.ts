@@ -12,6 +12,8 @@ export type NormalizedRateObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
+  /** Identifier issued by the upstream for this quote, when it provides one. */
+  upstreamQuoteId?: string;
 }>;
 
 export type RateFreshnessState = "fresh" | "stale" | "future" | "invalid";
@@ -68,7 +70,12 @@ export type RateSnapshotPersistenceCode =
   | "PERSISTENCE_FAILURE";
 
 export type RateSnapshotPersistenceResult =
-  | Readonly<{ ok: true; snapshot: PersistedRateSnapshot }>
+  | Readonly<{
+      ok: true;
+      snapshot: PersistedRateSnapshot;
+      /** True when the observation was already stored and no row was added. */
+      replayed: boolean;
+    }>
   | Readonly<{ ok: false; code: RateSnapshotPersistenceCode }>;
 
 export type RateSnapshotRepository = Readonly<{
@@ -83,6 +90,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
+    observationKey: string;
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -90,6 +98,8 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
+    /** Set when an existing row for the same observationKey was returned. */
+    replayed?: boolean;
   }>>;
 }>;
 

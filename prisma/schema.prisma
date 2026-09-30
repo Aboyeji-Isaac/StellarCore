@@ -104,6 +104,11 @@ model RateSnapshot {
   destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  /// Deterministic identity of the logical observation (see
+  /// lib/rates/observationIdentity.ts). Unique so replays and concurrent runs
+  /// cannot insert the same observation twice. Null only on rows written
+  /// before this column existed; PostgreSQL allows many NULLs in a unique index.
+  observationKey    String?  @unique @map("observation_key")
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
