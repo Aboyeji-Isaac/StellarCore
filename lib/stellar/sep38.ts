@@ -1,4 +1,4 @@
-import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostname";
 import type {
   ParsedSep38AssetIdentifier,
   Sep38Asset,
@@ -171,11 +171,16 @@ export function normalizeSep38QuoteServer(quoteServer: string): string {
       url.password ||
       url.search ||
       url.hash ||
-      url.port ||
-      !isValidHomeDomain(url.hostname)
+      url.port
     ) {
       throw new Error("invalid quote server");
     }
+
+    const canonical = canonicalizeHostname(url.hostname);
+    if (!canonical.ok) {
+      throw new Error("invalid quote server");
+    }
+    url.hostname = canonical.hostname;
 
     url.pathname = url.pathname.replace(/\/+$/, "");
 

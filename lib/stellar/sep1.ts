@@ -1,6 +1,6 @@
 import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
-import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostname";
 import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   AnchorRegistryEntry,
@@ -51,7 +51,8 @@ export type FetchSep1Options = Readonly<{
 }>;
 
 export function buildSep1TomlUrl(homeDomain: string): string {
-  if (!isValidHomeDomain(homeDomain)) {
+  const canonical = canonicalizeHostname(homeDomain);
+  if (!canonical.ok) {
     throw new Sep1DiscoveryError(
       "INVALID_HOME_DOMAIN",
       `Invalid anchor home domain: "${homeDomain}"`,
@@ -59,7 +60,7 @@ export function buildSep1TomlUrl(homeDomain: string): string {
     );
   }
 
-  return `https://${homeDomain}/.well-known/stellar.toml`;
+  return `https://${canonical.hostname}/.well-known/stellar.toml`;
 }
 
 export function normalizeSeps(seps: Iterable<number>): readonly StellarSep[] {
@@ -223,10 +224,13 @@ export async function discoverAnchor(
   entry: AnchorRegistryEntry,
   options: FetchSep1Options = {},
 ): Promise<DiscoveredAnchor> {
+  const canonical = canonicalizeHostname(entry.homeDomain);
+  const homeDomain = canonical.ok ? canonical.hostname : entry.homeDomain;
   const { tomlUrl, data } = await fetchSep1Toml(entry.homeDomain, options);
 
   return Object.freeze({
     ...entry,
+    homeDomain,
     tomlUrl,
     organizationName: data.organizationName,
     ...(data.organizationUrl ? { organizationUrl: data.organizationUrl } : {}),

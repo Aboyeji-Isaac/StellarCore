@@ -1,4 +1,4 @@
-import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostname";
 import type {
   StellarAuthProvider,
   StellarAuthToken,
@@ -76,12 +76,15 @@ export function parseStellarAuthToken(
   if (subject !== metadata.expectedSubject) throw invalidToken();
   validateIssuer(issuer);
 
+  const canonicalHome = canonicalizeHostname(metadata.homeDomain);
+  if (!canonicalHome.ok) throw invalidToken();
+
   const issuedAt = numericDateToIso(issuedAtSeconds);
   const expiresAt = numericDateToIso(expiresAtSeconds);
   const token = Object.freeze({
     token: value,
     protocol: metadata.protocol,
-    homeDomain: metadata.homeDomain,
+    homeDomain: canonicalHome.hostname,
     issuer,
     subject,
     issuedAt,
@@ -100,7 +103,8 @@ export function validateStellarAuthToken(
   validateTokenValue(token.token);
   validateProtocol(token.protocol);
 
-  if (!isValidHomeDomain(token.homeDomain)) throw invalidToken();
+  const canonicalHome = canonicalizeHostname(token.homeDomain);
+  if (!canonicalHome.ok) throw invalidToken();
   validateIssuer(token.issuer);
 
   if (!token.subject || TOKEN_WHITESPACE_OR_CONTROL.test(token.subject)) {
@@ -128,7 +132,8 @@ export function validateStellarAuthToken(
 
 function validateMetadata(metadata: StellarAuthTokenMetadata): void {
   validateProtocol(metadata.protocol);
-  if (!isValidHomeDomain(metadata.homeDomain)) throw invalidToken();
+  const canonical = canonicalizeHostname(metadata.homeDomain);
+  if (!canonical.ok) throw invalidToken();
   if (
     !metadata.expectedSubject ||
     TOKEN_WHITESPACE_OR_CONTROL.test(metadata.expectedSubject)
@@ -196,8 +201,13 @@ function validateIssuer(value: string): void {
       issuer.protocol !== "https:" ||
       issuer.username ||
       issuer.password ||
-      !isValidHomeDomain(issuer.hostname)
+      issuer.port
     ) {
+      throw new Error("invalid issuer");
+    }
+
+    const canonical = canonicalizeHostname(issuer.hostname);
+    if (!canonical.ok) {
       throw new Error("invalid issuer");
     }
   } catch {

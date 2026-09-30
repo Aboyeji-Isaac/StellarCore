@@ -13,6 +13,10 @@ with your pull request.
 
 - GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
 
+### Fixed
+
+- Canonicalized and validated internationalized hostnames across registry deduplication, SEP-1, SEP-10, SEP-38, and auth security boundaries (#233).
+
 ## [Prior work] — 2026-09-25
 
 Summary of development before this changelog was introduced. Only highlights

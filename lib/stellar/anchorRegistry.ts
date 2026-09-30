@@ -1,11 +1,13 @@
+import {
+  canonicalizeHostname,
+  isValidHostname,
+} from "@/lib/stellar/hostname";
 import type { AnchorRegistryEntry } from "@/types/anchor";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HOME_DOMAIN_PATTERN =
-  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 export function isValidHomeDomain(homeDomain: string): boolean {
-  return HOME_DOMAIN_PATTERN.test(homeDomain);
+  return isValidHostname(homeDomain);
 }
 
 export function validateAnchorRegistry(
@@ -23,7 +25,8 @@ export function validateAnchorRegistry(
       throw new Error(`Anchor "${entry.slug}" has an empty name`);
     }
 
-    if (!isValidHomeDomain(entry.homeDomain)) {
+    const canonicalResult = canonicalizeHostname(entry.homeDomain);
+    if (!canonicalResult.ok) {
       throw new Error(
         `Anchor "${entry.slug}" has an invalid home domain: "${entry.homeDomain}"`,
       );
@@ -33,11 +36,12 @@ export function validateAnchorRegistry(
       throw new Error(`Duplicate anchor slug: "${entry.slug}"`);
     }
 
-    if (homeDomains.has(entry.homeDomain)) {
+    if (homeDomains.has(canonicalResult.hostname)) {
       throw new Error(`Duplicate anchor home domain: "${entry.homeDomain}"`);
     }
 
     slugs.add(entry.slug);
-    homeDomains.add(entry.homeDomain);
+    homeDomains.add(canonicalResult.hostname);
   }
 }
+

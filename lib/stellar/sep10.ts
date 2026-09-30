@@ -1,7 +1,7 @@
 import { StrKey, WebAuth } from "@stellar/stellar-sdk";
 
 import { parseStellarAuthToken } from "@/lib/stellar/auth";
-import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostname";
 import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   Sep10ChallengeSigner,
@@ -165,11 +165,16 @@ export function normalizeSep10AuthEndpoint(endpoint: string): string {
       url.password ||
       url.search ||
       url.hash ||
-      url.port ||
-      !isValidHomeDomain(url.hostname)
+      url.port
     ) {
       throw new Error("invalid endpoint");
     }
+
+    const canonical = canonicalizeHostname(url.hostname);
+    if (!canonical.ok) {
+      throw new Error("invalid endpoint");
+    }
+    url.hostname = canonical.hostname;
 
     return url.toString();
   } catch {
@@ -224,7 +229,8 @@ export function parseSep10ChallengeResponse(
 function normalizeConfig(config: Sep10AuthConfig): Sep10AuthConfig {
   const endpoint = normalizeSep10AuthEndpoint(config.webAuthEndpoint);
 
-  if (!isValidHomeDomain(config.homeDomain)) {
+  const canonicalHome = canonicalizeHostname(config.homeDomain);
+  if (!canonicalHome.ok) {
     throw invalidConfiguration(endpoint);
   }
   if (!StrKey.isValidEd25519PublicKey(config.serverSigningKey)) {
@@ -244,8 +250,17 @@ function normalizeConfig(config: Sep10AuthConfig): Sep10AuthConfig {
   const memo = validateMemo(config.memo, config.account, endpoint);
   const clientDomain = config.clientDomain;
   const clientDomainSigningKey = config.clientDomainSigningKey;
+
+  let canonicalClientDomain: string | undefined;
+  if (clientDomain !== undefined) {
+    const canonicalClient = canonicalizeHostname(clientDomain);
+    if (!canonicalClient.ok) {
+      throw invalidConfiguration(endpoint);
+    }
+    canonicalClientDomain = canonicalClient.hostname;
+  }
+
   if (
-    (clientDomain !== undefined && !isValidHomeDomain(clientDomain)) ||
     (clientDomain === undefined) !== (clientDomainSigningKey === undefined) ||
     (clientDomainSigningKey !== undefined &&
       !StrKey.isValidEd25519PublicKey(clientDomainSigningKey))
@@ -254,13 +269,13 @@ function normalizeConfig(config: Sep10AuthConfig): Sep10AuthConfig {
   }
 
   return Object.freeze({
-    homeDomain: config.homeDomain,
+    homeDomain: canonicalHome.hostname,
     webAuthEndpoint: endpoint,
     serverSigningKey: config.serverSigningKey,
     networkPassphrase,
     account: config.account,
     ...(memo ? { memo } : {}),
-    ...(clientDomain ? { clientDomain } : {}),
+    ...(canonicalClientDomain ? { clientDomain: canonicalClientDomain } : {}),
     ...(clientDomainSigningKey ? { clientDomainSigningKey } : {}),
   });
 }

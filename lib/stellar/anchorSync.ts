@@ -1,5 +1,6 @@
 import { AnchorStatus } from "@/app/generated/prisma/enums";
 import { ANCHOR_REGISTRY } from "@/constants/anchors";
+import { canonicalizeHostname } from "@/lib/stellar/hostname";
 import {
   discoverAnchor as discoverRegistryAnchor,
   Sep1DiscoveryError,
@@ -60,9 +61,11 @@ export async function persistDiscoveredAnchor(
   anchor: DiscoveredAnchor,
 ): Promise<PersistedAnchor> {
   const { db } = await import("@/lib/dbClient");
+  const canonical = canonicalizeHostname(anchor.homeDomain);
+  const homeDomain = canonical.ok ? canonical.hostname : anchor.homeDomain;
   const data = {
     name: anchor.name,
-    homeDomain: anchor.homeDomain,
+    homeDomain,
     tomlUrl: anchor.tomlUrl,
     seps: [...anchor.seps],
     isTransferCapable: anchor.isTransferCapable,
