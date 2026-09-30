@@ -6,6 +6,7 @@ import {
 } from "@/lib/rates/liveRateSource";
 import { runRateEngine } from "@/lib/rates/rateEngine";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
+import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
 import type {
   PreparedLiveRateCandidate,
   SafeLiveRateRunSummary,
@@ -17,17 +18,36 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
+  listSuppressions: () => Promise<readonly Readonly<{ anchorSlug: string; corridorSlug: string }>[]>;
 }>;
 
 /**
  * Runs the reviewed production rate-source boundary once. This is intentionally
  * shared by the CLI and the authenticated scheduler so they cannot drift.
+ *
+ * Durably suppressed sources are excluded before candidates are executed so
+ * they never consume scheduler capacity and never count toward freshness.
  */
 export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-  return dependencies.executeCandidates(await dependencies.buildCandidates());
+  const [suppressions, candidates] = await Promise.all([
+    dependencies.listSuppressions(),
+    dependencies.buildCandidates(),
+  ]);
+
+  const suppressedKeys = new Set(
+    suppressions.map((suppression) => `${suppression.anchorSlug}:${suppression.corridorSlug}`),
+  );
+  const eligible = candidates.filter(
+    (candidate) => !suppressedKeys.has(`${candidate.anchorSlug}:${candidate.corridorSlug}`),
+  );
+  const suppressed = candidates.length - eligible.length;
+
+  const summary = await dependencies.executeCandidates(eligible);
+  if (suppressed === 0) return summary;
+  return Object.freeze({ ...summary, suppressed });
 }
 
 const DEFAULT_DEPENDENCIES = Object.freeze({
@@ -39,4 +59,11 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
     }),
   ),
+  listSuppressions: async () => {
+    const active = await PRISMA_SUPPRESSION_REPOSITORY.listActive();
+    return Object.freeze(active.map((suppression) => Object.freeze({
+      anchorSlug: suppression.anchorSlug,
+      corridorSlug: suppression.corridorSlug,
+    })));
+  },
 }) satisfies SnapshotReviewedLiveRatesDependencies;
