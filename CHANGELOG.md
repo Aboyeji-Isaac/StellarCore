@@ -9,8 +9,9 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Explicit runtime PostgreSQL connection pool, acquisition, statement, lock, and transaction timeout budgets with saturation recovery tests and safe secret-free error classification (#151).
 
 ## [Prior work] — 2026-09-25
 

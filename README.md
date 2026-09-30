@@ -399,6 +399,9 @@ npm run registry:print
 # Type check only
 npx tsc --noEmit
 
+# PostgreSQL pool budget saturation and recovery tests against a live database (requires DATABASE_URL)
+tsx --test tests/integration/db/poolBudget.integration.test.ts
+
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 

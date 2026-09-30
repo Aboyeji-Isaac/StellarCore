@@ -21,8 +21,19 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
 - `npm run bootstrap:registry` explicitly synchronizes the reviewed anchor/corridor registries for a new database.
+- `tsx --test tests/integration/db/poolBudget.integration.test.ts` runs PostgreSQL pool budget saturation and recovery tests against a live database (requires `DATABASE_URL`).
 
 Do not add undocumented scripts; update this guide and the README when commands change.
+
+## Database Budget Configuration
+
+Database resource use is bounded by `lib/db/budgetConfig.ts`. Every runtime connection is subject to the pool, acquisition, statement, lock, and transaction limits defined there. The budget is parsed from `DB_*` environment variables documented in `.env.example`. Invalid, non-finite, zero-unlimited, or out-of-range values cause a startup error — the budget is never silently disabled.
+
+Timeout ordering (inner → outer): `lock_timeout < statement_timeout < acquisitionTimeoutMs < transactionTimeoutMs`. Conflicting timeout parameters in `DATABASE_URL` (e.g., `?statement_timeout=...`) are rejected.
+
+Pool size is per-instance. Total fan-out = `DB_POOL_MAX × instance count`. Reserve capacity for migrations and operators. Example: PostgreSQL `max_connections = 100`, reserve 5, 10 instances × `poolMax = 5` = 50 ≤ 95 ✓.
+
+The pool factory (`lib/db/pool.ts`) applies server-side `SET statement_timeout` and `SET lock_timeout` on each new connection via the pg `connect` event. Error translation (`lib/db/errors.ts`) classifies raw driver errors into safe, secret-free application error codes.
 
 ## Coding Style & Naming Conventions
 
