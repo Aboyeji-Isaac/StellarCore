@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CspNonceProvider } from "@/components/csp/CspNonceProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <CspNonceProvider>{children}</CspNonceProvider>
+      </body>
     </html>
   );
 }
