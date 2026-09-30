@@ -24,7 +24,7 @@ After `package.json` is introduced, use the documented npm workflow:
 
 Do not add undocumented scripts; update this guide and the README when commands change.
 
-## Coding Style & Naming Conventions
+##Coding Style & Naming Conventions
 
 Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
 
@@ -36,6 +36,6 @@ Write Vitest tests for normalization, median pricing, staleness, and reputation 
 
 No commit convention is established yet. Use concise, imperative subjects, optionally with Conventional Commit prefixes, for example `feat: add SEP-38 quote normalization`. Keep commits focused. Pull requests should explain behavior and architecture changes, link the relevant issue, list verification commands, and include screenshots or recordings for UI and animation work. Note schema, environment, accessibility, and reduced-motion impacts explicitly.
 
-## Security & Configuration
+##Security & Configuration
 
 Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.
