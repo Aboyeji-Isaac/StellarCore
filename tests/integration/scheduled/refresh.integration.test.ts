@@ -27,6 +27,7 @@ test("controlled scheduled integration passes one persisted evaluation time from
       return { attempted: 2, succeeded: 2, failed: 0, failures: [] };
     },
     now: () => EVALUATED_AT,
+    checkMaintenance: async () => ({ ok: true as const, value: undefined }),
   });
 
   assert.deepEqual(events, ["rate-persisted", "reputation:2026-08-31T17:00:00.000Z"]);

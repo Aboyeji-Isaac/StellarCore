@@ -5,9 +5,23 @@ import { pathToFileURL } from "node:url";
 import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
 import { syncAnchorRegistry } from "@/lib/stellar/anchorSync";
 import { syncCorridorRegistry } from "@/lib/stellar/corridorSync";
+import { checkMaintenanceMode } from "@/lib/maintenance";
 
 async function main(): Promise<void> {
   assertCurrentStellarCoreConfiguration();
+
+  const maintenance = await checkMaintenanceMode();
+  if (!maintenance.ok) {
+    console.error(JSON.stringify({
+      ok: false,
+      code: "MAINTENANCE_MODE_ACTIVE",
+      message: maintenance.error?.message,
+      details: { maintenanceCode: maintenance.error?.code },
+    }));
+    process.exitCode = 1;
+    return;
+  }
+
   const { db } = await import("@/lib/dbClient");
 
   try {

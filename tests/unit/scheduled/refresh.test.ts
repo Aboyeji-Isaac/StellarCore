@@ -126,6 +126,7 @@ function dependencies(overrides: Partial<ScheduledRefreshDependencies>): Schedul
     snapshotRates: async () => rateSummary(),
     evaluateReputation: async () => reputationSummary(),
     now: () => (clockCalls++ % 2 === 0 ? STARTED_AT : COMPLETED_AT),
+    checkMaintenance: async () => ({ ok: true as const, value: undefined }),
     ...overrides,
   });
 }

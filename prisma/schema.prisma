@@ -163,3 +163,18 @@ model ReputationScore {
 
   @@map("reputation_scores")
 }
+
+model MaintenanceState {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  active        Boolean  @default(false)
+  reason        String?  @db.Text
+  activatedAt   DateTime @map("activated_at") @db.Timestamptz(6)
+  activatedBy   String?  @map("activated_by") @db.Text
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz(6)
+  deactivatedBy String?  @map("deactivated_by") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([active], map: "maintenance_state_active_idx")
+  @@map("maintenance_state")
+}

@@ -3,6 +3,7 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
+import { checkMaintenanceMode } from "@/lib/maintenance";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/scheduled";
 
@@ -10,6 +11,7 @@ export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
   evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
   now: () => Date;
+  checkMaintenance?: () => Promise<{ ok: boolean; error?: { code: string; message: string } }>;
 }>;
 
 /**
@@ -17,10 +19,25 @@ export type ScheduledRefreshDependencies = Readonly<{
  * evaluation so the evaluation can use observations written in the same run.
  * A rate preparation failure is isolated; a fatal reputation-run failure reaches
  * the HTTP boundary as a safe 500 response.
+ * Maintenance mode blocks evidence mutations before any writes occur.
  */
 export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
+  const maintenanceCheck = dependencies.checkMaintenance ?? checkMaintenanceMode;
+  const maintenance = await maintenanceCheck();
+  if (!maintenance.ok) {
+    const startedAt = dependencies.now();
+    const completedAt = dependencies.now();
+    return Object.freeze({
+      ok: false,
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
+      rates: maintenanceBlockedRates(maintenance.error!.code),
+      reputation: maintenanceBlockedReputation(maintenance.error!.code),
+    });
+  }
+
   const startedAt = dependencies.now();
   let rates: ScheduledRefreshResult["rates"];
 
@@ -77,5 +94,28 @@ function preparationFailure(): ScheduledRefreshResult["rates"] {
     failed: 1,
     skipped: 0,
     failures: Object.freeze([failure]),
+  });
+}
+
+function maintenanceBlockedRates(code: string): ScheduledRefreshResult["rates"] {
+  const failure: ScheduledRateFailure = Object.freeze({
+    phase: "MAINTENANCE",
+    code,
+  });
+  return Object.freeze({
+    attempted: 0,
+    succeeded: 0,
+    failed: 1,
+    skipped: 0,
+    failures: Object.freeze([failure]),
+  });
+}
+
+function maintenanceBlockedReputation(code: string): ScheduledRefreshResult["reputation"] {
+  return Object.freeze({
+    attempted: 0,
+    succeeded: 0,
+    failed: 1,
+    failures: Object.freeze([{ anchorSlug: "", code }]),
   });
 }

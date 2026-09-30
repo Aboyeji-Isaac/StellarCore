@@ -3,10 +3,28 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 
 import { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
+import { checkMaintenanceMode } from "@/lib/maintenance";
 
 export { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 
 async function main(): Promise<void> {
+  const maintenance = await checkMaintenanceMode();
+  if (!maintenance.ok) {
+    process.stdout.write(`${JSON.stringify({
+      totalCandidates: 0,
+      totalAttempted: 0,
+      succeeded: 0,
+      failed: 1,
+      skipped: 0,
+      snapshotsPersisted: 0,
+      snapshots: [],
+      failures: [{ phase: "MAINTENANCE", code: maintenance.error?.code ?? "MAINTENANCE_MODE_ACTIVE" }],
+      skippedSources: [],
+    })}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   try {
     const summary = await snapshotReviewedLiveRates();
     process.stdout.write(`${JSON.stringify(summary)}\n`);
