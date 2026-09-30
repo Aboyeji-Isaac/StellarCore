@@ -6,7 +6,7 @@
 
 StellarCore is planned as a Next.js 15 App Router application. Keep routes and API handlers in `app/`; reusable UI in `components/`; browser-side behavior in `hooks/`; and domain logic in `lib/stellar`, `lib/rates`, and `lib/reputation`. Shared types belong in `types/`, constants in `constants/`, Prisma files in `prisma/`, maintenance jobs in `scripts/`, and static assets in `public/`. Place unit, integration, and Playwright tests under `tests/unit`, `tests/integration`, and `tests/e2e`. Until scaffolding is complete, treat `README.md` as the product and architecture specification.
 
-## Build, Test, and Development Commands
+##Build, Test, and Development Commands
 
 After `package.json` is introduced, use the documented npm workflow:
 
@@ -28,7 +28,7 @@ Do not add undocumented scripts; update this guide and the README when commands 
 
 Use strict TypeScript, two-space indentation, and functional React components. Name components in PascalCase (`AnchorCard.tsx`), hooks with a `use` prefix (`useLiveRates.ts`), and utility modules in lower camel case. Follow Next.js route names (`app/anchors/[id]/page.tsx`). Keep Stellar data and scoring logic independent of UI code. Centralize GSAP registration in `lib/gsap.ts` and shared motion values in `constants/animation.ts`. Run the configured formatter and linter before submitting changes once those tools are added.
 
-## Testing Guidelines
+##Testing Guidelines
 
 Write Vitest tests for normalization, median pricing, staleness, and reputation scoring. Add integration coverage for API routes and Playwright coverage for corridor selection and rate comparison. Use descriptive `*.test.ts` unit names and `*.spec.ts` E2E names. Mock external anchors; tests must not depend on live network responses.
 
