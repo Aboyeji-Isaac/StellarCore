@@ -8,6 +8,7 @@ import {
   type CorridorSyncDependencies,
   type PersistedCorridor,
 } from "@/lib/stellar/corridorSync";
+import { RetryExhaustedError, NonRetryableError } from "@/lib/db";
 import type {
   AnchorCorridorRegistryEntry,
   CorridorRegistryEntry,
@@ -124,6 +125,46 @@ test("unexpected errors produce a safe structured failure", async () => {
   ]);
   assert.equal(serialized.includes("DATABASE_URL"), false);
   assert.equal(serialized.includes("do-not-expose"), false);
+});
+
+test("retry exhaustion produces RETRY_EXHAUSTED failure code", async () => {
+  const state = createInMemoryState({
+    unexpectedError: new RetryExhaustedError(3, new Error("deadlock"), 5000),
+  });
+
+  const result = await syncCorridorRegistry(
+    [MONEYGRAM_CORRIDOR],
+    [MAPPINGS[0]],
+    state.dependencies,
+  );
+
+  assert.deepEqual(result.failures, [
+    {
+      scope: "ASSOCIATION",
+      slug: "moneygram",
+      code: "RETRY_EXHAUSTED",
+    },
+  ]);
+});
+
+test("non-retryable database error produces NON_RETRYABLE_ERROR failure code", async () => {
+  const state = createInMemoryState({
+    unexpectedError: new NonRetryableError(new Error("FK violation")),
+  });
+
+  const result = await syncCorridorRegistry(
+    [MONEYGRAM_CORRIDOR],
+    [MAPPINGS[0]],
+    state.dependencies,
+  );
+
+  assert.deepEqual(result.failures, [
+    {
+      scope: "ASSOCIATION",
+      slug: "moneygram",
+      code: "NON_RETRYABLE_ERROR",
+    },
+  ]);
 });
 
 function createInMemoryState(options: {

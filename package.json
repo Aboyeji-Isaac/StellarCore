@@ -18,7 +18,9 @@
     "snapshot:rates": "tsx scripts/snapshot-rates.ts",
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
-    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
+    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
+    "export:evidence": "tsx scripts/export-evidence.ts",
+    "verify:export": "tsx scripts/verify-export.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -31,6 +33,7 @@
     "pg": "^8.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "server-only": "^0.0.1",
     "smol-toml": "^1.8.0"
   },
   "devDependencies": {
