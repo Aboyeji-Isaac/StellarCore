@@ -19,6 +19,8 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 
+import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
+
 export type CronRotationErrorCode =
   | "MISSING_PRIMARY_SECRET"
   | "DUPLICATE_ROTATION_SECRET"
@@ -102,7 +104,7 @@ export function resolveCronRotation(
  */
 export function hasValidCronAuthorization(
   authorization: string | null,
-  secret: string | undefined = process.env.CRON_SECRET,
+  secret?: string,
   previousSecret: string | undefined = process.env.CRON_SECRET_PREVIOUS,
   rotationUntil: string | undefined = process.env.CRON_SECRET_ROTATION_UNTIL,
   now: () => number = Date.now,
@@ -110,8 +112,9 @@ export function hasValidCronAuthorization(
   let rotation: ResolvedCronRotation;
 
   try {
+    const primarySecret = secret ?? getRuntimeConfig().cronSecret;
     rotation = resolveCronRotation(
-      { primarySecret: secret, previousSecret, rotationUntil },
+      { primarySecret, previousSecret, rotationUntil },
       now,
     );
   } catch {
