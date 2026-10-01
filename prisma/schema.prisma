@@ -196,3 +196,21 @@ model ScheduledSourceSuppression {
   @@index([state], map: "scheduled_source_suppressions_state_idx")
   @@map("scheduled_source_suppressions")
 }
+
+
+/// Auditable production maintenance control (#198).
+/// Historical activation rows are retained after deactivation.
+model MaintenanceState {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  active        Boolean   @default(true)
+  reason        String
+  activatedAt   DateTime  @default(now()) @map("activated_at") @db.Timestamptz(6)
+  activatedBy   String    @map("activated_by")
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz(6)
+  deactivatedBy String?   @map("deactivated_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([active], map: "maintenance_state_active_idx")
+  @@map("maintenance_state")
+}
