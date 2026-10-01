@@ -105,7 +105,7 @@ export async function exportEvidence(
       version: EVIDENCE_EXPORT_VERSION,
       provenance,
       members: sortedMembers,
-      rootSha256: computeRootHash(sortedMembers),
+      rootSha256: computeRootHash(sortedMembers, provenance),
     });
 
     await writeFile(
