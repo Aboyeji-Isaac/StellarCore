@@ -236,6 +236,22 @@ Running the bootstrap:
 
 ## Scheduler
 
+### Cron secret rotation
+
+For a planned zero-downtime rotation, deploy the application with the new
+`CRON_SECRET`, the outgoing value in `CRON_SECRET_PREVIOUS`, and a UTC
+`CRON_SECRET_ROTATION_UNTIL` deadline. During that bounded window either
+secret authenticates. Cut the scheduler over to the new primary, verify it, and
+then remove the previous/deadline variables. At the exact deadline the previous
+secret is already revoked.
+
+Misconfigured rotation fails closed: blank primary, duplicate primary/previous,
+or an invalid previous-slot deadline returns 401. Removing the previous slot
+revokes it on the next request. For a compromised primary, deploy a fresh
+primary with no previous slot; for a compromised previous secret, remove both
+rotation variables immediately. Secret values are never logged.
+
+
 `vercel.json` schedules the single production-only refresh route once daily at `0 0 * * *` (midnight UTC), which is compatible with the Vercel Hobby plan. Vercel sends `CRON_SECRET` as a Bearer authorization header; the route uses constant-time validation, accepts GET only, returns bounded no-store JSON, and does not accept query-string credentials.
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
