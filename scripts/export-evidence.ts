@@ -88,7 +88,7 @@ async function main(): Promise<void> {
     console.log(`  Corridor filter: ${args.corridorSlugs.join(", ")}`);
   }
 
-  const result = await exportEvidence(deps, selection, args.output, args.exportedBy);
+  const result = await exportEvidence(deps, selection, args.output, args.exportedBy ?? "cli");
 
   if (!result.ok) {
     console.error(`Export failed: ${result.code} - ${result.message}`);

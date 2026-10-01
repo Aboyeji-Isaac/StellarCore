@@ -21,8 +21,6 @@ import type {
 import {
   withTransactionRetry,
   DEFAULT_RETRY_POLICY,
-  isRetryablePrismaError,
-  RetryExhaustedError,
 } from "@/lib/db/retry";
 import {
   canonicalStringify,
@@ -388,37 +386,43 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
         },
       };
       if (selection.anchorSlugs?.length) {
-        const anchorIds = await db.anchor.findMany({
-          where: { slug: { in: [...selection.anchorSlugs] } },
-          select: { id: true },
+        const anchorIds = await withExportRetry(async () => {
+          return db.anchor.findMany({
+            where: { slug: { in: [...selection.anchorSlugs!] } },
+            select: { id: true },
+          });
         });
         if (anchorIds.length > 0) {
           where.anchorId = { in: anchorIds.map((a) => a.id) };
         }
       }
       if (selection.corridorSlugs?.length) {
-        const corridorIds = await db.corridor.findMany({
-          where: { slug: { in: [...selection.corridorSlugs] } },
-          select: { id: true },
+        const corridorIds = await withExportRetry(async () => {
+          return db.corridor.findMany({
+            where: { slug: { in: [...selection.corridorSlugs!] } },
+            select: { id: true },
+          });
         });
         if (corridorIds.length > 0) {
           where.corridorId = { in: corridorIds.map((c) => c.id) };
         }
       }
 
-      const snapshots = await db.rateSnapshot.findMany({
-        where,
-        orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { capturedAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          anchor: { select: { slug: true } },
-          corridor: { select: { slug: true } },
-          rate: true,
-          sourceAmount: true,
-          destinationAmount: true,
-          fee: true,
-          capturedAt: true,
-        },
+      const snapshots = await withExportRetry(async () => {
+        return db.rateSnapshot.findMany({
+          where,
+          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { capturedAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            anchor: { select: { slug: true } },
+            corridor: { select: { slug: true } },
+            rate: true,
+            sourceAmount: true,
+            destinationAmount: true,
+            fee: true,
+            capturedAt: true,
+          },
+        });
       });
 
       for (const s of snapshots) {
@@ -443,37 +447,43 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
         },
       };
       if (selection.anchorSlugs?.length) {
-        const anchorIds = await db.anchor.findMany({
-          where: { slug: { in: [...selection.anchorSlugs] } },
-          select: { id: true },
+        const anchorIds = await withExportRetry(async () => {
+          return db.anchor.findMany({
+            where: { slug: { in: [...selection.anchorSlugs!] } },
+            select: { id: true },
+          });
         });
         if (anchorIds.length > 0) {
           where.anchorId = { in: anchorIds.map((a) => a.id) };
         }
       }
       if (selection.corridorSlugs?.length) {
-        const corridorIds = await db.corridor.findMany({
-          where: { slug: { in: [...selection.corridorSlugs] } },
-          select: { id: true },
+        const corridorIds = await withExportRetry(async () => {
+          return db.corridor.findMany({
+            where: { slug: { in: [...selection.corridorSlugs!] } },
+            select: { id: true },
+          });
         });
         if (corridorIds.length > 0) {
           where.corridorId = { in: corridorIds.map((c) => c.id) };
         }
       }
 
-      const outcomes = await db.transferOutcome.findMany({
-        where,
-        orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { recordedAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          anchor: { select: { slug: true } },
-          corridor: { select: { slug: true } },
-          status: true,
-          fillRate: true,
-          settlementMs: true,
-          slippage: true,
-          recordedAt: true,
-        },
+      const outcomes = await withExportRetry(async () => {
+        return db.transferOutcome.findMany({
+          where,
+          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { recordedAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            anchor: { select: { slug: true } },
+            corridor: { select: { slug: true } },
+            status: true,
+            fillRate: true,
+            settlementMs: true,
+            slippage: true,
+            recordedAt: true,
+          },
+        });
       });
 
       for (const o of outcomes) {
@@ -491,54 +501,56 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
     },
 
     async queryReputationScores(selection: ExportSelection) {
-      const where: Prisma.ReputationScoreWhereInput = {};
-      if (selection.anchorSlugs?.length) {
-        const anchorIds = await db.anchor.findMany({
-          where: { slug: { in: [...selection.anchorSlugs] } },
-          select: { id: true },
-        });
-        if (anchorIds.length > 0) {
-          where.anchorId = { in: anchorIds.map((a) => a.id) };
+      return withExportRetry(async () => {
+        const where: Prisma.ReputationScoreWhereInput = {};
+        if (selection.anchorSlugs?.length) {
+          const anchorIds = await db.anchor.findMany({
+            where: { slug: { in: [...selection.anchorSlugs] } },
+            select: { id: true },
+          });
+          if (anchorIds.length > 0) {
+            where.anchorId = { in: anchorIds.map((a) => a.id) };
+          }
         }
-      }
 
-      const scores = await db.reputationScore.findMany({
-        where,
-        orderBy: { anchorId: "asc" },
-        select: {
-          id: true,
-          anchor: { select: { slug: true } },
-          compositeScore: true,
-          scoreBand: true,
-          fillRate7d: true,
-          fillRate30d: true,
-          fillRate90d: true,
-          settleP50Ms: true,
-          settleP95Ms: true,
-          slippageP50: true,
-          slippageP95: true,
-          sampleSize: true,
-          state: true,
-          computedAt: true,
-        },
+        const scores = await db.reputationScore.findMany({
+          where,
+          orderBy: { anchorId: "asc" },
+          select: {
+            id: true,
+            anchor: { select: { slug: true } },
+            compositeScore: true,
+            scoreBand: true,
+            fillRate7d: true,
+            fillRate30d: true,
+            fillRate90d: true,
+            settleP50Ms: true,
+            settleP95Ms: true,
+            slippageP50: true,
+            slippageP95: true,
+            sampleSize: true,
+            state: true,
+            computedAt: true,
+          },
+        });
+
+        return scores.map((s) => ({
+          id: s.id,
+          anchorSlug: s.anchor.slug,
+          compositeScore: s.compositeScore,
+          scoreBand: s.scoreBand,
+          fillRate7d: s.fillRate7d,
+          fillRate30d: s.fillRate30d,
+          fillRate90d: s.fillRate90d,
+          settleP50Ms: s.settleP50Ms,
+          settleP95Ms: s.settleP95Ms,
+          slippageP50: s.slippageP50,
+          slippageP95: s.slippageP95,
+          sampleSize: s.sampleSize,
+          state: s.state,
+          computedAt: s.computedAt.toISOString(),
+        }));
       });
-
-      return scores.map((s) => ({
-        id: s.id,
-        anchorSlug: s.anchor.slug,
-        compositeScore: s.compositeScore,
-        scoreBand: s.scoreBand,
-        fillRate7d: s.fillRate7d,
-        fillRate30d: s.fillRate30d,
-        fillRate90d: s.fillRate90d,
-        settleP50Ms: s.settleP50Ms,
-        settleP95Ms: s.settleP95Ms,
-        slippageP50: s.slippageP50,
-        slippageP95: s.slippageP95,
-        sampleSize: s.sampleSize,
-        state: s.state,
-        computedAt: s.computedAt.toISOString(),
-      }));
     },
   });
 }
