@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-process.env.NODE_ENV = "test";
+process.env.STELLARCORE_ENVIRONMENT = "test";
 process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
 
 const {
