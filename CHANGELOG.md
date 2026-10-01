@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Root EditorConfig defaults for consistent cross-editor whitespace, line endings, and indentation (#257).
 - Durable three-strike suppression for deterministic scheduled source failures, reviewed reactivation tooling, and aggregate exclusion of suppressed sources (#234).
 - Deterministic scheduled evidence-pipeline fault-injection coverage with documented recovery/failure matrix (#171).
 - Deployment-bound, secret-safe runtime configuration fingerprints with startup drift enforcement and release provenance binding (#214).
