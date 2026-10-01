@@ -102,6 +102,9 @@ export async function runScheduledRefresh(
   });
 }
 
+const TEST_MAINTENANCE_CLEAR = async () =>
+  Object.freeze({ ok: true as const, value: undefined });
+
 const DEFAULT_DEPENDENCIES = Object.freeze({
   snapshotRates: snapshotReviewedLiveRates,
   evaluateReputation: evaluatePersistedAnchorReputations,
