@@ -9,7 +9,7 @@ const ADVERSARIAL_VALUES = Object.freeze([
   "' OR 1=1--",
   "x'; DROP TABLE rate_snapshots;--",
   "${identifier}",
-  ""; SELECT pg_sleep(10);--",
+  "\"; SELECT pg_sleep(10);--",
   "/* comment */ UNION SELECT null",
 ]);
 
