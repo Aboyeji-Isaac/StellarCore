@@ -1,4 +1,5 @@
 import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
+import type { StaleEvidenceMetadata } from "@/types/api/staleEvidence";
 
 export type PublicRateObservation = Readonly<{
   anchor: Readonly<{
@@ -28,6 +29,7 @@ export type PublicMedianRequirement = Readonly<{
 }>;
 
 export type PublicRatesResponse = Readonly<{
+  degraded?: StaleEvidenceMetadata;
   corridor: Readonly<{
     slug: string;
     sourceAsset: string;
@@ -59,5 +61,5 @@ export type RatesApiErrorResponse = Readonly<{
 }>;
 
 export type RatesApiResult =
-  | Readonly<{ status: 200; body: PublicRatesResponse }>
+  | Readonly<{ status: 200; body: PublicRatesResponse; degraded?: StaleEvidenceMetadata }>
   | Readonly<{ status: 400 | 404 | 500; body: RatesApiErrorResponse }>;

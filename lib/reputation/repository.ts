@@ -1,13 +1,13 @@
 import { Prisma } from "@/app/generated/prisma/client";
-import { buildReputationEvidenceManifest } from "@/lib/reputation/manifest";
+import {
+  readInReputationSnapshot,
+  type ReputationSnapshotFailure,
+} from "@/lib/reputation/snapshot";
 import type {
   PersistedReputationScore,
   ReputationCorridorMembershipValue,
   ReputationEvidence,
-  ReputationEvidenceEligibilityValue,
-  ReputationEvidenceReasonCodeValue,
-  ReputationManifestRecord,
-  ReputationManifestRepository,
+  ReputationEvidenceReadFailure,
   ReputationPersistenceInput,
   ReputationRepository,
   ReputationTransferStatus,
@@ -124,82 +124,48 @@ const MANIFEST_SELECT = {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * The newest snapshot time per corridor for one anchor, as a bounded set of
+ * index probes instead of a walk over the anchor's history.
+ *
+ * Exported so differential tests and the benchmark run the exact SQL that
+ * production uses.
+ */
+export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      corridor.slug AS "corridorSlug",
+      latest.captured_at AS "capturedAt"
+    FROM corridors AS corridor
+    CROSS JOIN LATERAL (
+      SELECT snapshot.captured_at
+      FROM rate_snapshots AS snapshot
+      WHERE snapshot.anchor_id = ${anchorId}::uuid
+        AND snapshot.corridor_id = corridor.id
+      ORDER BY snapshot.captured_at DESC, snapshot.id DESC
+      LIMIT 1
+    ) AS latest
+    ORDER BY corridor.slug
+  `;
+}
+
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
-    const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug: anchorSlug },
-      select: {
-        id: true,
-        slug: true,
-        status: true,
-        corridors: {
-          select: { corridor: { select: { id: true, slug: true } } },
-        },
-      },
-    });
-    if (!anchor) return null;
+    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    await ensureDatabaseEnvironment();
 
-    const [latestRates, transferOutcomes, outsideOutcomeCount] = await Promise.all([
-      db.$queryRaw<LatestRateRow[]>(Prisma.sql`
-        SELECT DISTINCT ON (corridor.slug)
-          snapshot.id AS "rateSnapshotId",
-          corridor.id AS "corridorId",
-          corridor.slug AS "corridorSlug",
-          snapshot.captured_at AS "capturedAt"
-        FROM rate_snapshots AS snapshot
-        INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
-        WHERE snapshot.anchor_id = ${anchor.id}::uuid
-        ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
-      `),
-      db.transferOutcome.findMany({
-        where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
-        orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
-        select: {
-          id: true,
-          corridorId: true,
-          status: true,
-          settlementMs: true,
-          slippage: true,
-          recordedAt: true,
-        },
-      }),
-      db.transferOutcome.count({
-        where: { anchorId: anchor.id, recordedAt: { lt: outcomeWindowStart } },
-      }),
-    ]);
+    const snapshotResult = await readInReputationSnapshot(db, (tx, identity) =>
+      readEvidenceInSnapshot(tx, identity, anchorSlug, outcomeWindowStart),
+    );
 
-    return Object.freeze({
-      anchorId: anchor.id,
-      anchorSlug: anchor.slug,
-      status: anchor.status,
-      corridors: Object.freeze(anchor.corridors
-        .map(({ corridor }) => Object.freeze({
-          corridorId: corridor.id,
-          slug: corridor.slug,
-        }))
-        .sort((left, right) => left.slug.localeCompare(right.slug))),
-      latestRates: Object.freeze(latestRates.map((rate) => Object.freeze({
-        rateSnapshotId: rate.rateSnapshotId,
-        corridorId: rate.corridorId,
-        corridorSlug: rate.corridorSlug,
-        capturedAt: new Date(rate.capturedAt.getTime()),
-      }))),
-      transferOutcomes: Object.freeze(transferOutcomes.map((outcome) =>
-        Object.freeze({
-          transferOutcomeId: outcome.id,
-          corridorId: outcome.corridorId,
-          status: outcome.status,
-          settlementMs: outcome.settlementMs,
-          slippage: outcome.slippage,
-          recordedAt: new Date(outcome.recordedAt.getTime()),
-        }))),
-      outsideOutcomeCount,
-    }) satisfies ReputationEvidence;
+    if (!snapshotResult.ok) return toEvidenceReadFailure(snapshotResult.failure);
+    return snapshotResult.value;
   },
 
   async upsertScore(input: ReputationPersistenceInput): Promise<PersistedReputationScore> {
-    const { db } = await import("@/lib/dbClient");
+    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    await ensureDatabaseEnvironment();
+
     const { calculation } = input;
     const manifest = buildReputationEvidenceManifest({
       evidence: input.evidence,
@@ -220,6 +186,13 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       state: calculation.state === "established" ? "OK" : "INSUFFICIENT_DATA",
       computedAt: new Date(calculation.computedAt),
     } as const;
+
+    const persisted = await db.reputationScore.upsert({
+      where: { anchorId: input.anchorId },
+      create: { anchorId: input.anchorId, ...data },
+      update: data,
+      select: { id: true, computedAt: true, anchor: { select: { slug: true } } },
+    });
 
     // The current score projection and its immutable evidence-set manifest are
     // persisted in one transaction. If any member insert fails, the score
@@ -297,66 +270,79 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
   },
 });
 
-/**
- * Read-only inspection path for persisted evidence-set manifests. It performs
- * bounded reads only: no live SEP calls, no recalculation, and no writes.
- * Legacy evaluations have no manifest row and surface as `null`, which the
- * formatter maps to explicit legacy/unknown lineage rather than inferred
- * membership.
- */
-export const PRISMA_REPUTATION_MANIFEST_REPOSITORY: ReputationManifestRepository =
-  Object.freeze({
-    async readManifest(evaluationId) {
-      if (!UUID_PATTERN.test(evaluationId)) return null;
-      const { db } = await import("@/lib/dbClient");
-      const row = await db.reputationEvidenceManifest.findUnique({
-        where: { id: evaluationId },
-        select: MANIFEST_SELECT,
-      });
-      return row === null ? null : toManifestRecord(row);
-    },
-
-    async readLatestManifestForAnchor(anchorSlug) {
-      const { db } = await import("@/lib/dbClient");
-      const row = await db.reputationEvidenceManifest.findFirst({
-        where: { anchor: { slug: anchorSlug } },
-        orderBy: [
-          { evaluatedAt: "desc" },
-          { createdAt: "desc" },
-          { id: "desc" },
-        ],
-        select: MANIFEST_SELECT,
-      });
-      return row === null ? null : toManifestRecord(row);
+async function readEvidenceInSnapshot(
+  tx: Prisma.TransactionClient,
+  identity: Readonly<{ snapshotId: string; readAt: Date }>,
+  anchorSlug: string,
+  outcomeWindowStart: Date,
+): Promise<ReputationEvidence | null> {
+  const anchor = await tx.anchor.findUnique({
+    where: { slug: anchorSlug },
+    select: {
+      id: true,
+      slug: true,
+      status: true,
+      corridors: { select: { corridor: { select: { slug: true } } } },
     },
   });
 
-function toManifestRecord(row: ManifestRow): ReputationManifestRecord {
+  if (!anchor) return null;
+
+  const [latestRates, transferOutcomes] = await Promise.all([
+    tx.$queryRaw<LatestRateRow[]>(latestCorridorRatesQuery(anchor.id)),
+    tx.transferOutcome.findMany({
+      where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
+      orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
+      select: {
+        status: true,
+        settlementMs: true,
+        slippage: true,
+        recordedAt: true,
+      },
+    }),
+  ]);
+
   return Object.freeze({
-    id: row.id,
-    reputationScoreId: row.reputationScoreId,
-    anchorSlug: row.anchor.slug,
-    anchorStatus: row.anchorStatus,
-    manifestSchemaVersion: row.manifestSchemaVersion,
-    reasonCodeVocabularyVersion: row.reasonCodeVocabularyVersion,
-    scoringPolicyVersion: row.scoringPolicyVersion,
-    freshnessPolicyVersion: row.freshnessPolicyVersion,
-    configurationRevision: row.configurationRevision,
-    evaluatedAt: row.evaluatedAt.toISOString(),
-    outcomeWindowStart: row.outcomeWindowStart.toISOString(),
-    corridorCount: row.corridorCount,
-    latestRateCount: row.latestRateCount,
-    freshRateCount: row.freshRateCount,
-    outcomeCount: row.outcomeCount,
-    completedOutcomeCount: row.completedOutcomeCount,
-    outsideOutcomeCount: row.outsideOutcomeCount,
-    minimumOutcomeCount: row.minimumOutcomeCount,
-    createdAt: row.createdAt.toISOString(),
-    corridorMembers: Object.freeze(row.corridorMembers.map((member) =>
-      Object.freeze({ ...member }))),
-    rateMembers: Object.freeze(row.rateMembers.map((member) =>
-      Object.freeze({ ...member, capturedAt: member.capturedAt.toISOString() }))),
-    outcomeMembers: Object.freeze(row.outcomeMembers.map((member) =>
-      Object.freeze({ ...member, recordedAt: member.recordedAt.toISOString() }))),
+    anchorId: anchor.id,
+    anchorSlug: anchor.slug,
+    status: anchor.status,
+    corridorSlugs: Object.freeze(
+      anchor.corridors
+        .map(({ corridor }) => corridor.slug)
+        .sort((left, right) => left.localeCompare(right)),
+    ),
+    latestRates: Object.freeze(
+      latestRates.map((rate) =>
+        Object.freeze({
+          corridorSlug: rate.corridorSlug,
+          capturedAt: new Date(rate.capturedAt.getTime()),
+        }),
+      ),
+    ),
+    transferOutcomes: Object.freeze(
+      transferOutcomes.map((outcome) =>
+        Object.freeze({
+          status: outcome.status,
+          settlementMs: outcome.settlementMs,
+          slippage: outcome.slippage,
+          recordedAt: new Date(outcome.recordedAt.getTime()),
+        }),
+      ),
+    ),
+    snapshot: Object.freeze({
+      snapshotId: identity.snapshotId,
+      readAt: new Date(identity.readAt.getTime()),
+      isolationLevel: "REPEATABLE READ",
+    }),
+  });
+}
+
+function toEvidenceReadFailure(
+  failure: ReputationSnapshotFailure,
+): ReputationEvidenceReadFailure {
+  return Object.freeze({
+    code: failure.code,
+    retryable: failure.retryable,
+    attempts: failure.attempts,
   });
 }

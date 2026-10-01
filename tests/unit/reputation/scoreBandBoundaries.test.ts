@@ -127,6 +127,11 @@ function evidence(
       ...Array.from({ length: failedCount }, (_, index) =>
         outcome("ERROR", completedCount + index)),
     ]),
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
 }
 

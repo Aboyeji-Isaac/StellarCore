@@ -40,6 +40,7 @@ export type ScheduledRefreshResult = Readonly<{
     succeeded: number;
     failed: number;
     skipped: number;
+    suppressed?: number;
     failures: readonly ScheduledRateFailure[];
   }>;
   reputation: Readonly<{
