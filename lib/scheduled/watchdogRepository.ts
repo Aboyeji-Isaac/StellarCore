@@ -30,6 +30,14 @@ const SELECT = {
 } as const;
 
 /**
+ * Row-lock statement for one serialized watchdog transition. Exported for the
+ * reviewed raw-SQL boundary parameterization tests: values are Prisma-bound
+ * parameters and the statement structure is constant.
+ */
+export const watchdogPipelineLockQuery = (pipeline: string) =>
+  Prisma.sql`SELECT 1 FROM refresh_watchdog WHERE pipeline = ${pipeline} FOR UPDATE`;
+
+/**
  * Persists the watchdog heartbeat in PostgreSQL. Each transition runs in one
  * transaction holding a row lock, so concurrent completions serialize instead
  * of losing an update. This is not the #111 refresh lock: it only protects this
@@ -45,9 +53,7 @@ export const PRISMA_REFRESH_WATCHDOG_REPOSITORY: RefreshWatchdogRepository = Obj
   async transition(pipeline, apply) {
     const { db } = await import("@/lib/dbClient");
     return db.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`
-        SELECT 1 FROM refresh_watchdog WHERE pipeline = ${pipeline} FOR UPDATE
-      `);
+      await tx.$executeRaw(watchdogPipelineLockQuery(pipeline));
       const row = await tx.refreshWatchdog.findUnique({ where: { pipeline }, select: SELECT });
       const next = apply(row ? toState(row) : null);
       const data = {

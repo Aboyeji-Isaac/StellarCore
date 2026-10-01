@@ -11,6 +11,7 @@ const REVIEWED_RAW_SQL_FILES = new Set([
   "lib/reputation/repository.ts",
   "lib/reputation/snapshot.ts",
   "lib/stellar/anchorSync.ts",
+  "lib/scheduled/watchdogRepository.ts",
   "scripts/stamp-database-environment.ts",
 ]);
 

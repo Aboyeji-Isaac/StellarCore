@@ -7,6 +7,7 @@ on:
       - "lib/**"
       - "scripts/**"
       - "tests/unit/security/rawSqlBoundaries.test.ts"
+      - "tests/unit/security/watchdogSqlBoundaries.test.ts"
       - "package.json"
       - ".github/workflows/audit-raw-sql.yml"
 
@@ -40,4 +41,4 @@ jobs:
         run: npx prisma generate
 
       - name: Run adversarial parameterization tests
-        run: npx tsx --test tests/unit/security/rawSqlBoundaries.test.ts
+        run: npx tsx --test tests/unit/security/rawSqlBoundaries.test.ts tests/unit/security/watchdogSqlBoundaries.test.ts

@@ -95,6 +95,7 @@ raw-query files, unsafe APIs, or `Prisma.raw` fragments.
 | `lib/reputation/repository.ts` | `Prisma.sql` + `$queryRaw` | Latest rate evidence per corridor for reputation | Values are bound parameters; identifiers are constant SQL |
 | `lib/reputation/snapshot.ts` | `Prisma.sql` + `$queryRaw`; reviewed `$executeRawUnsafe` exception | Read-only repeatable-read snapshot setup and identity | The unsafe exception is exactly the constant statement `SET TRANSACTION READ ONLY`; no input or identifier is interpolated |
 | `lib/stellar/anchorSync.ts` | tagged `$executeRaw` / `$queryRaw` | Monotonic anchor persistence and sync-order allocation | Interpolated values are Prisma-bound parameters; table/column names are constants |
+| `lib/scheduled/watchdogRepository.ts` | tagged `$executeRaw` + `Prisma.sql` | Serialized watchdog heartbeat transition: `SELECT 1 FROM refresh_watchdog WHERE pipeline = $1 FOR UPDATE` row lock (#189) | Pipeline id is a bound parameter; statement structure is constant; covered by `tests/unit/security/watchdogSqlBoundaries.test.ts` |
 | `lib/config/environmentGuardDb.ts` | tagged `$queryRaw` | Read deployment environment stamp absent from Prisma schema | Query text is constant |
 | `scripts/stamp-database-environment.ts` | tagged `$queryRaw` / `$executeRaw` | Protected operator environment stamping | Values are bound and the statement structure is constant |
 
