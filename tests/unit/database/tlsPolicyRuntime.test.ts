@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  isProductionLikeEnvironment,
-  resolveDatabaseTlsPolicyForEnvironment,
-} from "@/lib/database/tlsPolicyRuntime";
+import { resolveDatabaseTlsPolicyForEnvironment } from "@/lib/database/tlsPolicyRuntime";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -122,7 +119,7 @@ test("a configured missing CA file path fails closed in production", () => {
   );
 });
 
-test("development exceptions cannot activate in production: same env map flips behavior by NODE_ENV only", () => {
+test("development exceptions cannot activate in production: same URL is allowed in development but rejected in production", () => {
   const devUrl = "postgres://user:secret@localhost:5432/stellar?sslmode=disable";
 
   const development = resolveDatabaseTlsPolicyForEnvironment({
