@@ -15,38 +15,51 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = join(__dirname, "..", "..", "..");
 const REPORTS_DIR = join(__dirname, "reports");
 
-const PRODUCTION_INDICATORS = [
-  "prod",
-  "production",
-  "live",
-  "main",
-  "primary",
-  "aws",
-  "gcp",
-  "azure",
-  "vercel",
-  "supabase",
-  "neon",
-  "planetscale",
-];
+export const REHEARSAL_CONFIRMATION = "allow-destructive";
 
-function assertNotProduction(dbUrl: string): void {
-  const url = new URL(dbUrl);
-  const host = url.hostname.toLowerCase();
-
-  for (const indicator of PRODUCTION_INDICATORS) {
-    if (host.includes(indicator)) {
-      throw new Error(
-        `SAFETY VIOLATION: Database host "${host}" appears to be production. ` +
-          `Migration rehearsals must run against isolated non-production databases only.`,
-      );
-    }
+export function assertIsolatedRehearsal(
+  dbUrl: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): void {
+  if (environment.STELLARCORE_MIGRATION_REHEARSAL !== REHEARSAL_CONFIRMATION) {
+    throw new Error(
+      "SAFETY VIOLATION: destructive migration rehearsal requires the explicit rehearsal confirmation.",
+    );
   }
 
-  if (url.searchParams.get("sslmode") === "require" && host.includes("prisma")) {
+  if (
+    environment.STELLARCORE_ENVIRONMENT !== "test" &&
+    environment.STELLARCORE_ENVIRONMENT !== "ci"
+  ) {
     throw new Error(
-      `SAFETY VIOLATION: Database appears to be a managed Prisma production instance. ` +
-        `Migration rehearsals must run against isolated non-production databases only.`,
+      "SAFETY VIOLATION: migration rehearsal is restricted to test or ci runtime identity.",
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(dbUrl);
+  } catch {
+    throw new Error("SAFETY VIOLATION: rehearsal DATABASE_URL is invalid.");
+  }
+
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+    throw new Error(
+      "SAFETY VIOLATION: rehearsal database must use PostgreSQL.",
+    );
+  }
+
+  const allowedHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (!allowedHosts.has(url.hostname)) {
+    throw new Error(
+      "SAFETY VIOLATION: destructive rehearsal is restricted to a loopback PostgreSQL host.",
+    );
+  }
+
+  const databaseName = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  if (!databaseName.toLowerCase().includes("rehearsal")) {
+    throw new Error(
+      "SAFETY VIOLATION: rehearsal database name must contain 'rehearsal'.",
     );
   }
 }
@@ -188,7 +201,9 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 export const CORE_UTILS = Object.freeze({
-  assertNotProduction,
+  assertNotProduction: assertIsolatedRehearsal,
+  assertIsolatedRehearsal,
+  REHEARSAL_CONFIRMATION,
   getTimestamp,
   getDurationMs,
   runCommand,
