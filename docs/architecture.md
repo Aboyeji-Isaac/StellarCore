@@ -83,6 +83,16 @@ Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
 
+The database connection is managed through `@prisma/adapter-pg` backed by a
+hardened `pg.Pool`. Connection acquisition and timeouts are bounded by
+`connectionTimeoutMillis` and explicit request deadlines, with TCP keepalive
+and connection lifetime recycling enabled. When transient primary failover or
+endpoint rotation occurs, connection/failover errors trigger proactive eviction
+of stale pooled connections to avoid sequential query failures against dead
+sockets. Interrupted transactions never report success without positive commit
+confirmation, and bounded pool capacity prevents connection storms against
+newly promoted primaries. See `docs/database-failover.md` for full details.
+
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal
 identifiers, and use no-store behavior where data is dynamic. The
