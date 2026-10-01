@@ -4,39 +4,15 @@ import { PrismaClient } from "@/app/generated/prisma/client";
 
 export type { PrismaClient };
 import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
+import { getRuntimeConfig, type RuntimeConfig } from "@/lib/config/runtimeConfig";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
   prismaEnvironmentVerified: Promise<void> | undefined;
 };
 
-function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
-
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not defined");
-  }
-
-  let protocol: string;
-
-  try {
-    protocol = new URL(connectionString).protocol;
-  } catch {
-    throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL");
-  }
-
-  if (protocol === "prisma:" || protocol === "prisma+postgres:") {
-    throw new Error(
-      "DATABASE_URL must use postgres:// or postgresql:// with PrismaPg",
-    );
-  }
-
-  if (protocol !== "postgres:" && protocol !== "postgresql:") {
-    throw new Error("DATABASE_URL must use postgres:// or postgresql://");
-  }
-
-  const adapter = new PrismaPg({ connectionString });
-
+function createPrismaClient(config: RuntimeConfig = getRuntimeConfig()): PrismaClient {
+  const adapter = new PrismaPg({ connectionString: config.databaseUrl });
   return new PrismaClient({ adapter });
 }
 
@@ -65,4 +41,14 @@ export async function ensureDatabaseEnvironment(): Promise<void> {
 /** Test hook: clears the cached verification so guard tests can re-run it. */
 export function resetDatabaseEnvironmentForTests(): void {
   globalForPrisma.prismaEnvironmentVerified = undefined;
+}
+
+/** Test hook: allows injecting a test runtime configuration. */
+export function setRuntimeConfigForTests(config: RuntimeConfig): void {
+  globalForPrisma.prisma = createPrismaClient(config);
+}
+
+/** Test hook: clears the cached runtime configuration. */
+export function resetRuntimeConfigForTests(): void {
+  globalForPrisma.prisma = undefined;
 }

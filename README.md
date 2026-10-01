@@ -316,19 +316,43 @@ stellarcore/
 ```bash
 # .env.example
 
+# Required: Explicit runtime environment identity. One of: production, preview, development, test, ci
+# If not set, falls back to VERCEL_ENV (on Vercel) or NODE_ENV=test (in test runs).
+STELLARCORE_ENVIRONMENT="development"
+
 # Server-only application/runtime PostgreSQL connection for this environment.
+# Must use postgres:// or postgresql:// protocol.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional: Rate freshness threshold in milliseconds (default: 120000)
+RATE_FRESHNESS_THRESHOLD_MS="120000"
+
+# Optional: Minimum fresh independent sources required for a median (default: 2)
+MIN_FRESH_SOURCES="2"
 ```
+
+`STELLARCORE_ENVIRONMENT` explicitly declares the runtime environment. It is
+never inferred from hostnames or URL contents. Valid values are `production`,
+`preview`, `development`, `test`, and `ci`. On Vercel, `VERCEL_ENV` is used as
+a fallback. In test runs (`NODE_ENV=test`), the environment defaults to `test`.
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
 appropriate to its deployment environment; local development may use a
 compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
-repository files, or logs.
+repository files, or logs. The URL must use `postgres://` or `postgresql://`
+protocol; `prisma://` and `prisma+postgres://` are rejected.
+
+`CRON_SECRET` is required in production for the authenticated scheduled refresh
+route. It is optional in other environments.
+
+`RATE_FRESHNESS_THRESHOLD_MS` and `MIN_FRESH_SOURCES` control the rate engine's
+staleness and median requirements. They have architectural defaults (120 seconds
+and 2 sources) that should rarely need adjustment.
 
 ---
 

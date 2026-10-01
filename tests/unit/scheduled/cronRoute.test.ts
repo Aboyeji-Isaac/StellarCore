@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// Set up test environment BEFORE importing modules that depend on it
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+process.env.CRON_SECRET = "local-test-cron-secret";
+
 import * as route from "@/app/api/internal/cron/refresh/route";
 import { hasValidCronAuthorization } from "@/lib/scheduled/cronAuth";
 import { getScheduledRefreshResponse } from "@/lib/scheduled/http";
+import { resetRuntimeConfigCache } from "@/lib/config/runtimeConfig";
 import type { ScheduledRefreshResult } from "@/types/scheduled";
 
 const SECRET = "local-test-cron-secret";
+
+// Store original env for cleanup
+const originalEnv: Record<string, string | undefined> = {};
+for (const [key, value] of Object.entries(process.env)) {
+  originalEnv[key] = value;
+}
 
 test("cron authorization rejects missing, malformed, and incorrect bearer values", () => {
   assert.equal(hasValidCronAuthorization(null, SECRET), false);
@@ -78,6 +90,17 @@ test("fatal job failures are a safe 500 and the route stays GET-only dynamic", a
   }
   const missing = await route.GET(new Request("http://localhost/api/internal/cron/refresh"));
   assert.equal(missing.status, 401);
+});
+
+test.after(() => {
+  // Restore original environment and clear config cache
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) delete process.env[key];
+  }
+  for (const [key, value] of Object.entries(originalEnv)) {
+    process.env[key] = value;
+  }
+  resetRuntimeConfigCache();
 });
 
 function successfulRun(overrides: Partial<ScheduledRefreshResult> = {}): ScheduledRefreshResult {
