@@ -41,7 +41,11 @@ The middleware matcher excludes `/api/*`, Next.js static/image requests,
 prefetches, metadata files, and common static image assets. API responses
 therefore do not receive the page-oriented CSP or cross-origin browser policy.
 
-## Rendering requirement
+## Runtime and rendering requirement
+
+The middleware explicitly uses the Node.js runtime supported by Next.js 15.5 so
+it remains compatible with StellarCore's existing Node-only instrumentation and
+configuration-fingerprint dependency graph.
 
 Nonce-based CSP requires dynamic request-time rendering. The root App Router
 layout reads request headers so Next.js has the request context required to
