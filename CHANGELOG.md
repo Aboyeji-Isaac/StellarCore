@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Deterministic scheduled evidence-pipeline fault-injection coverage with documented recovery/failure matrix (#171).
 - Deployment-bound, secret-safe runtime configuration fingerprints with startup drift enforcement and release provenance binding (#214).
 - Repository-wide raw SQL boundary auditing with reviewed allowlists, CI enforcement, and adversarial parameterization tests (#217).
 - Canonical IDNA hostname identity for anchor registry, SEP-1, and outbound DNS trust decisions (#233).

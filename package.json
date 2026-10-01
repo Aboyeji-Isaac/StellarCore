@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "postinstall": "prisma generate",
     "test": "tsx scripts/run-tests.ts",
+    "test:faults": "node --import tsx --test tests/faults/rateEngineFaults.test.ts tests/faults/reputationFaults.test.ts tests/faults/scheduledCycleFaults.test.ts",
     "audit:config": "node --import tsx scripts/audit-configuration.ts",
     "audit:compatibility": "node --import tsx scripts/audit-compatibility.ts",
     "audit:integrity": "node --import tsx scripts/audit-integrity.ts",
