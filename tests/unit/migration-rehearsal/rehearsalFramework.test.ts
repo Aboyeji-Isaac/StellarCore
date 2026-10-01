@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CORE_UTILS } from "@/scripts/migration-rehearsal/lib/core.ts";
-import type { MigrationRecord } from "@/scripts/migration-rehearsal/lib/types.ts";
+import { CORE_UTILS } from "@/scripts/migration-rehearsal/lib/core";
+import type { MigrationRecord } from "@/scripts/migration-rehearsal/lib/types";
 
 const { assertIsolatedRehearsal, REPO_ROOT, splitSqlStatements } = CORE_UTILS;
 
@@ -123,9 +123,9 @@ test("MigrationRecord type structure", () => {
 });
 
 test("Scenario modules exist and export expected functions", async () => {
-  const { runScenario1 } = await import("@/scripts/migration-rehearsal/scenarios/scenario1.ts");
-  const { runScenario2 } = await import("@/scripts/migration-rehearsal/scenarios/scenario2.ts");
-  const { runScenario3 } = await import("@/scripts/migration-rehearsal/scenarios/scenario3.ts");
+  const { runScenario1 } = await import("@/scripts/migration-rehearsal/scenarios/scenario1");
+  const { runScenario2 } = await import("@/scripts/migration-rehearsal/scenarios/scenario2");
+  const { runScenario3 } = await import("@/scripts/migration-rehearsal/scenarios/scenario3");
 
   assert.ok(typeof runScenario1 === "function");
   assert.ok(typeof runScenario2 === "function");
@@ -133,9 +133,9 @@ test("Scenario modules exist and export expected functions", async () => {
 });
 
 test("Scenario constants are exported", async () => {
-  const { SCENARIO_1_ID, SCENARIO_1_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario1.ts");
-  const { SCENARIO_2_ID, SCENARIO_2_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario2.ts");
-  const { SCENARIO_3_ID, SCENARIO_3_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario3.ts");
+  const { SCENARIO_1_ID, SCENARIO_1_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario1");
+  const { SCENARIO_2_ID, SCENARIO_2_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario2");
+  const { SCENARIO_3_ID, SCENARIO_3_NAME } = await import("@/scripts/migration-rehearsal/scenarios/scenario3");
 
   assert.equal(SCENARIO_1_ID, "pre-schema-failure");
   assert.ok(SCENARIO_1_NAME.includes("idempotent"));
