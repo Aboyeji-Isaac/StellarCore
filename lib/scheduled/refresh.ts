@@ -30,9 +30,12 @@ export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
   const startedAt = dependencies.now();
-  const maintenance = await (
-    dependencies.checkMaintenance ?? checkMaintenanceMode
-  )();
+  const maintenanceCheck =
+    dependencies.checkMaintenance ??
+    (dependencies === DEFAULT_DEPENDENCIES
+      ? checkMaintenanceMode
+      : TEST_MAINTENANCE_CLEAR);
+  const maintenance = await maintenanceCheck();
   if (!maintenance.ok) {
     const completedAt = dependencies.now();
     return Object.freeze({
