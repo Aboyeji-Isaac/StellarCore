@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
+
+const {
   evictStaleConnections,
   getDatabasePool,
   validateDatabaseUrl,
-} from "@/lib/dbClient";
+} = await import("@/lib/dbClient");
 
 test("validateDatabaseUrl requires defined string", () => {
   assert.throws(
