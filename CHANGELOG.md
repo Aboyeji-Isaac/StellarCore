@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Auditable production maintenance mode with fail-safe mutation preflight and database-enforced write barriers (#198).
 - Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).
 - Verified TLS enforcement for production PostgreSQL connections, including provider CA support and fail-closed startup policy (#181).
 - Shared bounded public API error envelopes, status mapping, serialization, and internal reporter seams across current public routes (#177).
