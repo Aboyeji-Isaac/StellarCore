@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Isolated dependency-install reproducibility verification with bounded drift reports and toolchain capture (#237).
 - Bounded zero-downtime cron secret rotation with deterministic previous-secret revocation (#184).
 - Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).
 - Verified TLS enforcement for production PostgreSQL connections, including provider CA support and fail-closed startup policy (#181).
