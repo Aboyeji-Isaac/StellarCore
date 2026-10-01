@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Deployment-bound, secret-safe runtime configuration fingerprints with startup drift enforcement and release provenance binding (#214).
 - Repository-wide raw SQL boundary auditing with reviewed allowlists, CI enforcement, and adversarial parameterization tests (#217).
 - Canonical IDNA hostname identity for anchor registry, SEP-1, and outbound DNS trust decisions (#233).
 - Read-only bounded integrity auditing for persisted evidence relationships and semantic invariants (#190).
