@@ -37,6 +37,10 @@ export async function runScheduledRefresh(
       : TEST_MAINTENANCE_CLEAR);
   const maintenance = await maintenanceCheck();
   if (!maintenance.ok) {
+    const maintenanceCode =
+      maintenance.error.code === "MAINTENANCE_MODE_ACTIVE"
+        ? "MAINTENANCE_MODE_ACTIVE"
+        : "MAINTENANCE_STATE_UNAVAILABLE";
     const completedAt = dependencies.now();
     return Object.freeze({
       ok: false,
@@ -50,7 +54,7 @@ export async function runScheduledRefresh(
         failures: Object.freeze([
           Object.freeze({
             phase: "MAINTENANCE" as const,
-            code: maintenance.error.code,
+            code: maintenanceCode,
           }),
         ]),
       }),
@@ -61,7 +65,7 @@ export async function runScheduledRefresh(
         failures: Object.freeze([
           Object.freeze({
             anchorSlug: "",
-            code: maintenance.error.code,
+            code: maintenanceCode,
           }),
         ]),
       }),
