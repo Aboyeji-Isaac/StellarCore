@@ -5,26 +5,11 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
-import { emitRefreshRunLog, type RefreshRunLogger } from "@/lib/scheduled/refreshLog";
+import { classifyPermanentScheduledFailure } from "@/lib/scheduled/suppression";
 import {
-  createPostgresRefreshLockProvider,
-  type RefreshLockProvider,
-} from "@/lib/scheduled/refreshLock";
-import {
-  createPrismaRefreshRunStore,
-  RefreshRunNotFoundError,
-  type RefreshPhaseProgress,
-  type RefreshRunRecord,
-  type RefreshRunStore,
-} from "@/lib/scheduled/refreshRunRepository";
-import {
-  MAX_REFRESH_FAILURE_ENTRIES,
-  resolveTerminalRunState,
-  type RefreshPhaseName,
-  type RefreshPhaseStateValue,
-  type RefreshRunStateValue,
-  type SanitizedRefreshFailure,
-} from "@/lib/scheduled/refreshRunState";
+  PRISMA_SUPPRESSION_REPOSITORY,
+  type SuppressionRepository,
+} from "@/lib/scheduled/suppressionRepository";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type {
   ScheduledRateFailure,
@@ -35,9 +20,8 @@ import type {
 
 export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
-  evaluateReputation: (
-    options: Readonly<{ evaluatedAt: Date }>,
-  ) => Promise<ReputationEvaluationRunSummary>;
+  evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
+  suppressions?: SuppressionRepository;
   now: () => Date;
   newRunId: () => string;
   lock: RefreshLockProvider;
@@ -234,11 +218,13 @@ async function safelyMarkInterrupted(
   log: RefreshRunLogger,
 ): Promise<void> {
   try {
-    await dependencies.runs.markInterrupted(runId, {
-      completedAt: dependencies.now(),
-      code: "ORCHESTRATION_EXCEPTION",
-    });
-    log({ event: "refresh_run_interrupted", runId, state: "FAILED", code: "ORCHESTRATION_EXCEPTION" });
+    const summary = await dependencies.snapshotRates();
+    await recordPermanentFailures(
+      summary,
+      dependencies.suppressions ?? PRISMA_SUPPRESSION_REPOSITORY,
+      startedAt,
+    );
+    rates = toScheduledRates(summary);
   } catch {
     // Never mask the original orchestration error with a ledger write failure.
   }
@@ -446,23 +432,34 @@ function toScheduledRates(summary: SafeLiveRateRunSummary): RatesSummary {
     succeeded: summary.succeeded,
     failed: summary.failed,
     skipped: summary.skipped,
+    ...(summary.suppressed && summary.suppressed > 0
+      ? { suppressed: summary.suppressed }
+      : {}),
     failures: Object.freeze(summary.failures.map((failure) => Object.freeze({ ...failure }))),
   });
 }
 
-function toScheduledReputation(summary: ReputationEvaluationRunSummary): ReputationSummary {
-  return Object.freeze({
-    attempted: summary.attempted,
-    succeeded: summary.succeeded,
-    failed: summary.failed,
-    failures: Object.freeze(summary.failures.map((failure) => Object.freeze({
+async function recordPermanentFailures(
+  summary: SafeLiveRateRunSummary,
+  repository: SuppressionRepository,
+  observedAt: Date,
+): Promise<void> {
+  for (const failure of summary.failures) {
+    const reason = classifyPermanentScheduledFailure(failure);
+    if (!reason) continue;
+
+    await repository.recordDeterministicFailure({
       anchorSlug: failure.anchorSlug,
-      code: failure.code,
-    }))),
-  });
+      corridorSlug: failure.corridorSlug,
+      reason,
+      failureCode: failure.code,
+      failurePhase: failure.phase,
+      observedAt,
+    });
+  }
 }
 
-function preparationFailure(): RatesSummary {
+function preparationFailure(): ScheduledRefreshResult["rates"] {
   const failure: ScheduledRateFailure = Object.freeze({
     phase: "PREPARATION",
     code: "LIVE_RATE_PREPARATION_FAILURE",

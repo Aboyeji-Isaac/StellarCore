@@ -46,64 +46,11 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
-/// Classification of one piece of evidence named by a manifest. ELIGIBLE
-/// evidence contributed to the calculation; EXCLUDED evidence was read but did
-/// not; OUTSIDE_WINDOW evidence was read but sits outside the relevant window.
-enum ReputationEvidenceEligibility {
-  ELIGIBLE       @map("eligible")
-  EXCLUDED       @map("excluded")
-  OUTSIDE_WINDOW @map("outside_window")
+enum ScheduledSourceSuppressionState {
+  ACTIVE
+  SUPPRESSED
 
-  @@map("reputation_evidence_eligibility")
-}
-
-/// Versioned vocabulary explaining why a manifest member was excluded. The
-/// vocabulary is versioned as a whole through
-/// ReputationEvidenceManifest.reasonCodeVocabularyVersion so a reason code is
-/// never reinterpreted after the fact. Codes whose underlying concept (for
-/// example non-destructive invalidation) is not yet implemented are reserved
-/// here but only emitted once that concept exists.
-enum ReputationEvidenceReasonCode {
-  NONE                    @map("none")
-  STALE_RATE              @map("stale_rate")
-  FUTURE_TIMESTAMP        @map("future_timestamp")
-  INVALID_TIMESTAMP       @map("invalid_timestamp")
-  OUTSIDE_OUTCOME_WINDOW  @map("outside_outcome_window")
-  INVALIDATED_OBSERVATION @map("invalidated_observation")
-  UNKNOWN_AUTHORITY       @map("unknown_authority")
-  RETIRED_OR_NON_MEMBER   @map("retired_or_non_member")
-
-  @@map("reputation_evidence_reason_code")
-}
-
-/// Lifecycle state of an anchor–corridor relationship as recorded at
-/// evaluation time. MEMBER is the only state emitted while registry
-/// lifecycle semantics are limited to current synchronized memberships.
-enum ReputationCorridorMembership {
-  MEMBER     @map("member")
-  RETIRED    @map("retired")
-  NON_MEMBER @map("non_member")
-
-  @@map("reputation_corridor_membership")
-}
-
-enum RefreshRunState {
-  RUNNING             @map("running")
-  SUCCEEDED           @map("succeeded")
-  PARTIALLY_SUCCEEDED @map("partially_succeeded")
-  FAILED              @map("failed")
-
-  @@map("refresh_run_state")
-}
-
-enum RefreshPhaseState {
-  PENDING   @map("pending")
-  RUNNING   @map("running")
-  SUCCEEDED @map("succeeded")
-  FAILED    @map("failed")
-  SKIPPED   @map("skipped")
-
-  @@map("refresh_phase_state")
+  @@map("scheduled_source_suppression_state")
 }
 
 model Anchor {
@@ -115,6 +62,7 @@ model Anchor {
   seps              Int[]        @default([])
   isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
   status            AnchorStatus @default(UNKNOWN)
+  lastSyncOrder     BigInt       @default(0) @map("last_sync_order")
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -231,127 +179,27 @@ model ReputationScore {
   @@map("reputation_scores")
 }
 
-/// Immutable, append-only evidence-set manifest written atomically with every
-/// newly persisted reputation evaluation. It names the exact persisted rate
-/// snapshots, transfer outcomes, corridor memberships, and anchor state that
-/// were read for that evaluation, with stable IDs and bounded classification
-/// metadata only — never copied raw SEP responses, secrets, or mutable display
-/// text. A missing manifest means a legacy evaluation whose membership is
-/// unknown; that membership is never reconstructed from current state.
-model ReputationEvidenceManifest {
-  id                          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  reputationScoreId           String         @map("reputation_score_id") @db.Uuid
-  anchorId                    String         @map("anchor_id") @db.Uuid
-  anchorStatus                AnchorStatus   @map("anchor_status")
-  manifestSchemaVersion       Int            @map("manifest_schema_version")
-  reasonCodeVocabularyVersion Int            @map("reason_code_vocabulary_version")
-  scoringPolicyVersion        String         @map("scoring_policy_version")
-  freshnessPolicyVersion      String         @map("freshness_policy_version")
-  configurationRevision       String         @map("configuration_revision")
-  evaluatedAt                 DateTime       @map("evaluated_at") @db.Timestamptz(6)
-  outcomeWindowStart          DateTime       @map("outcome_window_start") @db.Timestamptz(6)
-  corridorCount               Int            @map("corridor_count")
-  latestRateCount             Int            @map("latest_rate_count")
-  freshRateCount              Int            @map("fresh_rate_count")
-  outcomeCount                Int            @map("outcome_count")
-  completedOutcomeCount       Int            @map("completed_outcome_count")
-  outsideOutcomeCount         Int            @map("outside_outcome_count")
-  minimumOutcomeCount         Int            @map("minimum_outcome_count")
-  createdAt                   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  reputationScore ReputationScore          @relation(fields: [reputationScoreId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  anchor          Anchor                   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridorMembers ReputationEvidenceCorridorMember[]
-  rateMembers     ReputationEvidenceRateMember[]
-  outcomeMembers  ReputationEvidenceOutcomeMember[]
+/// Durable reviewed state for deterministic scheduled-source failures (#234).
+/// Slug identity is stored directly so an invalid/missing registry reference can
+/// still be suppressed and audited without requiring a resolvable foreign key.
+model ScheduledSourceSuppression {
+  id                  String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorSlug          String                          @map("anchor_slug")
+  corridorSlug        String                          @map("corridor_slug")
+  state               ScheduledSourceSuppressionState @default(ACTIVE)
+  reason              String
+  failureCode         String                          @map("failure_code")
+  failurePhase        String                          @map("failure_phase")
+  consecutiveFailures Int                             @default(0) @map("consecutive_failures")
+  firstFailedAt       DateTime                        @map("first_failed_at") @db.Timestamptz(6)
+  lastFailedAt        DateTime                        @map("last_failed_at") @db.Timestamptz(6)
+  suppressedAt        DateTime?                       @map("suppressed_at") @db.Timestamptz(6)
+  reactivatedAt       DateTime?                       @map("reactivated_at") @db.Timestamptz(6)
+  reactivationReason  String?                         @map("reactivation_reason")
+  updatedAt           DateTime                        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@index([anchorId, evaluatedAt(sort: Desc)], map: "reputation_evidence_manifests_anchor_evaluated_idx")
-  @@index([reputationScoreId, evaluatedAt(sort: Desc)], map: "reputation_evidence_manifests_score_evaluated_idx")
-  @@map("reputation_evidence_manifests")
-}
-
-/// One anchor–corridor membership used by an evaluation. Referential
-/// integrity pins the corridor; retirement/non-member states are reserved for
-/// when registry lifecycle semantics land.
-model ReputationEvidenceCorridorMember {
-  id         String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  manifestId String                         @map("manifest_id") @db.Uuid
-  corridorId String                         @map("corridor_id") @db.Uuid
-  membership ReputationCorridorMembership
-  reasonCode ReputationEvidenceReasonCode   @map("reason_code")
-  ordinal    Int
-
-  manifest ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor                    @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-
-  @@unique([manifestId, ordinal], map: "reputation_evidence_corridor_members_manifest_ordinal_key")
-  @@unique([manifestId, corridorId], map: "reputation_evidence_corridor_members_manifest_corridor_key")
-  @@map("reputation_evidence_corridor_members")
-}
-
-/// One rate snapshot named by an evaluation's manifest. capturedAt and ageMs
-/// are bounded classification inputs; the snapshot itself is never mutated.
-model ReputationEvidenceRateMember {
-  id             String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  manifestId     String                         @map("manifest_id") @db.Uuid
-  rateSnapshotId String                         @map("rate_snapshot_id") @db.Uuid
-  corridorId     String                         @map("corridor_id") @db.Uuid
-  capturedAt     DateTime                       @map("captured_at") @db.Timestamptz(6)
-  ageMs          Int?                           @map("age_ms")
-  eligibility    ReputationEvidenceEligibility
-  reasonCode     ReputationEvidenceReasonCode   @map("reason_code")
-  ordinal        Int
-
-  manifest     ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  rateSnapshot RateSnapshot                @relation(fields: [rateSnapshotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor     Corridor                    @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-
-  @@unique([manifestId, ordinal], map: "reputation_evidence_rate_members_manifest_ordinal_key")
-  @@unique([manifestId, rateSnapshotId], map: "reputation_evidence_rate_members_manifest_snapshot_key")
-  @@map("reputation_evidence_rate_members")
-}
-
-/// One transfer outcome named by an evaluation's manifest. Eligibility mirrors
-/// the engine's timestamp filter; a manifest with zero in-window outcomes
-/// records that truthfully and never creates synthetic outcomes.
-model ReputationEvidenceOutcomeMember {
-  id                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  manifestId        String                         @map("manifest_id") @db.Uuid
-  transferOutcomeId String                         @map("transfer_outcome_id") @db.Uuid
-  corridorId        String                         @map("corridor_id") @db.Uuid
-  status            TransferStatus
-  recordedAt        DateTime                       @map("recorded_at") @db.Timestamptz(6)
-  eligibility       ReputationEvidenceEligibility
-  reasonCode        ReputationEvidenceReasonCode   @map("reason_code")
-  ordinal           Int
-
-  manifest        ReputationEvidenceManifest @relation(fields: [manifestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  transferOutcome TransferOutcome            @relation(fields: [transferOutcomeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor        Corridor                   @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-
-  @@unique([manifestId, ordinal], map: "reputation_evidence_outcome_members_manifest_ordinal_key")
-  @@unique([manifestId, transferOutcomeId], map: "reputation_evidence_outcome_members_manifest_outcome_key")
-  @@map("reputation_evidence_outcome_members")
-}
-
-/// Durable ledger for the authenticated scheduled refresh. Exactly one row is
-/// created per refresh attempt that acquires the advisory lock; terminal rows
-/// are immutable and resume creates a new row linked through resumedFromId.
-/// Phase progress lives in phaseStates so an interrupted run can be inspected
-/// and resumed without re-executing completed phases. Only bounded, sanitized
-/// failure summaries are stored here — never secrets or raw remote bodies.
-model RefreshRun {
-  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  triggeredBy   String          @default("cron") @map("triggered_by") @db.VarChar(32)
-  state         RefreshRunState @default(RUNNING)
-  attempt       Int             @default(1)
-  resumedFromId String?         @map("resumed_from_id") @db.Uuid
-  startedAt     DateTime        @default(now()) @map("started_at") @db.Timestamptz(6)
-  completedAt   DateTime?       @map("completed_at") @db.Timestamptz(6)
-  phaseStates   Json            @default("{}") @map("phase_states")
-  failures      Json            @default("[]")
-  result        Json?
-
-  @@index([state, startedAt(sort: Desc)], map: "refresh_runs_state_started_at_idx")
-  @@map("refresh_runs")
+  @@unique([anchorSlug, corridorSlug], map: "scheduled_source_suppressions_source_key")
+  @@index([state], map: "scheduled_source_suppressions_state_idx")
+  @@map("scheduled_source_suppressions")
 }

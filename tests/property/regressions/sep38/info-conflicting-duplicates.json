@@ -1,0 +1,6 @@
+{
+  "assets": [
+    { "asset": "iso4217:USD", "country_codes": ["US"] },
+    { "asset": "iso4217:USD", "country_codes": ["BR"] }
+  ]
+}

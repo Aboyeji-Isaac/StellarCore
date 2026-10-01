@@ -39,6 +39,10 @@ function evidence(
         slippage: 0,
         recordedAt: new Date(NOW.getTime() - index),
       }))),
-    outsideOutcomeCount: 0,
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
 }

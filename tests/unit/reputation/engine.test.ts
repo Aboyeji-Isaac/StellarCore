@@ -33,6 +33,36 @@ test("engine reads one 90-day window and can calculate without persistence", asy
   if (result.ok) assert.equal(result.persisted, null);
 });
 
+test("engine includes the exact 90-day boundary and excludes the next millisecond", async () => {
+  const recentOutcomes = outcomes(29, "COMPLETED");
+  const boundary = outcomeAtAge("ERROR", 90);
+  const justOutside = outcomeAtAge("ERROR", 90, 1);
+
+  const evaluateWith = async (candidate: ReputationEvidence["transferOutcomes"][number]) => {
+    const result = await evaluateAnchorReputation("anchor", {
+      evaluatedAt: NOW,
+      persist: false,
+      repository: repository({
+        readEvidence: async (_slug, start) => repositoryEvidence([
+          ...recentOutcomes,
+          ...(candidate.recordedAt >= start ? [candidate] : []),
+        ]),
+      }),
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) throw new Error("expected reputation evaluation to succeed");
+    return result.calculation;
+  };
+
+  const atBoundary = await evaluateWith(boundary);
+  const beyondBoundary = await evaluateWith(justOutside);
+
+  assert.equal(atBoundary.evidence.outcomeCount, 30);
+  assert.equal(atBoundary.metrics.fillRate90d, 0.9667);
+  assert.equal(beyondBoundary.evidence.outcomeCount, 29);
+  assert.equal(beyondBoundary.metrics.fillRate90d, 1);
+});
+
 test("persistence upserts current score rather than appending history", async () => {
   let rowId: string | undefined;
   let writeCount = 0;
@@ -120,8 +150,39 @@ function sparseEvidence(): ReputationEvidence {
     corridors: Object.freeze([]),
     latestRates: Object.freeze([]),
     transferOutcomes: Object.freeze([]),
-    outsideOutcomeCount: 0,
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
+}
+
+function repositoryEvidence(
+  transferOutcomes: ReputationEvidence["transferOutcomes"],
+): ReputationEvidence {
+  return Object.freeze({
+    ...sparseEvidence(),
+    status: "LIVE",
+    corridorSlugs: Object.freeze(["corridor-a"]),
+    latestRates: Object.freeze([Object.freeze({
+      corridorSlug: "corridor-a",
+      capturedAt: NOW,
+    })]),
+    transferOutcomes: Object.freeze(transferOutcomes),
+  });
+}
+
+function outcomes(
+  count: number,
+  status: ReputationEvidence["transferOutcomes"][number]["status"],
+): ReputationEvidence["transferOutcomes"][number][] {
+  return Array.from({ length: count }, (_, index) => Object.freeze({
+    status,
+    settlementMs: 1_000,
+    slippage: 0,
+    recordedAt: new Date(NOW.getTime() - index * 1_000),
+  }));
 }
 
 function persisted() {
@@ -131,5 +192,20 @@ function persisted() {
     computedAt: NOW,
     manifestId: "manifest-id",
     manifestSchemaVersion: 1,
+  });
+}
+
+function outcomeAtAge(
+  status: ReputationEvidence["transferOutcomes"][number]["status"],
+  days: number,
+  extraMilliseconds = 0,
+): ReputationEvidence["transferOutcomes"][number] {
+  return Object.freeze({
+    status,
+    settlementMs: 1_000,
+    slippage: 0,
+    recordedAt: new Date(
+      NOW.getTime() - days * 24 * 60 * 60 * 1_000 - extraMilliseconds,
+    ),
   });
 }

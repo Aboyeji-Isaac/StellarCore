@@ -37,15 +37,33 @@ export type ReputationEvidence = Readonly<{
   anchorId: string;
   anchorSlug: string;
   status: ReputationAnchorStatus;
-  corridors: readonly ReputationCorridorEvidence[];
-  latestRates: readonly ReputationRateEvidence[];
-  transferOutcomes: readonly ReputationOutcomeEvidence[];
+  corridorSlugs: readonly string[];
+  latestRates: readonly Readonly<{
+    corridorSlug: string;
+    capturedAt: Date | string;
+  }>[];
+  transferOutcomes: readonly Readonly<{
+    status: ReputationTransferStatus;
+    settlementMs: number;
+    slippage: number;
+    recordedAt: Date | string;
+  }>[];
   /**
-   * Count of persisted outcomes for this anchor older than the evaluation's
-   * outcome window. Recorded as a bounded count only: the individual rows were
-   * not read and are never named as members.
+   * Identity of the single PostgreSQL snapshot the whole evidence set was read
+   * from. See lib/reputation/snapshot.ts. Transactional coherence proves only
+   * that the rows were observed at one database point in time; it is not
+   * evidence about quote correctness, anchor availability, or transfer success.
    */
-  outsideOutcomeCount: number;
+  snapshot: ReputationSnapshotContext;
+}>;
+
+export type ReputationSnapshotContext = Readonly<{
+  /** PostgreSQL snapshot identifier from `pg_current_snapshot()` (txid:xip). */
+  snapshotId: string;
+  /** Server-side transaction start time of the snapshot read. */
+  readAt: Date | string;
+  /** Isolation level the evidence was read under. */
+  isolationLevel: "REPEATABLE READ" | "SERIALIZABLE";
 }>;
 
 export type ReputationComponentName =
@@ -102,145 +120,23 @@ export type ReputationPersistenceInput = Readonly<{
   calculation: ReputationCalculation;
 }>;
 
-export type ReputationEvidenceEligibilityValue =
-  | "ELIGIBLE"
-  | "EXCLUDED"
-  | "OUTSIDE_WINDOW";
+export type ReputationEvidenceReadErrorCode =
+  | "EVIDENCE_READ_FAILURE"
+  | "EVIDENCE_READ_SERIALIZATION_FAILURE";
 
-export type ReputationEvidenceReasonCodeValue =
-  | "NONE"
-  | "STALE_RATE"
-  | "FUTURE_TIMESTAMP"
-  | "INVALID_TIMESTAMP"
-  | "OUTSIDE_OUTCOME_WINDOW"
-  | "INVALIDATED_OBSERVATION"
-  | "UNKNOWN_AUTHORITY"
-  | "RETIRED_OR_NON_MEMBER";
-
-export type ReputationCorridorMembershipValue =
-  | "MEMBER"
-  | "RETIRED"
-  | "NON_MEMBER";
-
-export type ReputationCorridorMemberDraft = Readonly<{
-  corridorId: string;
-  membership: ReputationCorridorMembershipValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-export type ReputationRateMemberDraft = Readonly<{
-  rateSnapshotId: string;
-  corridorId: string;
-  capturedAt: Date;
-  ageMs: number | null;
-  eligibility: ReputationEvidenceEligibilityValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-export type ReputationOutcomeMemberDraft = Readonly<{
-  transferOutcomeId: string;
-  corridorId: string;
-  status: ReputationTransferStatus;
-  recordedAt: Date;
-  eligibility: ReputationEvidenceEligibilityValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-/**
- * A pure, deterministic description of one immutable evidence-set manifest.
- * Building it performs no I/O and never copies raw remote responses, secrets,
- * or mutable display text — only stable IDs and bounded classification.
- */
-export type ReputationEvidenceManifestDraft = Readonly<{
-  manifestSchemaVersion: number;
-  reasonCodeVocabularyVersion: number;
-  scoringPolicyVersion: string;
-  freshnessPolicyVersion: string;
-  configurationRevision: string;
-  anchorId: string;
-  anchorStatus: ReputationAnchorStatus;
-  evaluatedAt: Date;
-  outcomeWindowStart: Date;
-  corridorCount: number;
-  latestRateCount: number;
-  freshRateCount: number;
-  outcomeCount: number;
-  completedOutcomeCount: number;
-  outsideOutcomeCount: number;
-  minimumOutcomeCount: number;
-  corridorMembers: readonly ReputationCorridorMemberDraft[];
-  rateMembers: readonly ReputationRateMemberDraft[];
-  outcomeMembers: readonly ReputationOutcomeMemberDraft[];
-}>;
-
-export type ReputationManifestCorridorMember = Readonly<{
-  corridorId: string;
-  membership: ReputationCorridorMembershipValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-export type ReputationManifestRateMember = Readonly<{
-  rateSnapshotId: string;
-  corridorId: string;
-  capturedAt: string;
-  ageMs: number | null;
-  eligibility: ReputationEvidenceEligibilityValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-export type ReputationManifestOutcomeMember = Readonly<{
-  transferOutcomeId: string;
-  corridorId: string;
-  status: ReputationTransferStatus;
-  recordedAt: string;
-  eligibility: ReputationEvidenceEligibilityValue;
-  reasonCode: ReputationEvidenceReasonCodeValue;
-  ordinal: number;
-}>;
-
-/** Bounded, sanitized read model for one persisted manifest. */
-export type ReputationManifestRecord = Readonly<{
-  id: string;
-  reputationScoreId: string;
-  anchorSlug: string;
-  anchorStatus: ReputationAnchorStatus;
-  manifestSchemaVersion: number;
-  reasonCodeVocabularyVersion: number;
-  scoringPolicyVersion: string;
-  freshnessPolicyVersion: string;
-  configurationRevision: string;
-  evaluatedAt: string;
-  outcomeWindowStart: string;
-  corridorCount: number;
-  latestRateCount: number;
-  freshRateCount: number;
-  outcomeCount: number;
-  completedOutcomeCount: number;
-  outsideOutcomeCount: number;
-  minimumOutcomeCount: number;
-  createdAt: string;
-  corridorMembers: readonly ReputationManifestCorridorMember[];
-  rateMembers: readonly ReputationManifestRateMember[];
-  outcomeMembers: readonly ReputationManifestOutcomeMember[];
-}>;
-
-export type ReputationManifestRepository = Readonly<{
-  readManifest: (evaluationId: string) => Promise<ReputationManifestRecord | null>;
-  readLatestManifestForAnchor: (
-    anchorSlug: string,
-  ) => Promise<ReputationManifestRecord | null>;
+export type ReputationEvidenceReadFailure = Readonly<{
+  code: ReputationEvidenceReadErrorCode;
+  /** Bounded, secret-free retry classification for callers. */
+  retryable: boolean;
+  /** Number of read attempts made, bounded by REPUTATION_EVIDENCE_MAX_READ_ATTEMPTS. */
+  attempts: number;
 }>;
 
 export type ReputationRepository = Readonly<{
   readEvidence: (
     anchorSlug: string,
     outcomeWindowStart: Date,
-  ) => Promise<ReputationEvidence | null>;
+  ) => Promise<ReputationEvidence | ReputationEvidenceReadFailure | null>;
   upsertScore: (
     input: ReputationPersistenceInput,
   ) => Promise<PersistedReputationScore>;
@@ -251,6 +147,8 @@ export type ReputationEvaluationResult =
       ok: true;
       calculation: ReputationCalculation;
       persisted: PersistedReputationScore | null;
+      /** Snapshot identity the winning evidence set was read from. */
+      snapshot: ReputationSnapshotContext;
     }>
   | Readonly<{
       ok: false;
@@ -259,5 +157,9 @@ export type ReputationEvaluationResult =
         | "ANCHOR_NOT_FOUND"
         | "INVALID_EVALUATION_TIME"
         | "EVIDENCE_READ_FAILURE"
+        | "EVIDENCE_READ_SERIALIZATION_FAILURE"
         | "PERSISTENCE_FAILURE";
     }>;
+
+/** Bounded retry ceiling; exceeded attempts surface as a typed failure. */
+export const REPUTATION_EVIDENCE_MAX_READ_ATTEMPTS = 3;
