@@ -147,23 +147,6 @@ export function verifyEnvironmentPairing(
   return Object.freeze({ ok: true, environment: runtimeEnvironment });
 }
 
-/**
- * Capability gate: some flows (scheduled capture, bootstrap, evidence
- * mutation) must additionally be denied in environments that cannot hold
- * evidence at all (test/CI) even when a database is correctly stamped.
- */
-export function assertEvidenceCapability(
-  environment: DatabaseEnvironmentId,
-): void {
-  if (!EVIDENCE_CAPABLE_ENVIRONMENTS.has(environment)) {
-    throw new EnvironmentIsolationError(
-      "ENVIRONMENT_CAPABILITY_DENIED",
-      environment,
-      environment,
-    );
-  }
-}
-
 export class EnvironmentIsolationError extends Error {
   readonly code: Extract<
     Extract<EnvironmentGuardError, { ok: false }>["code"],
