@@ -321,6 +321,9 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional writable directory for bounded last-known-good public evidence snapshots.
+STALE_EVIDENCE_DIRECTORY="/path/to/writable/stale-evidence"
 ```
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
@@ -329,6 +332,13 @@ compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
 repository files, or logs.
+
+`STALE_EVIDENCE_DIRECTORY` is optional. By default, the Node.js runtime stores
+verified public read snapshots in its temporary directory under
+`stellarcore-stale-evidence`. On multi-instance or serverless deployments this
+store is local to a warm instance; use a writable shared mount if fallback must
+survive instance replacement. If the store is unavailable, corrupt, or older
+than five minutes, the APIs fail closed.
 
 ---
 
@@ -630,6 +640,15 @@ when that observation is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.
+
+The latest rates, rate history, and reputation GETs may serve a bounded
+last-known-good response only for recognized transient PostgreSQL connectivity
+or connection-pool errors. Such responses preserve their original
+`evaluatedAt`, `computedAt`, and `capturedAt` values and include a `degraded`
+object with `state: "stale"`, the snapshot `generatedAt`, source evidence
+times, expiry, and snapshot age. They also send `X-Evidence-State: stale` and an HTTP
+`Warning: 110` header. All responses remain `no-store`. Fallback snapshots are
+never read by rate aggregation or reputation evaluation code.
 
 Errors use stable codes:
 

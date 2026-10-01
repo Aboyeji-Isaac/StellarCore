@@ -1,3 +1,5 @@
+import type { StaleEvidenceMetadata } from "@/types/api/staleEvidence";
+
 export type PublicRateHistoryObservation = Readonly<{
   anchor: Readonly<{
     slug: string;
@@ -20,6 +22,7 @@ export type PublicRateHistoryPoint = Readonly<{
 }>;
 
 export type PublicRateHistoryResponse = Readonly<{
+  degraded?: StaleEvidenceMetadata;
   corridor: Readonly<{
     slug: string;
     sourceAsset: string;
@@ -47,7 +50,7 @@ export type RateHistoryApiErrorResponse = Readonly<{
 }>;
 
 export type RateHistoryApiResult =
-  | Readonly<{ status: 200; body: PublicRateHistoryResponse }>
+  | Readonly<{ status: 200; body: PublicRateHistoryResponse; degraded?: StaleEvidenceMetadata }>
   | Readonly<{
       status: 400 | 404 | 500;
       body: RateHistoryApiErrorResponse;

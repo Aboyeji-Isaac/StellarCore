@@ -1,4 +1,11 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
+import {
+  FILE_STALE_EVIDENCE_STORE,
+  restoreStaleEvidence,
+  saveLastKnownGoodEvidence,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
@@ -18,6 +25,7 @@ export type RatesApiDependencies = Readonly<{
     options: Readonly<{ evaluatedAt: Date }>,
   ) => Promise<LatestCorridorRateReadResult>;
   now?: () => Date;
+  staleEvidenceStore?: StaleEvidenceStore;
 }>;
 
 export async function getRatesApiResult(
@@ -28,12 +36,24 @@ export async function getRatesApiResult(
   if (!validation.ok) return validation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const snapshotKey = `rates:v1:${validation.corridorSlug}`;
   const read = dependencies.readLatestRate ?? readLatestCorridorRate;
   let result: LatestCorridorRateReadResult;
 
   try {
     result = await read(validation.corridorSlug, { evaluatedAt });
-  } catch {
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRatesResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 
@@ -41,14 +61,34 @@ export async function getRatesApiResult(
     if (result.code === "CORRIDOR_NOT_FOUND") {
       return errorResult(404, "corridor_not_found", "Corridor not found.");
     }
+    if (result.code === "DATABASE_UNAVAILABLE") {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRatesResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 
   try {
-    return Object.freeze({ status: 200, body: serializeRates(result) });
+    const body = serializeRates(result);
+    const sourceTimes = body.observations
+      .map(({ capturedAt }) => capturedAt)
+      .filter(isValidTimestamp);
+    await saveLastKnownGoodEvidence(store, snapshotKey, body, sourceTimes, evaluatedAt);
+    return Object.freeze({ status: 200, body });
   } catch {
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
+}
+
+function isValidTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 export function serializeRates(result: LatestCorridorRate): PublicRatesResponse {
