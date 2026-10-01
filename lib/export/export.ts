@@ -19,6 +19,12 @@ import type {
   ExportErrorCode,
 } from "@/lib/export/types";
 import {
+  withTransactionRetry,
+  DEFAULT_RETRY_POLICY,
+  isRetryablePrismaError,
+  RetryExhaustedError,
+} from "@/lib/db/retry";
+import {
   canonicalStringify,
   computeSha256FromString,
   computeRootHash,
@@ -139,7 +145,7 @@ async function writeJsonFile<T>(
   const stream = createWriteStream(filePath, { flags: "w" });
   stream.write(buffer);
   await new Promise<void>((resolve, reject) => {
-    stream.end((err) => (err ? reject(err) : resolve()));
+    stream.end((err: Error | null) => (err ? reject(err) : resolve()));
   });
 
   return Object.freeze({
@@ -254,102 +260,127 @@ export async function exportEvidence(
   }
 }
 
-export async function* createPrismaExportDependencies(): Promise<ExportDependencies> {
+export async function createPrismaExportDependencies(): Promise<ExportDependencies> {
   const { db } = await import("@/lib/dbClient");
 
+  // Retry policy for export database queries: bounded attempts, exponential backoff, deadline
+  const exportRetryPolicy = {
+    ...DEFAULT_RETRY_POLICY,
+    maxAttempts: 3,
+    baseDelayMs: 50,
+    maxDelayMs: 500,
+    deadlineMs: 5000,
+  };
+
+  // Wraps a Prisma query with bounded retry for transient failures (P2034).
+  // Non-retryable errors (validation, auth, etc.) are thrown immediately.
+  async function withExportRetry<T>(query: () => Promise<T>): Promise<T> {
+    return withTransactionRetry(query, {
+      policy: exportRetryPolicy,
+      // Only retry on P2034 (serialization failure / deadlock)
+      // The withTransactionRetry uses isRetryablePrismaError which checks for P2034
+    });
+  }
+
   return Object.freeze({
-    async queryAnchors(selection) {
-      const where: Prisma.AnchorWhereInput = {};
-      if (selection.anchorSlugs?.length) {
-        where.slug = { in: [...selection.anchorSlugs] };
-      }
-      const anchors = await db.anchor.findMany({
-        where,
-        orderBy: { slug: "asc" },
-        select: {
-          slug: true,
-          name: true,
-          homeDomain: true,
-          status: true,
-          seps: true,
-          isTransferCapable: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      return anchors.map((a) => ({
-        slug: a.slug,
-        name: a.name,
-        homeDomain: a.homeDomain,
-        status: a.status,
-        seps: [...a.seps],
-        isTransferCapable: a.isTransferCapable,
-        createdAt: a.createdAt.toISOString(),
-        updatedAt: a.updatedAt.toISOString(),
-      }));
-    },
-
-    async queryCorridors(selection) {
-      const where: Prisma.CorridorWhereInput = {};
-      if (selection.corridorSlugs?.length) {
-        where.slug = { in: [...selection.corridorSlugs] };
-      }
-      const corridors = await db.corridor.findMany({
-        where,
-        orderBy: { slug: "asc" },
-        select: {
-          slug: true,
-          assetCodeFrom: true,
-          countryFrom: true,
-          assetCodeTo: true,
-          countryTo: true,
-        },
-      });
-      return corridors.map((c) => ({
-        slug: c.slug,
-        assetCodeFrom: c.assetCodeFrom,
-        countryFrom: c.countryFrom,
-        assetCodeTo: c.assetCodeTo,
-        countryTo: c.countryTo,
-      }));
-    },
-
-    async queryAnchorCorridors(selection) {
-      const where: Prisma.AnchorCorridorWhereInput = {};
-      if (selection.anchorSlugs?.length) {
-        where.anchorId = { in: [] };
-        const anchorIds = await db.anchor.findMany({
-          where: { slug: { in: [...selection.anchorSlugs] } },
-          select: { id: true },
-        });
-        if (anchorIds.length > 0) {
-          where.anchorId = { in: anchorIds.map((a) => a.id) };
+    async queryAnchors(selection: ExportSelection) {
+      return withExportRetry(async () => {
+        const where: Prisma.AnchorWhereInput = {};
+        if (selection.anchorSlugs?.length) {
+          where.slug = { in: [...selection.anchorSlugs] };
         }
-      }
-      if (selection.corridorSlugs?.length) {
-        const corridorIds = await db.corridor.findMany({
-          where: { slug: { in: [...selection.corridorSlugs] } },
-          select: { id: true },
+        const anchors = await db.anchor.findMany({
+          where,
+          orderBy: { slug: "asc" },
+          select: {
+            slug: true,
+            name: true,
+            homeDomain: true,
+            status: true,
+            seps: true,
+            isTransferCapable: true,
+            createdAt: true,
+            updatedAt: true,
+          },
         });
-        if (corridorIds.length > 0) {
-          where.corridorId = { in: corridorIds.map((c) => c.id) };
-        }
-      }
-      const associations = await db.anchorCorridor.findMany({
-        where,
-        orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }],
-        select: {
-          anchor: { select: { slug: true } },
-          corridor: { select: { slug: true } },
-        },
+        return anchors.map((a) => ({
+          slug: a.slug,
+          name: a.name,
+          homeDomain: a.homeDomain,
+          status: a.status,
+          seps: [...a.seps],
+          isTransferCapable: a.isTransferCapable,
+          createdAt: a.createdAt.toISOString(),
+          updatedAt: a.updatedAt.toISOString(),
+        }));
       });
-      return associations.map((a) => ({
-        anchorSlug: a.anchor.slug,
-        corridorSlug: a.corridor.slug,
-      }));
     },
 
-    async *queryRateSnapshots(selection) {
+    async queryCorridors(selection: ExportSelection) {
+      return withExportRetry(async () => {
+        const where: Prisma.CorridorWhereInput = {};
+        if (selection.corridorSlugs?.length) {
+          where.slug = { in: [...selection.corridorSlugs] };
+        }
+        const corridors = await db.corridor.findMany({
+          where,
+          orderBy: { slug: "asc" },
+          select: {
+            slug: true,
+            assetCodeFrom: true,
+            countryFrom: true,
+            assetCodeTo: true,
+            countryTo: true,
+          },
+        });
+        return corridors.map((c) => ({
+          slug: c.slug,
+          assetCodeFrom: c.assetCodeFrom,
+          countryFrom: c.countryFrom,
+          assetCodeTo: c.assetCodeTo,
+          countryTo: c.countryTo,
+        }));
+      });
+    },
+
+    async queryAnchorCorridors(selection: ExportSelection) {
+      return withExportRetry(async () => {
+        const where: Prisma.AnchorCorridorWhereInput = {};
+        if (selection.anchorSlugs?.length) {
+          where.anchorId = { in: [] };
+          const anchorIds = await db.anchor.findMany({
+            where: { slug: { in: [...selection.anchorSlugs] } },
+            select: { id: true },
+          });
+          if (anchorIds.length > 0) {
+            where.anchorId = { in: anchorIds.map((a) => a.id) };
+          }
+        }
+        if (selection.corridorSlugs?.length) {
+          const corridorIds = await db.corridor.findMany({
+            where: { slug: { in: [...selection.corridorSlugs] } },
+            select: { id: true },
+          });
+          if (corridorIds.length > 0) {
+            where.corridorId = { in: corridorIds.map((c) => c.id) };
+          }
+        }
+        const associations = await db.anchorCorridor.findMany({
+          where,
+          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }],
+          select: {
+            anchor: { select: { slug: true } },
+            corridor: { select: { slug: true } },
+          },
+        });
+        return associations.map((a) => ({
+          anchorSlug: a.anchor.slug,
+          corridorSlug: a.corridor.slug,
+        }));
+      });
+    },
+
+    async *queryRateSnapshots(selection: ExportSelection) {
       const where: Prisma.RateSnapshotWhereInput = {
         capturedAt: {
           gte: new Date(selection.timeRange.start),
@@ -404,7 +435,7 @@ export async function* createPrismaExportDependencies(): Promise<ExportDependenc
       }
     },
 
-    async *queryTransferOutcomes(selection) {
+    async *queryTransferOutcomes(selection: ExportSelection) {
       const where: Prisma.TransferOutcomeWhereInput = {
         recordedAt: {
           gte: new Date(selection.timeRange.start),
@@ -459,7 +490,7 @@ export async function* createPrismaExportDependencies(): Promise<ExportDependenc
       }
     },
 
-    async queryReputationScores(selection) {
+    async queryReputationScores(selection: ExportSelection) {
       const where: Prisma.ReputationScoreWhereInput = {};
       if (selection.anchorSlugs?.length) {
         const anchorIds = await db.anchor.findMany({

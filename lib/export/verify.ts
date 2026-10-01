@@ -166,7 +166,7 @@ export async function verifyExportPackage(packageDir: string): Promise<Verificat
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    let code: VerificationResult["code"] = "CORRUPTED_DATA";
+    let code: "MANIFEST_MISMATCH" | "MISSING_MEMBER" | "CORRUPTED_DATA" | "INVALID_SCHEMA" | "SECRET_DETECTED" = "CORRUPTED_DATA";
     if (message.includes("Byte length mismatch") || message.includes("SHA256 mismatch")) {
       code = "CORRUPTED_DATA";
     } else if (message.includes("Missing") || message.includes("ENOENT")) {

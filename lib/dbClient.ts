@@ -4,16 +4,13 @@ import type { Pool } from "pg";
 import { PrismaClient } from "@/app/generated/prisma/client";
 export type { PrismaClient };
 import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
-<<<<<<< HEAD
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/config/runtimeConfig";
-=======
 import {
   createHardenedPool,
   evictStalePoolConnections,
   handleConnectionError,
   handlePoolError,
 } from "@/lib/db/poolManager";
->>>>>>> origin/main
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -21,11 +18,10 @@ const globalForPrisma = globalThis as unknown as {
   prismaEnvironmentVerified: Promise<void> | undefined;
 };
 
-<<<<<<< HEAD
-function createPrismaClient(config: RuntimeConfig = getRuntimeConfig()): PrismaClient {
-  const adapter = new PrismaPg({ connectionString: config.databaseUrl });
-  return new PrismaClient({ adapter });
-=======
+/**
+ * Validates a DATABASE_URL value.
+ * Exported for testing and external validation.
+ */
 export function validateDatabaseUrl(connectionString: string | undefined): string {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not defined");
@@ -50,14 +46,10 @@ export function validateDatabaseUrl(connectionString: string | undefined): strin
   }
 
   return connectionString;
->>>>>>> origin/main
 }
 
-function initializeDatabaseInstance(): {
-  prisma: PrismaClient;
-  pool: Pool;
-} {
-  const connectionString = validateDatabaseUrl(process.env.DATABASE_URL);
+function createPrismaClient(config: RuntimeConfig = getRuntimeConfig()): PrismaClient {
+  const connectionString = validateDatabaseUrl(config.databaseUrl);
   const pool = createHardenedPool(connectionString);
 
   const adapter = new PrismaPg(pool, {
@@ -65,31 +57,38 @@ function initializeDatabaseInstance(): {
     onConnectionError: (error) => handleConnectionError(pool, error),
   });
 
-  const prisma = new PrismaClient({ adapter });
+  // Store pool for global access in non-production
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.pool = pool;
+  }
 
-  return { prisma, pool };
+  return new PrismaClient({ adapter });
 }
 
 const activeInstance =
-  globalForPrisma.prisma && globalForPrisma.pool
+  globalForPrisma.prisma
     ? { prisma: globalForPrisma.prisma, pool: globalForPrisma.pool }
-    : initializeDatabaseInstance();
+    : (() => {
+        const client = createPrismaClient();
+        return { prisma: client, pool: globalForPrisma.pool };
+      })();
 
 export const db: PrismaClient = activeInstance.prisma;
 
 /** Returns the underlying hardened pg.Pool used by PrismaPg. */
-export function getDatabasePool(): Pool {
-  return activeInstance.pool;
+export function getDatabasePool(): Pool | undefined {
+  return globalForPrisma.pool;
 }
 
 /** Proactively evicts currently idle pooled connections after a failover signal. */
 export function evictStaleConnections(): number {
-  return evictStalePoolConnections(activeInstance.pool);
+  const pool = globalForPrisma.pool;
+  if (!pool) return 0;
+  return evictStalePoolConnections(pool);
 }
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = activeInstance.prisma;
-  globalForPrisma.pool = activeInstance.pool;
 }
 
 /**
