@@ -58,3 +58,9 @@ jobs:
           tests/unit/scheduled/refresh.test.ts
           tests/unit/rates/snapshotRun.test.ts
           tests/unit/rates/latestRateReadModel.test.ts
+
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build
