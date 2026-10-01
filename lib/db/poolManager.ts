@@ -120,6 +120,7 @@ export function handleConnectionError(pool: Pool, error: unknown): void {
 export function createHardenedPool(
   connectionString: string,
   overrides?: Partial<HardenedPoolOptions>,
+  ssl?: PoolConfig["ssl"],
 ): Pool {
   const options = resolveHardenedPoolOptions(overrides);
 
@@ -131,6 +132,7 @@ export function createHardenedPool(
     keepAlive: options.keepAlive,
     keepAliveInitialDelayMillis: options.keepAliveInitialDelayMillis,
     max: options.max,
+    ...(ssl !== undefined ? { ssl } : {}),
   };
 
   const pool = new Pool(poolConfig);

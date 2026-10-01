@@ -5,6 +5,7 @@ import { PrismaClient } from "@/app/generated/prisma/client";
 export type { PrismaClient };
 import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
 import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
+import { resolveDatabaseTlsPolicyForEnvironment } from "@/lib/database/tlsPolicyRuntime";
 import {
   createHardenedPool,
   evictStalePoolConnections,
@@ -48,8 +49,28 @@ function initializeDatabaseInstance(): {
   prisma: PrismaClient;
   pool: Pool;
 } {
-  const connectionString = validateDatabaseUrl(getRuntimeConfig().databaseUrl);
-  const pool = createHardenedPool(connectionString);
+  const runtimeConfig = getRuntimeConfig();
+  const connectionString = validateDatabaseUrl(runtimeConfig.databaseUrl);
+  const tls = resolveDatabaseTlsPolicyForEnvironment({
+    databaseUrl: connectionString,
+    environmentId: runtimeConfig.environment,
+    environment: process.env,
+  });
+
+  if (!tls.resolution.accepted) {
+    const { code, message } = tls.resolution.rejection;
+    throw new Error(`Database TLS policy failure (${code}): ${message}`);
+  }
+
+  if (tls.emergencyBypassActive) {
+    console.warn("[stellarcore:database] emergency TLS verification bypass active");
+  }
+
+  const pool = createHardenedPool(
+    tls.sanitizedConnectionString,
+    undefined,
+    tls.resolution.mode === "DISABLED" ? undefined : tls.resolution.sslConfig,
+  );
 
   const adapter = new PrismaPg(pool, {
     onPoolError: (error) => handlePoolError(pool, error),

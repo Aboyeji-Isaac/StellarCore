@@ -83,6 +83,12 @@ Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
 
+Production database transport is guarded before pool construction by the
+verified-TLS policy in `lib/database/tlsPolicy.ts`. The policy strips
+connection-string TLS overrides, rejects plaintext or unverifiable production
+modes, and passes an explicit certificate-verifying SSL object into the
+hardened pool. Optional provider CA material remains server-only.
+
 The database connection is managed through `@prisma/adapter-pg` backed by a
 hardened `pg.Pool`. Connection acquisition and timeouts are bounded by
 `connectionTimeoutMillis` and explicit request deadlines, with TCP keepalive
