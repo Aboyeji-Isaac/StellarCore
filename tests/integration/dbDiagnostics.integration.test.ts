@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { db } from "@/lib/dbClient";
 
-test("Database Diagnostics Script Logic Executes Safely", async () => {
+const DATABASE_INTEGRATION_ENABLED = process.env.RUN_DATABASE_INTEGRATION === "1";
+
+test("Database Diagnostics Script Logic Executes Safely", { skip: !DATABASE_INTEGRATION_ENABLED }, async () => {
   // We simply verify that the queries used by the diagnostic script
   // are structurally valid, parse correctly against the postgres provider,
   // and do not require superuser permissions (which would fail in CI).

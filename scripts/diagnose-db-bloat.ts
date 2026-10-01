@@ -60,7 +60,7 @@ async function main() {
     console.log("\nDiagnostics completed successfully.");
     console.log("Consult docs/database-maintenance.md for threshold evaluation and remediation.");
   } catch (error) {
-    console.error("Failed to run diagnostics:", error);
+    console.error("Failed to run diagnostics. Ensure the database connection is valid and necessary schema exists.");
     process.exit(1);
   } finally {
     await db.$disconnect();
