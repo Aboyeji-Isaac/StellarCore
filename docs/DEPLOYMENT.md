@@ -259,3 +259,38 @@ Production releases carry a reproducible software-supply-chain record:
 ## Rollback
 
 Redeploy the prior application artifact when needed. Database migration rollback is a separate, reviewed change: do not reset or reverse a production database ad hoc. Disable the Vercel cron before any planned database maintenance that would make refresh unsafe.
+
+
+## Poison scheduled-input suppression (#234)
+
+Scheduled live-rate sources that repeatedly fail with deterministic
+normalization errors are tracked in the durable
+`scheduled_source_suppressions` table. The policy is intentionally narrow:
+only known normalization failures are eligible. Quote/network failures and
+persistence failures remain transient and never advance permanent suppression.
+
+A source is suppressed after **three consecutive eligible deterministic
+failures**. Once suppressed, its reviewed anchor/corridor identity is removed
+before live candidate preparation, so it consumes no discovery/quote network
+capacity and cannot create a fresh observation. Public latest-rate aggregation
+also excludes a suppressed source's previously persisted observation, so a
+suppressed source cannot satisfy fresh-source or median requirements.
+
+Suppression records contain only stable source identity, bounded failure
+classification, timestamps, state, and reactivation audit metadata. They do
+not store raw upstream payloads, credentials, or exception messages.
+
+Reactivation is explicit. After the underlying reviewed configuration or
+protocol mismatch has been corrected, an operator supplies a reviewed reason
+and runs:
+
+```bash
+STELLARCORE_REACTIVATE_ANCHOR="anchor-slug" \
+STELLARCORE_REACTIVATE_CORRIDOR="corridor-slug" \
+STELLARCORE_REACTIVATE_REASON="Reviewed correction in PR #..." \
+npm run suppression:reactivate
+```
+
+The command resets the suppression counter/state only. It never deletes,
+rewrites, or fabricates evidence. The source is eligible for the next scheduled
+run, where normal validation and quote handling apply again.
