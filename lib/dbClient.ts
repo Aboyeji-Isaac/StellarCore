@@ -2,6 +2,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import type { Pool } from "pg";
 
 import { PrismaClient } from "@/app/generated/prisma/client";
+export type { PrismaClient };
+import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
 import {
   createHardenedPool,
   evictStalePoolConnections,
@@ -12,6 +14,7 @@ import {
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
   pool: Pool | undefined;
+  prismaEnvironmentVerified: Promise<void> | undefined;
 };
 
 export function validateDatabaseUrl(connectionString: string | undefined): string {
@@ -48,8 +51,8 @@ function initializeDatabaseInstance(): {
   const pool = createHardenedPool(connectionString);
 
   const adapter = new PrismaPg(pool, {
-    onPoolError: (err) => handlePoolError(pool, err),
-    onConnectionError: (err) => handleConnectionError(pool, err),
+    onPoolError: (error) => handlePoolError(pool, error),
+    onConnectionError: (error) => handleConnectionError(pool, error),
   });
 
   const prisma = new PrismaClient({ adapter });
@@ -64,16 +67,12 @@ const activeInstance =
 
 export const db: PrismaClient = activeInstance.prisma;
 
-/**
- * Returns the underlying pg.Pool managing connections for PrismaPg.
- */
+/** Returns the underlying hardened pg.Pool used by PrismaPg. */
 export function getDatabasePool(): Pool {
   return activeInstance.pool;
 }
 
-/**
- * Proactively evicts idle connections from the active pool.
- */
+/** Proactively evicts currently idle pooled connections after a failover signal. */
 export function evictStaleConnections(): number {
   return evictStalePoolConnections(activeInstance.pool);
 }
@@ -81,4 +80,25 @@ export function evictStaleConnections(): number {
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = activeInstance.prisma;
   globalForPrisma.pool = activeInstance.pool;
+}
+
+/**
+ * Environment isolation verification (#143).
+ *
+ * Callers MUST await `ensureDatabaseEnvironment()` once before the first
+ * evidence read or write. It verifies the durable database_environment stamp
+ * against the declared runtime identity and fails closed with a bounded,
+ * secret-free error on any mismatch, missing stamp, or missing runtime
+ * identity. Verification is cached per process after a successful pass.
+ */
+export async function ensureDatabaseEnvironment(): Promise<void> {
+  globalForPrisma.prismaEnvironmentVerified ??= (async () => {
+    await assertDatabaseEnvironmentMatchesRuntime(db);
+  })();
+  await globalForPrisma.prismaEnvironmentVerified;
+}
+
+/** Test hook: clears the cached verification so guard tests can re-run it. */
+export function resetDatabaseEnvironmentForTests(): void {
+  globalForPrisma.prismaEnvironmentVerified = undefined;
 }
