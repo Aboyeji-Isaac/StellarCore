@@ -126,6 +126,11 @@ export function normalizeIndicativeRate(
     sourceAmount: sourceAmountDec,
     destinationAmount: destinationAmountDec,
     fee: feeDec,
+    rateScale: decimalScale(input.quote.price),
+    totalPriceScale: decimalScale(input.quote.totalPrice),
+    sourceAmountScale: decimalScale(input.quote.sellAmount),
+    destinationAmountScale: decimalScale(input.quote.buyAmount),
+    feeScale: decimalScale(input.quote.fee.total),
     feeDetails: input.quote.fee.details,
   });
 
@@ -151,11 +156,27 @@ function validateArithmeticConsistency(input: Readonly<{
   sourceAmount: ExactDecimal;
   destinationAmount: ExactDecimal;
   fee: ExactDecimal;
+  rateScale: number;
+  totalPriceScale: number;
+  sourceAmountScale: number;
+  destinationAmountScale: number;
+  feeScale: number;
   feeDetails?: readonly Sep38FeeDetail[];
 }>): void {
-  const { rate, totalPrice, sourceAmount, destinationAmount, fee, feeDetails } = input;
+  const {
+    rate,
+    totalPrice,
+    sourceAmount,
+    destinationAmount,
+    fee,
+    rateScale,
+    totalPriceScale,
+    sourceAmountScale,
+    destinationAmountScale,
+    feeScale,
+    feeDetails,
+  } = input;
 
-  // 1. Fee details sum verification
   if (feeDetails && feeDetails.length > 0) {
     let detailsSum = parseDatabaseDecimal("0");
     for (const detail of feeDetails) {
@@ -167,65 +188,68 @@ function validateArithmeticConsistency(input: Readonly<{
     }
   }
 
-  // 2. Fee monotonicity: with fee in buyAsset, totalPrice must be >= rate (conversion costs more)
-  // If fee is 0, totalPrice must be consistent with rate within 1 ULP
-  if (isZeroDecimal(fee)) {
-    const ulpP = oneUlp(rate.scale);
-    const ulpT = oneUlp(totalPrice.scale);
-    const maxUlp = maxDecimal(ulpP, ulpT);
-    if (compareDecimals(absDecimalDiff(totalPrice, rate), maxUlp) > 0) {
-      fail("ARITHMETIC_INCONSISTENCY");
-    }
-  } else {
-    // With positive fee, totalPrice must not be less than rate (allowing 1 ULP rounding)
-    const ulp = maxDecimal(oneUlp(rate.scale), oneUlp(totalPrice.scale));
-    if (compareDecimals(addDecimals(totalPrice, ulp), rate) < 0) {
-      fail("ARITHMETIC_INCONSISTENCY");
-    }
-  }
+  // SEP-38 price is always sell_asset per one unit of buy_asset. StellarCore's
+  // reviewed live sources currently accept fees denominated in buy_asset, so
+  // the applicable protocol formulas are:
+  //
+  //   sell_amount ~= total_price * buy_amount
+  //   sell_amount ~= price * (buy_amount + fee)
+  //
+  // "~=" permits only deterministic decimal rounding. Use the precision that
+  // appeared on the wire; parseDatabaseDecimal intentionally strips trailing
+  // zeroes and therefore cannot be used to infer the declared ULP.
+  const ulpSell = oneUlp(sourceAmountScale);
+  const ulpBuy = oneUlp(destinationAmountScale);
+  const ulpFee = oneUlp(feeScale);
 
-  // 3. Amount & price consistency
-  const S = sourceAmount;
-  const B = destinationAmount;
-  const P = rate;
-  const T = totalPrice;
-  const F = fee;
-
-  const ulpB = oneUlp(B.scale);
-  const ulpS = oneUlp(S.scale);
-
-  // Representation 1: Standard SEP-38
-  // sell_amount = total_price * buy_amount
-  // sell_amount = price * (buy_amount + fee)
-  const TB = multiplyDecimals(T, B);
-  const diffTB = absDecimalDiff(S, TB);
-  const tolTB = maxDecimal(multiplyDecimals(T, ulpB), ulpS);
-
-  const B_plus_F = addDecimals(B, F);
-  const P_BF = multiplyDecimals(P, B_plus_F);
-  const diffPBF = absDecimalDiff(S, P_BF);
-  const tolPBF = maxDecimal(multiplyDecimals(P, ulpB), ulpS);
-
-  const rep1Valid =
-    compareDecimals(diffTB, tolTB) <= 0 && compareDecimals(diffPBF, tolPBF) <= 0;
-
-  // Representation 2: Reciprocal / direct rate
-  // buy_amount = price * sell_amount
-  // buy_amount + fee = total_price * sell_amount
-  const PS = multiplyDecimals(P, S);
-  const diffPS = absDecimalDiff(B, PS);
-  const tolPS = maxDecimal(multiplyDecimals(P, ulpS), ulpB);
-
-  const TS = multiplyDecimals(T, S);
-  const diffTS = absDecimalDiff(B_plus_F, TS);
-  const tolTS = maxDecimal(multiplyDecimals(T, ulpS), ulpB);
-
-  const rep2Valid =
-    compareDecimals(diffPS, tolPS) <= 0 && compareDecimals(diffTS, tolTS) <= 0;
-
-  if (!rep1Valid && !rep2Valid) {
+  const totalProduct = multiplyDecimals(totalPrice, destinationAmount);
+  const totalTolerance = maxDecimal(
+    multiplyDecimals(totalPrice, ulpBuy),
+    ulpSell,
+  );
+  if (
+    compareDecimals(
+      absDecimalDiff(sourceAmount, totalProduct),
+      totalTolerance,
+    ) > 0
+  ) {
     fail("ARITHMETIC_INCONSISTENCY");
   }
+
+  const buyPlusFee = addDecimals(destinationAmount, fee);
+  const baseProduct = multiplyDecimals(rate, buyPlusFee);
+  const baseInputTolerance = addDecimals(ulpBuy, ulpFee);
+  const baseTolerance = maxDecimal(
+    multiplyDecimals(rate, baseInputTolerance),
+    ulpSell,
+  );
+  if (
+    compareDecimals(
+      absDecimalDiff(sourceAmount, baseProduct),
+      baseTolerance,
+    ) > 0
+  ) {
+    fail("ARITHMETIC_INCONSISTENCY");
+  }
+
+  // With no fee, total_price and price describe the same conversion. With a
+  // positive buy-asset fee, total_price must not be lower than price.
+  const priceTolerance = maxDecimal(
+    oneUlp(rateScale),
+    oneUlp(totalPriceScale),
+  );
+  if (isZeroDecimal(fee)) {
+    if (compareDecimals(absDecimalDiff(totalPrice, rate), priceTolerance) > 0) {
+      fail("ARITHMETIC_INCONSISTENCY");
+    }
+  } else if (compareDecimals(addDecimals(totalPrice, priceTolerance), rate) < 0) {
+    fail("ARITHMETIC_INCONSISTENCY");
+  }
+}
+
+function decimalScale(value: string): number {
+  const separator = value.indexOf(".");
+  return separator < 0 ? 0 : value.length - separator - 1;
 }
 
 function parseAndRequireDecimal(
