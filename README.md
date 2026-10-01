@@ -427,6 +427,9 @@ npm run audit:config
 # Public API compatibility contract gate
 npm run audit:compatibility
 
+# Read-only persisted evidence integrity audit
+npm run audit:integrity
+
 # Update canonical API contract fixtures (intentional reviewed changes only)
 npm run contract:update
 
@@ -885,6 +888,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] SEP-10 authentication boundary/harness
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
+- [x] Read-only evidence-graph integrity audit with bounded reports and per-class remediation guidance
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
 
 ### Planned/Future

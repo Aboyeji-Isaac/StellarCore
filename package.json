@@ -14,6 +14,7 @@
     "test": "tsx scripts/run-tests.ts",
     "audit:config": "node --import tsx scripts/audit-configuration.ts",
     "audit:compatibility": "node --import tsx scripts/audit-compatibility.ts",
+    "audit:integrity": "node --import tsx scripts/audit-integrity.ts",
     "contract:update": "node --import tsx scripts/update-api-contracts.ts",
     "registry:print": "node --import tsx scripts/registry-print.ts",
     "registry:diff": "node --import tsx scripts/registry-diff.ts",
