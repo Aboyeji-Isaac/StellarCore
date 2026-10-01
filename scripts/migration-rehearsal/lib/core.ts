@@ -13,7 +13,7 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = join(__dirname, "..", "..", "..");
-const REPORTS_DIR = join(__dirname, "reports");
+const REPORTS_DIR = join(REPO_ROOT, "scripts", "migration-rehearsal", "reports");
 
 export const REHEARSAL_CONFIRMATION = "allow-destructive";
 
