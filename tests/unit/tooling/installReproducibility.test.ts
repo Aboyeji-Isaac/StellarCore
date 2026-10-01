@@ -241,6 +241,32 @@ test("platform-incompatible optional packages are expected to be absent", () => 
   assert.equal(result.issues.total, 0);
 });
 
+test("optional packages with engines metadata still install when platform gates match", () => {
+  const reviewed = graph({
+    "node_modules/native-with-engines": entry({
+      optional: true,
+      engines: { node: ">=18" },
+      os: ["linux"],
+      cpu: ["x64"],
+      libc: ["glibc"],
+    }),
+  });
+  const installed = graph({
+    "node_modules/native-with-engines": entry({
+      engines: { node: ">=18" },
+      os: ["linux"],
+      cpu: ["x64"],
+      libc: ["glibc"],
+    }),
+  });
+  const result = auditInstalledGraphAgainstLockfile(
+    reviewed,
+    installed,
+    LINUX_X64_GLIBC,
+  );
+  assert.equal(result.issues.total, 0);
+});
+
 test("optional packages without platform gates must still install", () => {
   const reviewed = graph({
     "node_modules/fallback-wasi": entry({ optional: true }),
