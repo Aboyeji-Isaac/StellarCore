@@ -12,6 +12,7 @@ with your pull request.
 ### Added
 
 - Bounded zero-downtime cron secret rotation with deterministic previous-secret revocation (#184).
+- Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).
 - Verified TLS enforcement for production PostgreSQL connections, including provider CA support and fail-closed startup policy (#181).
 - Shared bounded public API error envelopes, status mapping, serialization, and internal reporter seams across current public routes (#177).
 - Request-scoped nonce Content Security Policy and hardened browser response headers for App Router pages (#172).
