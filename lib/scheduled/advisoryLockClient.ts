@@ -29,9 +29,10 @@ export async function withAdvisoryLock<T>(
   deps: AdvisoryLockClientDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<{ result: T; lock: AdvisoryLockResult } | { lock: AdvisoryLockResult }> {
   const client = await deps.checkoutClient();
+  let acquired = false;
 
   try {
-    const acquired = await tryAcquire(client, key);
+    acquired = await tryAcquire(client, key);
     const lock: AdvisoryLockResult = acquired
       ? Object.freeze({ acquired: true, key })
       : Object.freeze({ acquired: false, key, reason: "already_held" as const });
@@ -41,7 +42,9 @@ export async function withAdvisoryLock<T>(
     const result = await body();
     return { result, lock };
   } finally {
-    await safeRelease(client, key);
+    if (acquired) {
+      await safeRelease(client, key);
+    }
     deps.releaseClient(client);
   }
 }
@@ -70,23 +73,25 @@ async function safeRelease(client: PoolClient, key: bigint): Promise<void> {
   try {
     await client.query("SELECT pg_advisory_unlock($1::bigint)", [key.toString()]);
   } catch {
-    // Connection loss releases the session lock automatically; swallow here
+    // Connection loss releases the session lock automatically; swallow here.
   }
 }
 
-// Default dependency: one dedicated pg Pool connection per lock call.
-// Imported lazily to avoid pulling the pool into test boundaries that mock deps.
+// The default pool must allow more than one checked-out connection. A one-client
+// pool would serialize overlapping callers at checkout, causing the second call
+// to wait and run later instead of observing the held advisory lock and returning
+// the intended "already_held" result.
 function buildDefaultDependencies(): AdvisoryLockClientDependencies {
   let pool: import("pg").Pool | undefined;
 
   function getPool(): import("pg").Pool {
     if (!pool) {
-      // Dynamic require to keep test isolation clean; pg is a runtime dep
+      // Dynamic require keeps test boundaries that inject dependencies isolated.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { Pool } = require("pg") as typeof import("pg");
       const connectionString = process.env.DATABASE_URL;
       if (!connectionString) throw new Error("DATABASE_URL is not defined");
-      pool = new Pool({ connectionString, max: 1 });
+      pool = new Pool({ connectionString });
     }
     return pool;
   }
