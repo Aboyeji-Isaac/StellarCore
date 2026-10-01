@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Request-scoped nonce Content Security Policy and hardened browser response headers for App Router pages (#172).
 - Integrity-verifiable, bounded evidence export packages with streamed NDJSON members and offline verification (#202).
 - Root EditorConfig defaults for consistent cross-editor whitespace, line endings, and indentation (#257).
 - Durable three-strike suppression for deterministic scheduled source failures, reviewed reactivation tooling, and aggregate exclusion of suppressed sources (#234).
