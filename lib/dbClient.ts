@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import { PrismaClient } from "@/app/generated/prisma/client";
 export type { PrismaClient };
 import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
+import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
 import {
   createHardenedPool,
   evictStalePoolConnections,
@@ -47,7 +48,7 @@ function initializeDatabaseInstance(): {
   prisma: PrismaClient;
   pool: Pool;
 } {
-  const connectionString = validateDatabaseUrl(process.env.DATABASE_URL);
+  const connectionString = validateDatabaseUrl(getRuntimeConfig().databaseUrl);
   const pool = createHardenedPool(connectionString);
 
   const adapter = new PrismaPg(pool, {
