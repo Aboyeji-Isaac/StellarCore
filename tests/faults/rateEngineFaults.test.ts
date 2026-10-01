@@ -186,7 +186,12 @@ test("[R7] rerun after partial failure completes the set without duplicating pri
 test("[R8] persisted snapshots round-trip their inputs exactly (no fabricated values)", async () => {
   const ledger = snapshotLedger();
   const result = await runRateEngine([candidate("anchor-a")], {
-    quote: async () => okQuote({ price: "1610.5", totalPrice: "1610.5", buyAmount: "161050" }),
+    quote: async () => okQuote({
+      price: "1610.5",
+      totalPrice: "1610.5",
+      sellAmount: "161050",
+      buyAmount: "100",
+    }),
     repository: repository(ledger),
     now: () => NOW,
   });
@@ -220,10 +225,10 @@ function okQuote(overrides: Partial<Sep38IndicativePrice> = {}): Sep38Indicative
   return Object.freeze({
     sellAsset: USDC,
     buyAsset: NGN,
-    totalPrice: "1600",
-    price: "1600",
+    totalPrice: "1",
+    price: "1",
     sellAmount: "100",
-    buyAmount: "160000",
+    buyAmount: "100",
     fee: Object.freeze({ total: "0", asset: NGN, details: Object.freeze([]) }),
     ...overrides,
   });
