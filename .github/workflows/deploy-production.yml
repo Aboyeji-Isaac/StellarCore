@@ -64,6 +64,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      - name: Capture npm version
+        run: echo "STELLARCORE_NPM_VERSION=$(npm --version)" >> "$GITHUB_ENV"
+
       - name: Generate release manifest (SBOM + provenance)
         run: npm run release:manifest
         env:
@@ -71,7 +74,6 @@ jobs:
           STELLARCORE_WORKFLOW_REF: ${{ github.workflow_ref }}
           STELLARCORE_INVOCATION_ID: ${{ github.run_id }}
           STELLARCORE_ENVIRONMENT_ID: production
-          STELLARCORE_NPM_VERSION: ${{ env.NPM_VERSION }}
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
