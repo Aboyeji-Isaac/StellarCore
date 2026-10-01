@@ -121,24 +121,21 @@ export async function exportEvidence(
     });
   } catch (error) {
     if (error instanceof InvalidExportSelectionError) {
-      return Object.freeze({
-        ok: false,
-        code: "INVALID_SELECTION",
-        message: "Export selection is invalid",
-      });
+      return exportFailure(
+        "INVALID_SELECTION",
+        "Export selection is invalid",
+      );
     }
     if (error instanceof Error && error.message.startsWith("SECRET_DETECTED")) {
-      return Object.freeze({
-        ok: false,
-        code: "SECRET_DETECTED",
-        message: "Export safety policy rejected sensitive data",
-      });
+      return exportFailure(
+        "SECRET_DETECTED",
+        "Export safety policy rejected sensitive data",
+      );
     }
-    return Object.freeze({
-      ok: false,
-      code: "IO_ERROR",
-      message: "Evidence export failed",
-    });
+    return exportFailure(
+      "IO_ERROR",
+      "Evidence export failed",
+    );
   }
 }
 
@@ -493,4 +490,12 @@ async function writeNdjsonMember(
     byteLength,
     recordCount,
   });
+}
+
+
+function exportFailure(
+  code: Extract<ExportResult, { ok: false }>["code"],
+  message: string,
+): ExportResult {
+  return Object.freeze({ ok: false as const, code, message });
 }
