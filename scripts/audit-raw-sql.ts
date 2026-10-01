@@ -7,6 +7,7 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs"]);
 const REVIEWED_RAW_SQL_FILES = new Set([
   "lib/config/environmentGuardDb.ts",
   "lib/rates/latestRateRepository.ts",
+  "lib/rates/rateHistoryRepository.ts",
   "lib/reputation/repository.ts",
   "lib/reputation/snapshot.ts",
   "lib/stellar/anchorSync.ts",
