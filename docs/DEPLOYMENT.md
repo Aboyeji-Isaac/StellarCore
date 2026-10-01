@@ -49,6 +49,47 @@ Rules for operators:
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
+## Runtime configuration fingerprinting (#214)
+
+Production releases bind the checked-in reviewed configuration and selected
+non-secret runtime policy values to the source revision with a SHA-256
+fingerprint. The fingerprint covers the reviewed anchor/corridor registries,
+reviewed live-rate sources, runtime environment identity, rate freshness policy,
+minimum fresh-source policy, and only boolean presence metadata for
+`DATABASE_URL` and `CRON_SECRET`. Secret values themselves are never included
+in fingerprint material or release artifacts.
+
+`npm run release:manifest` records the fingerprint in
+`stellarcore-provenance.json` alongside the exact commit, lockfile digest,
+toolchain, and SBOM digest. The GitHub release workflow attests that provenance
+with the existing OIDC-backed build attestation.
+
+At application startup, `instrumentation.ts` recomputes the active fingerprint
+from the validated runtime configuration and compares it with
+`STELLARCORE_CONFIG_FINGERPRINT`. The deployment revision comes from
+`STELLARCORE_DEPLOYMENT_REVISION`, then `VERCEL_GIT_COMMIT_SHA`, then
+`GITHUB_SHA`.
+
+Mismatch handling is controlled by `STELLARCORE_CONFIG_DRIFT_POLICY`:
+
+- `fail`: reject startup on a mismatch; this is the production default. A
+  production deployment using this policy also rejects a missing expected
+  fingerprint.
+- `degrade`: start with diagnostics marked degraded so operators can keep
+  read-only service available while blocking or reviewing affected operational
+  paths.
+- `warn`: start and emit bounded diagnostics without marking degraded. This is
+  the non-production default.
+
+Intentional configuration changes require a new reviewed release fingerprint:
+change the reviewed configuration or policy, generate the release provenance
+for the intended commit, set the deployment's
+`STELLARCORE_CONFIG_FINGERPRINT` to that attested value, and deploy the same
+revision. Never copy a fingerprint between revisions.
+
+Startup diagnostics expose only the fingerprint, revision, policy, and drift
+state. They never emit database URLs, cron secrets, or other secret values.
+
 The read-only rates, rate-history, and reputation APIs can serve verified public
 snapshots for at most five minutes after a recognized transient database
 connectivity failure. These responses carry explicit stale metadata and remain
@@ -197,8 +238,9 @@ Production releases carry a reproducible software-supply-chain record:
 - `npm run release:manifest` emits `dist-release/stellarcore-sbom.json`
   (CycloneDX 1.5 SBOM of the locked **production** dependency graph) and
   `dist-release/stellarcore-provenance.json` (commit SHA, workflow run
-  reference, invocation id, environment identity, Node/npm versions, and the
-  SHA-256 digest of the `package-lock.json` used for installation).
+  reference, invocation id, environment identity, Node/npm versions, the
+  SHA-256 digest of the `package-lock.json` used for installation, and the
+  deployment-bound runtime configuration fingerprint).
 - `.github/workflows/deploy-production.yml` generates the manifest from the
   checked-out revision in CI (never handwritten), wraps both files in a
   verifiable attestation via `actions/attest-build-provenance` (OIDC-signed,

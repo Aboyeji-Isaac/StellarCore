@@ -17,5 +17,28 @@ export async function register(): Promise<void> {
   if (phase !== "phase-production-server" && phase !== "phase-development-server") return;
 
   const { assertRuntimeConfig } = await import("@/lib/config/runtimeConfig");
-  assertRuntimeConfig();
+  const config = assertRuntimeConfig();
+
+  const {
+    resolveDeploymentRevision,
+    resolveRuntimeConfigFingerprintPolicy,
+    verifyRuntimeConfigFingerprint,
+  } = await import("@/lib/config/runtimeConfigFingerprint");
+
+  const diagnostics = verifyRuntimeConfigFingerprint(config, {
+    expectedFingerprint: process.env.STELLARCORE_CONFIG_FINGERPRINT,
+    revision: resolveDeploymentRevision(process.env),
+    policy: resolveRuntimeConfigFingerprintPolicy(config, process.env),
+  });
+
+  console.info(JSON.stringify({
+    event: "runtime_config_fingerprint",
+    fingerprint: diagnostics.activeFingerprint,
+    expectedFingerprint: diagnostics.expectedFingerprint,
+    revision: diagnostics.revision,
+    policy: diagnostics.policy,
+    bound: diagnostics.bound,
+    driftDetected: diagnostics.driftDetected,
+    degraded: diagnostics.degraded,
+  }));
 }
