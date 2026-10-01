@@ -4,57 +4,70 @@ import test from "node:test";
 import { CORE_UTILS } from "@/scripts/migration-rehearsal/lib/core.ts";
 import type { MigrationRecord } from "@/scripts/migration-rehearsal/lib/types.ts";
 
-const { assertNotProduction, REPO_ROOT, splitSqlStatements } = CORE_UTILS;
+const { assertIsolatedRehearsal, REPO_ROOT, splitSqlStatements } = CORE_UTILS;
 
-test("assertNotProduction rejects production-like hostnames", () => {
-  const prodUrls = [
-    "postgresql://user:pass@prod.db.example.com:5432/db",
-    "postgresql://user:pass@production-db.example.com:5432/db",
-    "postgresql://user:pass@live.example.com:5432/db",
-    "postgresql://user:pass@main.example.com:5432/db",
-    "postgresql://user:pass@primary.example.com:5432/db",
-    "postgresql://user:pass@aws.example.com:5432/db",
-    "postgresql://user:pass@gcp.example.com:5432/db",
-    "postgresql://user:pass@azure.example.com:5432/db",
-    "postgresql://user:pass@vercel.example.com:5432/db",
-    "postgresql://user:pass@supabase.example.com:5432/db",
-    "postgresql://user:pass@neon.example.com:5432/db",
-    "postgresql://user:pass@planetscale.example.com:5432/db",
-  ];
+const SAFE_ENV = Object.freeze({
+  STELLARCORE_ENVIRONMENT: "test",
+  STELLARCORE_MIGRATION_REHEARSAL: "allow-destructive",
+});
 
-  for (const url of prodUrls) {
+test("rehearsal guard rejects missing destructive confirmation", () => {
+  assert.throws(
+    () =>
+      assertIsolatedRehearsal(
+        "postgresql://user:pass@localhost:5432/stellarcore_rehearsal",
+        { STELLARCORE_ENVIRONMENT: "test" },
+      ),
+    /SAFETY VIOLATION/,
+  );
+});
+
+test("rehearsal guard rejects production, preview, and development identities", () => {
+  for (const identity of ["production", "preview", "development"]) {
     assert.throws(
-      () => assertNotProduction(url),
+      () =>
+        assertIsolatedRehearsal(
+          "postgresql://user:pass@localhost:5432/stellarcore_rehearsal",
+          {
+            STELLARCORE_ENVIRONMENT: identity,
+            STELLARCORE_MIGRATION_REHEARSAL: "allow-destructive",
+          },
+        ),
       /SAFETY VIOLATION/,
-      `Should reject: ${url}`,
     );
   }
 });
 
-test("assertNotProduction rejects Prisma production with sslmode=require", () => {
-  const url = "postgresql://user:pass@abc123.prisma.io:5432/db?sslmode=require";
+test("rehearsal guard rejects non-loopback databases even with test identity", () => {
+  for (const host of ["staging.example.com", "db.internal", "supabase.co"]) {
+    assert.throws(
+      () =>
+        assertIsolatedRehearsal(
+          `postgresql://user:pass@${host}:5432/stellarcore_rehearsal`,
+          SAFE_ENV,
+        ),
+      /SAFETY VIOLATION/,
+    );
+  }
+});
+
+test("rehearsal guard requires an explicitly named rehearsal database", () => {
   assert.throws(
-    () => assertNotProduction(url),
+    () =>
+      assertIsolatedRehearsal(
+        "postgresql://user:pass@localhost:5432/stellarcore",
+        SAFE_ENV,
+      ),
     /SAFETY VIOLATION/,
-    `Should reject Prisma production: ${url}`,
   );
 });
 
-test("assertNotProduction allows local/staging databases", () => {
-  const safeUrls = [
-    "postgresql://user:pass@localhost:5432/db",
-    "postgresql://user:pass@staging.db.example.com:5432/db",
-    "postgresql://user:pass@test.example.com:5432/db",
-    "postgresql://user:pass@127.0.0.1:5432/db",
-    "postgresql://user:pass@db:5432/db",
-    "postgresql://user:pass@rehearsal.example.com:5432/db",
-  ];
-
-  for (const url of safeUrls) {
-    assert.doesNotThrow(
-      () => assertNotProduction(url),
-      `Should allow: ${url}`,
-    );
+test("rehearsal guard accepts only explicit local rehearsal targets", () => {
+  for (const url of [
+    "postgresql://user:pass@localhost:5432/stellarcore_rehearsal",
+    "postgresql://user:pass@127.0.0.1:5432/rehearsal_test",
+  ]) {
+    assert.doesNotThrow(() => assertIsolatedRehearsal(url, SAFE_ENV));
   }
 });
 
