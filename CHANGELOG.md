@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Isolated production migration-recovery rehearsal with hard non-production guards and per-scenario decision records (#212).
 - Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).
 - Verified TLS enforcement for production PostgreSQL connections, including provider CA support and fail-closed startup policy (#181).
 - Shared bounded public API error envelopes, status mapping, serialization, and internal reporter seams across current public routes (#177).
