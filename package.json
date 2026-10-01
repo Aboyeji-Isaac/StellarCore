@@ -29,6 +29,7 @@
     "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
     "stamp:environment": "tsx scripts/stamp-database-environment.ts",
     "suppression:reactivate": "tsx scripts/reactivate-scheduled-source.ts",
+    "maintenance": "tsx scripts/maintenance.ts",
     "release:manifest": "tsx scripts/release-cli.ts generate",
     "verify:release": "tsx scripts/release-cli.ts verify",
     "export:evidence": "tsx scripts/export-evidence.ts",
