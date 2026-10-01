@@ -86,6 +86,7 @@ test("fetchSep1Toml returns a typed non-2xx error without reading the body", asy
   await assert.rejects(
     fetchSep1Toml("anchor.example", {
       fetcher: async () => new Response("sensitive body", { status: 503 }),
+      retryPolicy: { maxAttempts: 1 },
     }),
     (error) =>
       error instanceof Sep1DiscoveryError &&

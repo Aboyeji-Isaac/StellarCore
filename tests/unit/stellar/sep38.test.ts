@@ -199,6 +199,7 @@ test("network client rejects invalid JSON, content types, and non-2xx responses"
         new Response("not-json", {
           headers: { "content-type": "application/json" },
         }),
+      retryPolicy: { maxAttempts: 1 },
     }),
     hasCode("INVALID_JSON"),
   );
@@ -208,6 +209,7 @@ test("network client rejects invalid JSON, content types, and non-2xx responses"
       fetcher: async () => new Response('{"assets":[]}', {
         headers: { "content-type": "text/plain" },
       }),
+      retryPolicy: { maxAttempts: 1 },
     }),
     hasCode("INVALID_CONTENT_TYPE"),
   );
@@ -215,6 +217,7 @@ test("network client rejects invalid JSON, content types, and non-2xx responses"
   await assert.rejects(
     getSep38Info(QUOTE_SERVER, {
       fetcher: async () => jsonResponse({ error: "private detail" }, 503),
+      retryPolicy: { maxAttempts: 1 },
     }),
     (error) =>
       error instanceof Sep38ClientError &&
@@ -250,7 +253,7 @@ test("network client aborts timeouts while reading and bounds JSON bodies", asyn
     })) as typeof fetch;
 
   await assert.rejects(
-    getSep38Info(QUOTE_SERVER, { fetcher: slowFetcher, timeoutMs: 5 }),
+    getSep38Info(QUOTE_SERVER, { fetcher: slowFetcher, timeoutMs: 5, retryPolicy: { maxAttempts: 1 } }),
     hasCode("TIMEOUT"),
   );
 
@@ -260,6 +263,7 @@ test("network client aborts timeouts while reading and bounds JSON bodies", asyn
         new Response(`{"padding":"${"x".repeat(100_001)}"}`, {
           headers: { "content-type": "application/json" },
         }),
+      retryPolicy: { maxAttempts: 1 },
     }),
     hasCode("RESPONSE_TOO_LARGE"),
   );
@@ -552,7 +556,7 @@ test("response-body reads remain covered by the request timeout", async () => {
     )) as typeof fetch;
 
   await assert.rejects(
-    getSep38Info(QUOTE_SERVER, { fetcher, timeoutMs: 5 }),
+    getSep38Info(QUOTE_SERVER, { fetcher, timeoutMs: 5, retryPolicy: { maxAttempts: 1 } }),
     hasCode("TIMEOUT"),
   );
 });

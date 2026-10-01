@@ -15,7 +15,7 @@ test("fetchSep1Toml aborts slow requests with a typed timeout error", async () =
     })) as typeof fetch;
 
   await assert.rejects(
-    fetchSep1Toml("anchor.example", { fetcher, timeoutMs: 5 }),
+    fetchSep1Toml("anchor.example", { fetcher, timeoutMs: 5, retryPolicy: { maxAttempts: 1 } }),
     (error) =>
       error instanceof Sep1DiscoveryError && error.code === "TIMEOUT",
   );

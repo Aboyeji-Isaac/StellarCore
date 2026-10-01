@@ -2,6 +2,12 @@ import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
 import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
+import {
+  type SepRetryPolicy,
+  withSepRetry,
+  classifySep1Error,
+  SepRetryExhaustedError,
+} from "@/lib/stellar/retry";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -24,7 +30,8 @@ export type Sep1ErrorCode =
   | "RESPONSE_TOO_LARGE"
   | "INVALID_TOML"
   | "INVALID_DATA"
-  | "MISSING_REQUIRED_DATA";
+  | "MISSING_REQUIRED_DATA"
+  | "RETRY_EXHAUSTED";
 
 export class Sep1DiscoveryError extends Error {
   readonly code: Sep1ErrorCode;
@@ -48,6 +55,8 @@ export class Sep1DiscoveryError extends Error {
 export type FetchSep1Options = Readonly<{
   timeoutMs?: number;
   fetcher?: typeof fetch;
+  retryPolicy?: Partial<SepRetryPolicy>;
+  retryOnFailure?: (error: Error, attempt: number) => void;
 }>;
 
 export function buildSep1TomlUrl(homeDomain: string): string {
@@ -144,22 +153,12 @@ export function parseSep1Toml(
   });
 }
 
-export async function fetchSep1Toml(
-  homeDomain: string,
-  options: FetchSep1Options = {},
+// Internal function that performs a single SEP-1 fetch attempt (no retries).
+async function fetchSep1TomlOnce(
+  tomlUrl: string,
+  timeoutMs: number,
+  fetcher: typeof fetch,
 ): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
-  const tomlUrl = buildSep1TomlUrl(homeDomain);
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetcher = options.fetcher ?? createEgressFetch();
-
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new Sep1DiscoveryError(
-      "INVALID_DATA",
-      "SEP-1 timeout must be a positive finite number",
-      tomlUrl,
-    );
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -216,6 +215,49 @@ export async function fetchSep1Toml(
     );
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+export async function fetchSep1Toml(
+  homeDomain: string,
+  options: FetchSep1Options = {},
+): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
+  const tomlUrl = buildSep1TomlUrl(homeDomain);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const fetcher = options.fetcher ?? createEgressFetch();
+  const retryPolicy = options.retryPolicy;
+  const onRetry = options.retryOnFailure;
+
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Sep1DiscoveryError(
+      "INVALID_DATA",
+      "SEP-1 timeout must be a positive finite number",
+      tomlUrl,
+    );
+  }
+
+  try {
+    return await withSepRetry(
+      async () => {
+        return fetchSep1TomlOnce(tomlUrl, timeoutMs, fetcher);
+      },
+      {
+        policy: retryPolicy,
+        onRetry,
+        classifyError: (error: unknown) => classifySep1Error(error, undefined),
+        attemptTimeoutMs: timeoutMs,
+      },
+    );
+  } catch (error) {
+    if (error instanceof SepRetryExhaustedError) {
+      throw new Sep1DiscoveryError(
+        "RETRY_EXHAUSTED",
+        `SEP-1 retry exhausted after ${error.attempts} attempts: ${error.lastError.message}`,
+        tomlUrl,
+        { cause: error.lastError },
+      );
+    }
+    throw error;
   }
 }
 

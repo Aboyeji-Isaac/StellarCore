@@ -42,6 +42,7 @@ test("indicative quote fetching reports upstream non-200 responses", async () =>
   await assert.rejects(
     getSep38IndicativePrice(QUOTE_SERVER, indicativeRequest(), {
       fetcher: async () => jsonResponse({ error: "unavailable" }, 503),
+      retryPolicy: { maxAttempts: 1 },
     }),
     (error) =>
       error instanceof Sep38ClientError &&
@@ -60,7 +61,7 @@ test("indicative quote fetching aborts when the upstream times out", async () =>
     getSep38IndicativePrice(
       QUOTE_SERVER,
       indicativeRequest(),
-      { fetcher, timeoutMs: 5 },
+      { fetcher, timeoutMs: 5, retryPolicy: { maxAttempts: 1 } },
     ),
     hasCode("TIMEOUT"),
   );

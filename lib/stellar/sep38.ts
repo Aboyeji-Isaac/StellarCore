@@ -22,6 +22,12 @@ import type {
   Sep38SupportedPair,
 } from "@/types/sep38";
 import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
+import {
+  type SepRetryPolicy,
+  withSepRetry,
+  classifySep38Error,
+  SepRetryExhaustedError,
+} from "@/lib/stellar/retry";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_JSON_BYTES = 100_000;
@@ -46,24 +52,27 @@ export type Sep38ErrorCode =
   | "RESPONSE_TOO_LARGE"
   | "INVALID_CONTENT_TYPE"
   | "INVALID_JSON"
-  | "INVALID_DATA";
+  | "INVALID_DATA"
+  | "RETRY_EXHAUSTED";
 
 export class Sep38ClientError extends Error {
   readonly code: Sep38ErrorCode;
   readonly endpoint: string;
   readonly status?: number;
+  readonly cause?: Error;
 
   constructor(
     code: Sep38ErrorCode,
     message: string,
     endpoint: string,
-    options?: Readonly<{ status?: number }>,
+    options?: Readonly<{ status?: number; cause?: Error }>,
   ) {
     super(message);
     this.name = "Sep38ClientError";
     this.code = code;
     this.endpoint = endpoint;
     this.status = options?.status;
+    this.cause = options?.cause;
   }
 }
 
@@ -71,6 +80,8 @@ export type Sep38ClientOptions = Readonly<{
   timeoutMs?: number;
   fetcher?: typeof fetch;
   authentication?: Sep38Authentication;
+  retryPolicy?: Partial<SepRetryPolicy>;
+  retryOnFailure?: (error: Error, attempt: number) => void;
 }>;
 
 export function parseSep38AssetIdentifier(
@@ -552,7 +563,8 @@ export async function getSep38FirmQuote(
   );
 }
 
-async function requestJson(
+// Internal function that performs a single SEP-38 JSON request attempt (no retries).
+async function requestJsonOnce(
   url: string,
   init: RequestInit,
   options: Sep38ClientOptions,
@@ -657,6 +669,42 @@ async function requestJson(
     );
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function requestJson(
+  url: string,
+  init: RequestInit,
+  options: Sep38ClientOptions,
+  expectedStatus = 200,
+): Promise<unknown> {
+  const endpoint = safeEndpoint(url);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const retryPolicy = options.retryPolicy;
+  const onRetry = options.retryOnFailure;
+
+  try {
+    return await withSepRetry(
+      async () => {
+        return requestJsonOnce(url, init, options, expectedStatus);
+      },
+      {
+        policy: retryPolicy,
+        onRetry,
+        classifyError: (error: unknown, headers?: Headers) => classifySep38Error(error, headers),
+        attemptTimeoutMs: timeoutMs,
+      },
+    );
+  } catch (error) {
+    if (error instanceof SepRetryExhaustedError) {
+      throw new Sep38ClientError(
+        "RETRY_EXHAUSTED",
+        `SEP-38 retry exhausted after ${error.attempts} attempts: ${error.lastError.message}`,
+        endpoint,
+        { cause: error.lastError },
+      );
+    }
+    throw error;
   }
 }
 
