@@ -115,3 +115,22 @@ test("validateAnchorRegistry: detects duplicates across Unicode and punycode for
     /Duplicate anchor home domain: "münchen\.de"/,
   );
 });
+
+
+test("canonicalizeHostname: rejects mixed-script confusables in Unicode and punycode forms", () => {
+  const confusable = "pаypal.com"; // Cyrillic small a in an otherwise Latin label.
+  assert.throws(
+    () => canonicalizeHostname(confusable),
+    (err: unknown) =>
+      err instanceof HostnameValidationError &&
+      err.code === "AMBIGUOUS_UNICODE",
+  );
+
+  const punycode = new URL(`https://${confusable}`).hostname;
+  assert.throws(
+    () => canonicalizeHostname(punycode),
+    (err: unknown) =>
+      err instanceof HostnameValidationError &&
+      err.code === "AMBIGUOUS_UNICODE",
+  );
+});
