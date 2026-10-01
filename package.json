@@ -20,7 +20,10 @@
     "verify:latest-rates": "tsx scripts/verify-latest-rates.ts",
     "verify:reputation": "tsx scripts/verify-reputation.ts",
     "benchmark:latest-observations": "tsx scripts/benchmark-latest-observations.ts",
-    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts"
+    "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
+    "stamp:environment": "tsx scripts/stamp-database-environment.ts",
+    "release:manifest": "tsx scripts/release-cli.ts generate",
+    "verify:release": "tsx scripts/release-cli.ts verify"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -42,7 +45,7 @@
     "@types/node": "^22.0.0",
     "@types/pg": "^8.21.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
+    "@types/react-dom": "^19.1.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.5.0",
     "prisma": "^7.9.1",
