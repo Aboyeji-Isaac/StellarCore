@@ -29,7 +29,10 @@
     "stamp:environment": "tsx scripts/stamp-database-environment.ts",
     "suppression:reactivate": "tsx scripts/reactivate-scheduled-source.ts",
     "release:manifest": "tsx scripts/release-cli.ts generate",
-    "verify:release": "tsx scripts/release-cli.ts verify"
+    "verify:release": "tsx scripts/release-cli.ts verify",
+    "export:evidence": "tsx scripts/export-evidence.ts",
+    "verify:export": "tsx scripts/verify-export.ts",
+    "test:export": "node --import tsx --test tests/integration/export/evidence-package.test.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
