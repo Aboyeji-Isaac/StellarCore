@@ -91,26 +91,38 @@ export function generateReleaseManifest(input: ReleaseManifestInput): ReleaseMan
   const lockfile = JSON.parse(lockfileRaw) as {
     name?: string;
     version?: string;
-    packages?: Record<string, { dependencies?: Record<string, string>; version?: string }>;
+    packages?: Record<string, {
+      name?: string;
+      version?: string;
+      dev?: boolean;
+      devOptional?: boolean;
+    }>;
   };
 
-  const rootPackageKey = "";
-  const productionDependencies =
-    lockfile.packages?.[rootPackageKey]?.dependencies ?? {};
   const applicationName = lockfile.name ?? "stellarcore";
   const applicationVersion = lockfile.version ?? "0.0.0";
 
-  const components = Object.keys(productionDependencies)
-    .sort((left, right) => left.localeCompare(right))
-    .map((name) => {
-      const range = productionDependencies[name] ?? "";
-      const version = resolveLockedVersion(lockfile, name, range);
+  // npm lockfile v3 marks dev-only packages with dev/devOptional. Include every
+  // installed non-dev package path, not just root dependencies, so the SBOM
+  // reflects the full locked production dependency graph.
+  const components = Object.entries(lockfile.packages ?? {})
+    .filter(([path, pkg]) =>
+      path.startsWith("node_modules/") &&
+      typeof pkg.version === "string" &&
+      pkg.version.length > 0 &&
+      pkg.dev !== true &&
+      pkg.devOptional !== true,
+    )
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([path, pkg]) => {
+      const name = pkg.name ?? packageNameFromLockPath(path);
+      const version = pkg.version!;
       return Object.freeze({
         type: "library" as const,
-        "bom-ref": `pkg:npm/${name}@${version}`,
+        "bom-ref": `urn:stellarcore:npm:${encodeURIComponent(path)}@${version}`,
         name,
         version,
-        purl: `pkg:npm/${name}@${version}`,
+        purl: packagePurl(name, version),
       });
     });
 
@@ -159,16 +171,17 @@ export function generateReleaseManifest(input: ReleaseManifestInput): ReleaseMan
   return Object.freeze({ sbom, provenance });
 }
 
-function resolveLockedVersion(
-  lockfile: { packages?: Record<string, { version?: string }> },
-  name: string,
-  range: string,
-): string {
-  // The lockfile records the exact installed version under node_modules/<name>.
-  const exact = lockfile.packages?.[`node_modules/${name}`]?.version;
-  if (exact) return exact;
-  // Fallback for lockfiles without a root pin: use the requested range.
-  return range.replace(/^[^0-9]*/, "") || "unknown";
+function packageNameFromLockPath(path: string): string {
+  const marker = "node_modules/";
+  const index = path.lastIndexOf(marker);
+  return index >= 0 ? path.slice(index + marker.length) : path;
+}
+
+function packagePurl(name: string, version: string): string {
+  const encodedName = name.startsWith("@")
+    ? `%40${name.slice(1)}`
+    : name;
+  return `pkg:npm/${encodedName}@${version}`;
 }
 
 function sha256(value: string): string {
