@@ -61,7 +61,7 @@ export async function runScenario3(dbUrl: string): Promise<{
   await runSql(dbUrl, `
     UPDATE "_prisma_migrations"
     SET checksum = '${corruptedChecksum}',
-        finished_at = NOW(),
+        finished_at = NULL,
         applied_steps_count = ${statements.length}
     WHERE migration_name = '${latestMigration.migrationName}'
   `);
@@ -113,36 +113,36 @@ export async function runScenario3(dbUrl: string): Promise<{
     durationMs: getDurationMs(verifyStart),
   });
 
-  // Phase 4: Recovery - Repair the checksum
+  // Phase 4: Recovery - repair metadata only through Prisma's documented
+  // migrate resolve command after schema verification. Never hand-edit the
+  // checksum as an operational recovery procedure.
   const recoveryStart = Date.now();
-
-  // Calculate correct checksum from the migration SQL
-  const { createHash } = await import("node:crypto");
-  const correctChecksum = createHash("sha256").update(sql).digest("hex");
-
-  // Fix the checksum
-  const fixResult = runSql(dbUrl, `
-    UPDATE "_prisma_migrations"
-    SET checksum = '${correctChecksum}',
-        logs = 'Checksum repaired by migration rehearsal framework'
-    WHERE migration_name = '${latestMigration.migrationName}'
-  `);
-
-  // Verify the fix
-  const verifyFixResult = runCommand("npx", ["prisma", "migrate", "status"], { DATABASE_URL: dbUrl });
-  const fixSuccess = fixResult.exitCode === 0 && verifyFixResult.stdout.includes("up to date");
+  const resolveResult = runCommand(
+    "npx",
+    ["prisma", "migrate", "resolve", "--applied", latestMigration.migrationName],
+    { DATABASE_URL: dbUrl },
+  );
+  const verifyFixResult = runCommand(
+    "npx",
+    ["prisma", "migrate", "status"],
+    { DATABASE_URL: dbUrl },
+  );
+  const fixSuccess =
+    resolveResult.exitCode === 0 &&
+    verifyFixResult.exitCode === 0 &&
+    verifyFixResult.stdout.toLowerCase().includes("up to date");
 
   results.push({
     scenarioId: SCENARIO_3_ID,
     phase: "recovery",
-    success: fixResult.exitCode === 0 && fixSuccess,
-    message: fixResult.exitCode === 0 && fixSuccess
-      ? "Checksum repaired successfully; Prisma now reports schema up to date"
-      : `Checksum repair failed: ${fixResult.stderr || verifyFixResult.stderr}`,
+    success: fixSuccess,
+    message: fixSuccess
+      ? "Migration metadata repaired with 'prisma migrate resolve --applied'"
+      : "Prisma metadata repair or post-repair status verification failed",
     details: {
-      correctChecksum: correctChecksum.slice(0, 16) + "...",
-      fixExitCode: fixResult.exitCode,
-      fixStderr: fixResult.stderr,
+      resolveExitCode: resolveResult.exitCode,
+      resolveStdout: resolveResult.stdout.slice(0, 300),
+      resolveStderr: resolveResult.stderr.slice(0, 300),
       verifyExitCode: verifyFixResult.exitCode,
       verifyStdout: verifyFixResult.stdout.slice(0, 300),
     },
@@ -173,24 +173,17 @@ export async function runScenario3(dbUrl: string): Promise<{
     scenarioId: SCENARIO_3_ID,
     recommendedAction: "forward-fix",
     rationale:
-      "All DDL was applied successfully (schema is correct), but the _prisma_migrations checksum was corrupted. " +
-      "This can happen due to race conditions, manual intervention, or incomplete migration recording. " +
-      "The fix is to recalculate the correct SHA256 checksum from the migration SQL file and update the record. " +
-      "This is a safe forward-fix because no schema changes are needed - only metadata repair.",
+      "All DDL is verified present, but migration metadata is unfinished/corrupt. " +
+      "Repair metadata only through Prisma's documented migrate resolve command after schema verification.",
     sqlCommands: [
-      `-- Calculate correct checksum: echo -n '${sql}' | sha256sum`,
-      `-- Then update:`,
-      `UPDATE "_prisma_migrations"`,
-      `SET checksum = '${createHash("sha256").update(sql).digest("hex")}',`,
-      `    logs = 'Checksum repaired by migration rehearsal framework'`,
-      `WHERE migration_name = '${latestMigration.migrationName}';`,
+      `npx prisma migrate resolve --applied ${latestMigration.migrationName}`,
     ],
     warnings: [
       "Only safe when schema is verified correct (all DDL applied)",
       "Never use this to hide actual schema drift - verify schema first",
       "If schema is actually incorrect, restore from backup instead",
     ],
-    verified: fixResult.exitCode === 0 && fixSuccess && compatibilityCheck.passed,
+    verified: fixSuccess && compatibilityCheck.passed,
   };
 
   return {
