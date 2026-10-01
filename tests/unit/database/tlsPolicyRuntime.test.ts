@@ -11,18 +11,11 @@ import { join } from "node:path";
 
 const PROD_URL = "postgres://user:secret@db.example.com:5432/stellar";
 
-test("production-like detection: NODE_ENV=production or the explicit deployment flag", () => {
-  assert.equal(isProductionLikeEnvironment({ NODE_ENV: "production" }), true);
-  assert.equal(isProductionLikeEnvironment({ STELLARCORE_DEPLOYMENT: "production" }), true);
-  assert.equal(isProductionLikeEnvironment({ NODE_ENV: "development" }), false);
-  assert.equal(isProductionLikeEnvironment({ NODE_ENV: "test" }), false);
-  assert.equal(isProductionLikeEnvironment({}), false);
-});
-
 test("production runtime with a plain URL resolves verified TLS and a sanitized connection string", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: PROD_URL,
-    environment: { NODE_ENV: "production", DATABASE_URL: PROD_URL },
+    environmentId: "production",
+    environment: { DATABASE_URL: PROD_URL },
   });
 
   assert.equal(result.resolution.accepted, true);
@@ -36,7 +29,8 @@ test("production runtime with a bypass URL rejects with the safe diagnostic and 
   const bypassedUrl = `${PROD_URL}?ssl=no-verify&application_name=stellarcore`;
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: bypassedUrl,
-    environment: { NODE_ENV: "production", DATABASE_URL: bypassedUrl },
+    environmentId: "production",
+    environment: { DATABASE_URL: bypassedUrl },
   });
 
   assert.equal(result.resolution.accepted, false);
@@ -54,15 +48,16 @@ test("the emergency bypass gate activates only with the exact value and logs no 
 
   const notGated = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: bypassedUrl,
-    environment: { NODE_ENV: "production", STELLARCORE_DB_TLS_EMERGENCY_BYPASS: "true" },
+    environmentId: "production",
+    environment: { STELLARCORE_DB_TLS_EMERGENCY_BYPASS: "true" },
   });
   assert.equal(notGated.emergencyBypassActive, false);
   assert.equal(notGated.resolution.accepted, false);
 
   const gated = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: bypassedUrl,
+    environmentId: "production",
     environment: {
-      NODE_ENV: "production",
       STELLARCORE_DB_TLS_EMERGENCY_BYPASS: "allow-unverified",
     },
   });
@@ -74,7 +69,8 @@ test("the emergency bypass gate activates only with the exact value and logs no 
 test("development runtime keeps plaintext usable without policy interference", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: "postgres://user:secret@localhost:5432/stellar",
-    environment: { NODE_ENV: "development", DATABASE_URL: "postgres://user:secret@localhost:5432/stellar" },
+    environmentId: "development",
+    environment: { DATABASE_URL: "postgres://user:secret@localhost:5432/stellar" },
   });
 
   assert.equal(result.resolution.accepted, true);
@@ -89,8 +85,8 @@ test("a configured CA file is loaded into the ssl config; its content never appe
   try {
     const result = resolveDatabaseTlsPolicyForEnvironment({
       databaseUrl: PROD_URL,
+      environmentId: "production",
       environment: {
-        NODE_ENV: "production",
         STELLARCORE_DB_CA_PATH: caPath,
       },
     });
@@ -110,18 +106,20 @@ test("a configured CA file is loaded into the ssl config; its content never appe
   }
 });
 
-test("a missing CA file path does not crash policy resolution in production", () => {
+test("a configured missing CA file path fails closed in production", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: PROD_URL,
+    environmentId: "production",
     environment: {
-      NODE_ENV: "production",
       STELLARCORE_DB_CA_PATH: "/nonexistent/path/ca.pem",
     },
   });
 
-  assert.equal(result.resolution.accepted, true);
-  assert.ok(result.resolution.accepted && result.resolution.mode === "VERIFY_FULL");
-  assert.ok(result.resolution.accepted && result.resolution.sslConfig.ca === undefined);
+  assert.equal(result.resolution.accepted, false);
+  assert.ok(
+    !result.resolution.accepted &&
+      result.resolution.rejection.code === "PRODUCTION_TLS_CA_MISSING",
+  );
 });
 
 test("development exceptions cannot activate in production: same env map flips behavior by NODE_ENV only", () => {
@@ -129,13 +127,15 @@ test("development exceptions cannot activate in production: same env map flips b
 
   const development = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: devUrl,
-    environment: { NODE_ENV: "development", DATABASE_URL: devUrl },
+    environmentId: "development",
+    environment: { DATABASE_URL: devUrl },
   });
   assert.equal(development.resolution.accepted, true);
 
   const production = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: devUrl,
-    environment: { NODE_ENV: "production", DATABASE_URL: devUrl },
+    environmentId: "production",
+    environment: { DATABASE_URL: devUrl },
   });
   assert.equal(production.resolution.accepted, false);
   assert.ok(!production.resolution.accepted && production.resolution.rejection.code === "PRODUCTION_TLS_DISABLED");
