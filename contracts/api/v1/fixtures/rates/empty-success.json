@@ -1,0 +1,30 @@
+{
+  "name": "rates.empty.success",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Rate response with zero observations",
+  "body": {
+    "corridor": {
+      "slug": "usdc-us-brl-br",
+      "sourceAsset": "USDC",
+      "sourceCountry": "US",
+      "destinationAsset": "BRL",
+      "destinationCountry": "BR"
+    },
+    "evaluatedAt": "2026-08-28T12:00:00.000Z",
+    "state": "insufficient_fresh_sources",
+    "medianRate": null,
+    "sourceCount": 0,
+    "freshSourceCount": 0,
+    "reviewedCandidateConfiguration": {
+      "candidateCount": 1,
+      "uniqueAnchorCount": 1
+    },
+    "medianRequirement": {
+      "minimumFreshIndependentSources": 2
+    },
+    "observations": []
+  }
+}

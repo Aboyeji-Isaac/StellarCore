@@ -1,0 +1,50 @@
+name: Audit evidence export packages
+
+on:
+  pull_request:
+    paths:
+      - "lib/export/**"
+      - "scripts/export-evidence.ts"
+      - "scripts/verify-export.ts"
+      - "tests/integration/export/**"
+      - "docs/evidence-export.md"
+      - "package.json"
+      - ".github/workflows/audit-evidence-export.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit evidence export packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+
+      - name: Run export package tests
+        run: npm run test:export
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build

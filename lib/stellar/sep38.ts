@@ -21,6 +21,7 @@ import type {
   Sep38StellarLiquidityPoolAssetIdentifier,
   Sep38SupportedPair,
 } from "@/types/sep38";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_JSON_BYTES = 100_000;
@@ -39,6 +40,7 @@ export type Sep38ErrorCode =
   | "AUTHENTICATION_REQUIRED"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "REDIRECT"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
@@ -355,8 +357,12 @@ export function parseSep38IndicativePrice(
   const record = requireRecord(value, endpoint);
 
   return Object.freeze({
-    sellAsset: request.sellAsset,
-    buyAsset: request.buyAsset,
+    sellAsset: record.sell_asset !== undefined
+      ? parseAsset(requireString(record.sell_asset, "sell_asset", endpoint))
+      : request.sellAsset,
+    buyAsset: record.buy_asset !== undefined
+      ? parseAsset(requireString(record.buy_asset, "buy_asset", endpoint))
+      : request.buyAsset,
     totalPrice: requireDecimal(
       record.total_price,
       "total_price",
@@ -377,6 +383,24 @@ export function parseSep38IndicativePrice(
       true,
     ),
     fee: parseFee(record.fee, endpoint),
+    ...(record.sell_delivery_method !== undefined
+      ? {
+          sellDeliveryMethod: requireString(
+            record.sell_delivery_method,
+            "sell_delivery_method",
+            endpoint,
+          ),
+        }
+      : {}),
+    ...(record.buy_delivery_method !== undefined
+      ? {
+          buyDeliveryMethod: requireString(
+            record.buy_delivery_method,
+            "buy_delivery_method",
+            endpoint,
+          ),
+        }
+      : {}),
   });
 }
 
@@ -536,7 +560,7 @@ async function requestJson(
 ): Promise<unknown> {
   const endpoint = safeEndpoint(url);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? createEgressFetch();
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Sep38ClientError(
@@ -610,6 +634,13 @@ async function requestJson(
     }
   } catch (error) {
     if (error instanceof Sep38ClientError) throw error;
+    if (error instanceof EgressPolicyError) {
+      throw new Sep38ClientError(
+        "EGRESS_POLICY",
+        "SEP-38 request blocked by outbound network policy",
+        endpoint,
+      );
+    }
 
     if (controller.signal.aborted) {
       throw new Sep38ClientError(
