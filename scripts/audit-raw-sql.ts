@@ -50,6 +50,7 @@ async function main(): Promise<void> {
   for (const file of files) {
     const source = await readFile(file, "utf8");
     const normalized = file.replaceAll("\\", "/");
+    if (normalized === "scripts/audit-raw-sql.ts") continue;
 
     const counts = {
       queryRaw: count(source, /\$queryRaw(?!Unsafe)\b/g),
