@@ -93,9 +93,13 @@ sockets. Interrupted transactions never report success without positive commit
 confirmation, and bounded pool capacity prevents connection storms against
 newly promoted primaries. See `docs/database-failover.md` for full details.
 
-Routes under `app/api/` expose anchors, corridors, rates, and reputation as
-read-only JSON. They serialize bounded fields, avoid raw errors and internal
-identifiers, and use no-store behavior where data is dynamic. The
+Routes under `app/api/` expose anchors, corridors, rates, rate history, and
+reputation as read-only JSON. Public failures use one shared bounded
+`error.code` / `error.message` envelope and a common response serializer.
+Unknown exceptions are retained only through the server-side reporter seam;
+stack traces, database details, raw upstream responses, and secrets never enter
+the public envelope. Successful response shapes and stale-evidence degradation
+headers remain unchanged. Dynamic responses use no-store behavior. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
 

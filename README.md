@@ -545,6 +545,38 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+
+### Public API error contract
+
+All public API failures use one bounded envelope:
+
+```json
+{
+  "error": {
+    "code": "corridor_not_found",
+    "message": "Corridor not found."
+  }
+}
+```
+
+The top level contains only `error`; the error object contains only stable
+`code` and bounded human-readable `message`. Successful payload shapes are
+unchanged. Unknown exceptions are reported through a server-side reporter seam
+and never serialized to clients.
+
+| HTTP | Codes |
+|---|---|
+| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug` |
+| 404 | `anchor_not_found`, `corridor_not_found` |
+| 429 | `rate_limited` (reserved for throttling) |
+| 500 | `internal_error` |
+| 503 | `upstream_unavailable` (reserved for bounded dependency failures) |
+
+Responses never expose stack traces, ORM/database messages, raw upstream
+responses, credentials, JWTs, or private endpoint details. Dynamic evidence
+routes retain their stale-evidence response headers when serving a verified
+last-known-good payload.
+
 ### `GET /api/anchors`
 
 Returns the public directory of anchors currently persisted by StellarCore,
