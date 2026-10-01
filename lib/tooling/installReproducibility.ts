@@ -456,7 +456,7 @@ function computeExpectedAbsentPaths(
     const excludedByAncestor = parentPath !== null && expectedAbsent.has(parentPath);
     const directlyExcluded =
       entry.optional === true &&
-      (platformExcludes(entry, platform) || entry.engines !== undefined);
+      platformExcludes(entry, platform);
     // Anything nested under a path that will not be installed cannot be on
     // disk either, regardless of its own optional flag.
     if (excludedByAncestor || directlyExcluded) {
