@@ -83,9 +83,16 @@ export async function runScenario1(dbUrl: string): Promise<{
     durationMs: getDurationMs(verifyStart),
   });
 
-  // Phase 4: Recovery - Simply re-run prisma migrate deploy (idempotent)
+  // Phase 4: Recovery - repair the failed migration record only through
+  // Prisma's documented resolve command after the isolated schema state has
+  // been verified.
   const recoveryStart = Date.now();
-  const recoverResult = runCommand("npx", ["prisma", "migrate", "deploy"], { DATABASE_URL: dbUrl });
+  if (!latestMigration) throw new Error("No migration available for recovery");
+  const recoverResult = runCommand(
+    "npx",
+    ["prisma", "migrate", "resolve", "--applied", latestMigration.migrationName],
+    { DATABASE_URL: dbUrl },
+  );
   const recoverySuccess = recoverResult.exitCode === 0;
 
   results.push({
@@ -93,7 +100,7 @@ export async function runScenario1(dbUrl: string): Promise<{
     phase: "recovery",
     success: recoverySuccess,
     message: recoverySuccess
-      ? "Migration reapplied successfully via 'prisma migrate deploy'"
+      ? "Migration metadata repaired with 'prisma migrate resolve --applied'"
       : `Migration reapply failed: ${recoverResult.stderr}`,
     details: {
       stdout: recoverResult.stdout.slice(0, 500),
@@ -126,14 +133,12 @@ export async function runScenario1(dbUrl: string): Promise<{
   // Create recovery decision record
   const recoveryDecision: RecoveryDecision = {
     scenarioId: SCENARIO_1_ID,
-    recommendedAction: "rollback",
+    recommendedAction: "forward-fix",
     rationale:
-      "Migration failed before any DDL executed. The _prisma_migrations record exists but finished_at is NULL. " +
-      "Simply re-running 'prisma migrate deploy' will apply the pending migration idempotently. " +
-      "No schema changes were made, so rollback is trivial and safe.",
+      "The isolated rehearsal produced an unfinished migration record. After verifying the expected schema state, " +
+      "repair metadata only through Prisma's documented migrate resolve boundary; do not edit _prisma_migrations manually.",
     sqlCommands: [
-      "-- No manual SQL needed; 'prisma migrate deploy' handles this idempotently",
-      "-- If needed manually: UPDATE _prisma_migrations SET finished_at = NOW() WHERE migration_name = '...'",
+      `npx prisma migrate resolve --applied ${latestMigration.migrationName}`,
     ],
     warnings: [
       "Ensure no concurrent migration runs are in progress",
