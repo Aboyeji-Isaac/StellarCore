@@ -120,13 +120,59 @@ exactly `npx prisma migrate deploy` on `ubuntu-latest` with Node.js 22 after
 timeout, and a non-cancelling `production-database-migration` concurrency group
 so two migration runs can never overlap.
 
-The `production` environment's `DATABASE_URL` secret is supplied to both the
-dependency-installation step and the migration step. `npm ci` runs the
-`postinstall` script (`prisma generate`), which loads `prisma.config.ts`, and
-that configuration resolves `DATABASE_URL`; without the secret the install step
-fails with `PrismaConfigEnvError: Cannot resolve environment variable:
-DATABASE_URL` before any migration runs. The secret stays scoped to those two
-steps rather than the whole workflow, and is never printed.
+### Source authorization and credential isolation (#146)
+
+Both production mutation workflows
+(`.github/workflows/deploy-production-migrations.yml` and
+`.github/workflows/bootstrap-production-registry.yml`) enforce the following
+repository policy, checked by `npm run audit:workflow`
+(`scripts/audit-workflow-policy.ts`, regression tests in
+`tests/unit/security/workflowPolicy.test.ts`):
+
+1. **Protected-main ref guard.** The first step fails the job unless
+   `github.ref == refs/heads/main`. Checkout then uses that exact
+   `${{ github.sha }}` so the reviewed revision that was dispatched is the
+   revision that executes; a moving branch head is never re-resolved.
+2. **Immutable action pins.** Third-party actions are pinned to full commit
+   SHAs with readable version comments (currently `actions/checkout@v4.2.2`
+   and `actions/setup-node@v4.4.0`).
+3. **Credential-free install/generation.** `npm ci` (which runs
+   `postinstall` → `prisma generate`) receives only the clearly
+   non-production placeholder `PRISMA_GENERATE_DATABASE_URL`
+   (`postgresql://prisma-generate-placeholder.invalid:5432/placeholder`).
+   The real `secrets.DATABASE_URL` is scoped exclusively to the authorized
+   mutation steps (`prisma migrate deploy`, `stamp:environment`,
+   `bootstrap:registry`) and is never printed.
+4. **Secret-free run summary.** Each run records the dispatch ref and the
+   reviewed source commit in `$GITHUB_STEP_SUMMARY` without secrets.
+
+**External setup requirement (cannot be fully enforced by workflow YAML):**
+editable workflow files in a repository can be changed by anyone who can push
+to a branch the workflow reads from. Branch protection and environment rules
+are hosted GitHub settings. A repository admin must configure, and periodically
+verify:
+
+- **Deployment branch policy** on the `production` environment restricted to
+  `main` only (Settings → Environments → production → Deployment branches and
+  tags).
+- **Required reviewers** on the `production` environment so each manual
+  dispatch needs human approval.
+- Branch protection on `main` (required reviews, linear history, no force
+  push) so the reviewed ref cannot be rewritten after approval.
+
+A checked-in in-file guard is defense-in-depth, not a substitute for those
+settings. `npm run audit:workflow` proves the repository policy; it does not
+prove that hosted environment protections are configured.
+
+### Migration workflow secret scoping
+
+The `production` environment's `DATABASE_URL` secret is supplied only to the
+mutation steps. Dependency installation uses the placeholder generate URL, so
+lifecycle scripts (`prisma generate`) never execute with the production
+credential. The secret is never printed and no environment-dumping debug steps
+are added. `DATABASE_URL` is the only production secret these workflows
+consume; they do not use the Vercel CLI, Vercel tokens, `CRON_SECRET`,
+`POSTGRES_URL`, or `PRISMA_DATABASE_URL`.
 
 One-time setup (repository admin):
 
@@ -137,8 +183,11 @@ One-time setup (repository admin):
 4. Set it to the **direct** PostgreSQL connection string suitable for Prisma
    Migrate (a `postgres://` / `postgresql://` URL, not a pooled/PgBouncer
    endpoint). Do not put this value in any repository file.
-5. Optionally add **required reviewers** and other environment protection rules
-   to `production` so a human must approve each migration run.
+5. Restrict the `production` environment to the `main` branch (deployment
+   branch policy) and add **required reviewers** so a human must approve each
+   migration or bootstrap run.
+6. Protect the `main` branch (required reviews, no force push) so the reviewed
+   source revision cannot be rewritten after approval.
 
 Running a migration:
 

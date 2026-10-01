@@ -1,3 +1,5 @@
+name: Deploy production migrations
+
 # Manually applies committed Prisma migrations to the production database.
 #
 # This workflow is intentionally manual and kept separate from Vercel builds
@@ -7,18 +9,27 @@
 # `prisma db push`, or any reset command, and it never creates or edits a
 # migration.
 #
+# Source authorization (#146):
+#   The first step refuses any dispatch that is not `refs/heads/main`. GitHub
+#   branch protection and the `production` environment's deployment branch
+#   rules are external settings that the repository YAML cannot fully enforce;
+#   the in-file guard is defense-in-depth, not a substitute for those settings.
+#
+# Dependency install isolation (#146):
+#   `npm ci` runs `prisma generate` via `postinstall`, which loads
+#   `prisma.config.ts` and requires a `DATABASE_URL` value. The install step
+#   therefore receives a clearly non-production placeholder URL. Only the
+#   authorized mutation steps receive the real production secret, so lifecycle
+#   scripts never execute with the production credential.
+#
 # One-time setup a repository admin must complete before the first run
 # (see docs/DEPLOYMENT.md for the full procedure):
 #   1. Create a GitHub Actions environment named `production`.
 #   2. Add a `DATABASE_URL` secret to that environment containing the direct
 #      PostgreSQL connection string suitable for Prisma Migrate.
-#   3. Optionally attach required reviewers / protection rules to the
-#      `production` environment.
-#
-# The secret is read only from the GitHub `production` environment. Do not
-# place it in any repository file.
-
-name: Deploy production migrations
+#   3. Restrict the `production` environment to the `main` branch.
+#   4. Attach required reviewers / protection rules to the `production`
+#      environment.
 
 on:
   workflow_dispatch:
@@ -33,6 +44,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Placeholder only. Satisfies prisma.config.ts during `npm ci` / `prisma
+  # generate`. Never a production credential; never used by a mutation step.
+  PRISMA_GENERATE_DATABASE_URL: postgresql://prisma-generate-placeholder.invalid:5432/placeholder
+
 jobs:
   migrate:
     name: prisma migrate deploy
@@ -42,39 +58,54 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
+      # Ref guard (#146): fail before any checkout or credential is exposed
+      # unless the dispatch ref is exactly refs/heads/main. `github.sha` is the
+      # commit that was dispatched; later steps must not re-resolve a moving
+      # branch head.
+      - name: Require protected main ref
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Deploy production migrations must be dispatched from refs/heads/main (got ${{ github.ref }}). Configure the production environment branch rules to main as well."
+          exit 1
+
+      - name: Record reviewed source revision
+        run: |
+          {
+            echo "## Production migrations"
+            echo ""
+            echo "- Dispatch ref: \`${{ github.ref }}\`"
+            echo "- Reviewed source commit: \`${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Pinned to a verified immutable commit SHA (#146).
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: 'npm'
 
-      # `npm ci` runs the existing `postinstall` lifecycle script
-      # (`prisma generate`), so no separate Prisma Client generation step is
-      # required here. That generate step loads `prisma.config.ts`, which
-      # resolves `DATABASE_URL`, so the same production secret must be present
-      # for this step as well or `npm ci` fails with `PrismaConfigEnvError`.
-      # It is scoped to this step only; it is never printed.
+      # Credential-free install/generation (#146): the placeholder URL lets
+      # `prisma generate` parse prisma.config.ts without any production secret
+      # present in this step. This step must never receive secrets.DATABASE_URL.
       - name: Install dependencies
         run: npm ci
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ env.PRISMA_GENERATE_DATABASE_URL }}
 
+      # Authorized mutation: production credential is scoped only to the steps
+      # that need it, and is never printed.
       - name: Apply migrations
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       # Environment isolation (#143): immediately after migrations, stamp the
-      # database with its explicit production identity. The application
-      # runtime verifies this stamp at startup/first access and fails closed
-      # on any mismatch, so a preview or test deployment pointing at this
-      # database can never read or mutate evidence data. The stamp is
-      # idempotent (re-runs succeed) and refuses to rewrite a different
-      # existing identity. The identity variable is a plain literal; the
-      # connection secret stays scoped to the steps and is never printed.
+      # database with its explicit production identity.
       - name: Stamp database environment identity
         run: npm run stamp:environment
         env:

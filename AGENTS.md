@@ -20,6 +20,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run audit:integrity` runs the read-only evidence-graph integrity audit against the configured database; it prints a bounded JSON report with stable record keys and remediation guidance, performs no writes, and exits nonzero when findings exist.
 - `npm run audit:sql` inventories reviewed Prisma raw-SQL boundaries and fails on new unreviewed raw-query files, unsafe raw APIs, or `Prisma.raw` fragments.
+- `npm run audit:workflow` parses the manual production mutation workflows and fails on missing main-ref guards, mutable action tags, production secrets in `npm ci`, broadened permissions, or non-dispatch triggers.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
 - `npm run benchmark:latest-observations` seeds synthetic snapshots into the database named by `BENCHMARK_DATABASE_URL` (a throwaway database, never production) and records `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for the latest-observation queries; it is never part of tests or builds. The database-backed differential test for those queries runs only with `RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1`.
 - `npx playwright test` runs browser-level user flows.

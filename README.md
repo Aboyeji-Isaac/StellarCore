@@ -430,6 +430,9 @@ npm run audit:compatibility
 # Read-only persisted evidence integrity audit
 npm run audit:integrity
 
+# Production mutation workflow policy regression checks
+npm run audit:workflow
+
 # Update canonical API contract fixtures (intentional reviewed changes only)
 npm run contract:update
 
