@@ -38,6 +38,7 @@ test("the sanitized connection string produces no TLS fields in the driver's par
 test("the policy-owned ssl object reaches the driver without URL override", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: `${PROD_URL}?sslmode=no-verify`,
+    environmentId: "production",
     environment: {
       STELLARCORE_DB_TLS_EMERGENCY_BYPASS: "allow-unverified",
     },
@@ -74,7 +75,8 @@ test("verified-TLS policy object passes rejectUnauthorized=true to the driver sh
 test("the full dbClient composition shape is accepted by the pg Pool config surface", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: `${PROD_URL}?connection_limit=5`,
-    environment: { NODE_ENV: "production", DATABASE_URL: `${PROD_URL}?connection_limit=5` },
+    environmentId: "production",
+    environment: { DATABASE_URL: `${PROD_URL}?connection_limit=5` },
   });
 
   assert.ok(result.resolution.accepted);
