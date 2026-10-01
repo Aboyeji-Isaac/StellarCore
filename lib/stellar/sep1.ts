@@ -1,6 +1,7 @@
 import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -18,6 +19,7 @@ export type Sep1ErrorCode =
   | "INVALID_HOME_DOMAIN"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
   | "INVALID_TOML"
@@ -148,7 +150,7 @@ export async function fetchSep1Toml(
 ): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
   const tomlUrl = buildSep1TomlUrl(homeDomain);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? createEgressFetch();
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Sep1DiscoveryError(
@@ -188,6 +190,14 @@ export async function fetchSep1Toml(
     return Object.freeze({ tomlUrl, data: parseSep1Toml(source, tomlUrl) });
   } catch (cause) {
     if (cause instanceof Sep1DiscoveryError) throw cause;
+    if (cause instanceof EgressPolicyError) {
+      throw new Sep1DiscoveryError(
+        "EGRESS_POLICY",
+        "SEP-1 request blocked by outbound network policy",
+        tomlUrl,
+        { cause },
+      );
+    }
 
     if (controller.signal.aborted) {
       throw new Sep1DiscoveryError(

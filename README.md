@@ -365,6 +365,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Hit a snag during setup? See [docs/troubleshooting.md](docs/troubleshooting.md) for verified workarounds.
+
 ### Running Sync Jobs Locally
 
 ```bash
@@ -402,6 +404,12 @@ npx tsc --noEmit
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 
+# Opt-in: latest-observation queries against a throwaway PostgreSQL database
+RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1 DATABASE_URL=postgresql://... \
+  npm test -- tests/integration/rates/latestObservationsDifferential.database.integration.test.ts
+
+# Opt-in: reproducible latest-observation benchmark (throwaway database only)
+BENCHMARK_DATABASE_URL=postgresql://... npm run benchmark:latest-observations
 ```
 
 `snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
@@ -435,10 +443,44 @@ MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network
 request, upserts each anchor's single current `ReputationScore`, and prints only
 safe structured evidence and results.
 
+The latest-observation reads behind `GET /api/rates` and reputation evidence
+take the newest snapshot per anchor (or per corridor) with a bounded lateral
+lookup instead of walking each group's history. The database-backed test
+compares them against the previous `DISTINCT ON` queries, kept verbatim in
+`tests/support/legacyLatestObservationQueries.ts`, on empty groups, uneven
+histories, tied timestamps, stale-only anchors and historically associated
+anchors, then compares the complete public rate and reputation outputs at a
+fixed evaluation time. It also asserts that rows visited do not grow with
+history depth (a row count, never a wall-clock time). It is skipped unless
+`RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1`, and it creates and removes its
+own uniquely named rows, so run it only against a database you can afford to
+write to.
+
+`benchmark:latest-observations` seeds deterministic synthetic snapshots and
+records `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for both forms of each query
+across a history-depth sweep and a group-count sweep. It reads
+`BENCHMARK_DATABASE_URL`, never `DATABASE_URL`, refuses a database that holds
+any anchor or corridor it did not create, and deletes only its own rows. Set
+`BENCHMARK_COLD_RESTART_COMMAND` (for example `podman restart my-postgres`) to
+add a cold-`shared_buffers` measurement. Flags: `--scenario <name>`,
+`--runs <n>`, `--out <file>`, `--plans-dir <dir>`. Results, method and caveats
+are in [docs/benchmarks/latest-observations.md](docs/benchmarks/latest-observations.md).
+It is not run by `npm test`, builds, or `postinstall`, and must never be pointed
+at production.
+
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
+
+SEP-10 contract notes: the signer callback must return the challenge it was
+given with signatures added; StellarCore compares the SDK transaction hash of
+the returned body with the original challenge before any token POST. When a
+client domain was requested, the returned token's `client_domain` claim must be
+present, well formed, and equal to it; otherwise no such claim is required.
+Token claims are decoded, not cryptographically verified: decoding is not JWT
+signature verification, and the SEP-10 signing key is not assumed to be the JWT
+verification key.
 
 ## Production deployment
 

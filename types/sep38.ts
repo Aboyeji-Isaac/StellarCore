@@ -137,6 +137,8 @@ export type Sep38IndicativePrice = Readonly<{
   sellAmount: string;
   buyAmount: string;
   fee: Sep38Fee;
+  sellDeliveryMethod?: string;
+  buyDeliveryMethod?: string;
 }>;
 
 export type Sep38FirmQuoteRequest = Sep38QuoteRequestBase &
