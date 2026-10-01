@@ -1,0 +1,80 @@
+name: Rehearse migration recovery
+
+on:
+  pull_request:
+    paths:
+      - "scripts/migration-rehearsal/**"
+      - "tests/unit/migration-rehearsal/**"
+      - "docs/migration-rehearsal/**"
+      - "prisma/migrations/**"
+      - ".github/workflows/migration-recovery-rehearsal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stellarcore_rehearsal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/stellarcore_rehearsal
+      STELLARCORE_ENVIRONMENT: ci
+      STELLARCORE_MIGRATION_REHEARSAL: allow-destructive
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: node --import tsx --test tests/unit/migration-rehearsal/rehearsalFramework.test.ts
+
+      - name: Run all three isolated recovery scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scenario in pre-schema-failure partial-apply-failure post-schema-checksum-mismatch; do
+            PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres               -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='stellarcore_rehearsal' AND pid <> pg_backend_pid();"               -c "DROP DATABASE IF EXISTS stellarcore_rehearsal;"               -c "CREATE DATABASE stellarcore_rehearsal;"
+            npx prisma migrate deploy
+            npm run rehearse:migrations -- --scenario="$scenario"
+          done
+
+      - run: npm run lint
+      - name: Full tests
+        env:
+          STELLARCORE_ENVIRONMENT: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: npm test
+      - name: Build
+        env:
+          STELLARCORE_ENVIRONMENT: ci
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/stellarcore_rehearsal
+        run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-recovery-decision-records
+          path: scripts/migration-rehearsal/reports/
+          if-no-files-found: warn
+          retention-days: 14
