@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Shared bounded public API error envelopes, status mapping, serialization, and internal reporter seams across current public routes (#177).
 - Request-scoped nonce Content Security Policy and hardened browser response headers for App Router pages (#172).
 - Integrity-verifiable, bounded evidence export packages with streamed NDJSON members and offline verification (#202).
 - Root EditorConfig defaults for consistent cross-editor whitespace, line endings, and indentation (#257).
