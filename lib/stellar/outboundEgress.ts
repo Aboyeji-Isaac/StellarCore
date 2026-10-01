@@ -4,6 +4,8 @@ import { Readable } from "node:stream";
 
 import ipaddr from "ipaddr.js";
 
+import { canonicalizeHostname } from "@/lib/stellar/hostnameCanonicalization";
+
 const DEFAULT_DNS_TIMEOUT_MS = 2_000;
 const ALLOWED_RANGES = new Set(["unicast"]);
 const DISALLOWED_IPV6_PREFIXES = Object.freeze([
@@ -84,30 +86,38 @@ export function createEgressFetch(options: EgressFetchOptions = {}): typeof fetc
       throw new EgressPolicyError("UNSUPPORTED_RUNTIME", url.hostname);
     }
 
+    let canonicalHostname: string;
+    try {
+      canonicalHostname = canonicalizeHostname(url.hostname);
+      url.hostname = canonicalHostname;
+    } catch {
+      throw new EgressPolicyError("UNSUPPORTED_RUNTIME", url.hostname);
+    }
+
     let addresses: readonly ResolvedAddress[];
     try {
-      addresses = await resolver(url.hostname, dnsTimeoutMs);
+      addresses = await resolver(canonicalHostname, dnsTimeoutMs);
     } catch (cause) {
       const error =
         cause instanceof EgressPolicyError
           ? cause
-          : new EgressPolicyError("DNS_FAILURE", url.hostname);
-      logDecision(logger, url.hostname, "deny", error.code, 0);
+          : new EgressPolicyError("DNS_FAILURE", canonicalHostname);
+      logDecision(logger, canonicalHostname, "deny", error.code, 0);
       throw error;
     }
 
     let approved: readonly ResolvedAddress[];
     try {
-      approved = approveResolvedAddresses(url.hostname, addresses);
+      approved = approveResolvedAddresses(canonicalHostname, addresses);
     } catch (cause) {
       const error =
         cause instanceof EgressPolicyError
           ? cause
-          : new EgressPolicyError("DISALLOWED_ADDRESS", url.hostname);
-      logDecision(logger, url.hostname, "deny", error.code, addresses.length);
+          : new EgressPolicyError("DISALLOWED_ADDRESS", canonicalHostname);
+      logDecision(logger, canonicalHostname, "deny", error.code, addresses.length);
       throw error;
     }
-    logDecision(logger, url.hostname, "allow", "PUBLIC_ADDRESSES", approved.length);
+    logDecision(logger, canonicalHostname, "allow", "PUBLIC_ADDRESSES", approved.length);
     return request(url, init, approved[0]);
   }) as typeof fetch;
 }
