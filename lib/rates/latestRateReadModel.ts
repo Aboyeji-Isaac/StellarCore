@@ -2,6 +2,8 @@ import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
 import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
+import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
+import type { ScheduledSourceIdentity } from "@/types/suppression";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
@@ -14,6 +16,7 @@ export async function readLatestCorridorRate(
   options: Readonly<{
     repository?: LatestRateRepository;
     evaluatedAt?: Date;
+    listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
   }> = {},
 ): Promise<LatestCorridorRateReadResult> {
   const evaluatedAt = options.evaluatedAt ?? new Date();
@@ -26,8 +29,22 @@ export async function readLatestCorridorRate(
     const corridor = await repository.findCorridorBySlug(corridorSlug);
     if (!corridor) return failure(corridorSlug, "CORRIDOR_NOT_FOUND");
 
+    const suppressed = await (
+      options.listSuppressed ??
+      (options.repository
+        ? async () => Object.freeze([] as ScheduledSourceIdentity[])
+        : PRISMA_SUPPRESSION_REPOSITORY.listSuppressed)
+    )();
+    const suppressedKeys = new Set(
+      suppressed.map(({ anchorSlug, corridorSlug }) =>
+        `${anchorSlug}\0${corridorSlug}`),
+    );
+
     const latest = selectLatestPerAnchor(
       await repository.findLatestObservations(corridor.id),
+    ).filter(
+      ({ anchorSlug }) =>
+        !suppressedKeys.has(`${anchorSlug}\0${corridor.slug}`),
     );
     const median = computeFreshMedian(latest.map((observation) => ({
       anchorSlug: observation.anchorSlug,
