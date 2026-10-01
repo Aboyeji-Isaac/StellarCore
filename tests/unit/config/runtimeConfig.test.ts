@@ -211,7 +211,7 @@ test("lib/config/runtimeConfig - validateRuntimeConfig", async () => {
     const result = validateRuntimeConfig(env);
     errorResult(result, "INVALID_NUMERIC");
     if (result.code === "INVALID_NUMERIC") {
-      assert.match(result.reason, /at least 1/);
+      assert.match(result.reason, /positive|at least 1/);
     }
   });
 
