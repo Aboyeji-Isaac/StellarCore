@@ -1,4 +1,4 @@
-import { domainToASCII } from "node:url";
+import { domainToASCII, domainToUnicode } from "node:url";
 
 export class HostnameValidationError extends Error {
   readonly code:
@@ -6,7 +6,8 @@ export class HostnameValidationError extends Error {
     | "DISALLOWED_CHARACTERS"
     | "INVALID_LENGTH"
     | "LABEL_TOO_LONG"
-    | "MALFORMED_IDN";
+    | "MALFORMED_IDN"
+    | "AMBIGUOUS_UNICODE";
 
   constructor(
     code:
@@ -14,7 +15,8 @@ export class HostnameValidationError extends Error {
       | "DISALLOWED_CHARACTERS"
       | "INVALID_LENGTH"
       | "LABEL_TOO_LONG"
-      | "MALFORMED_IDN",
+      | "MALFORMED_IDN"
+      | "AMBIGUOUS_UNICODE",
     message: string,
   ) {
     super(message);
@@ -94,8 +96,22 @@ export function canonicalizeHostname(rawHostname: string): string {
     );
   }
 
-  // Normalize to lowercase
+  // Normalize to lowercase, then decode the canonical A-label form once so
+  // visually ambiguous mixed Latin/Cyrillic or Latin/Greek labels fail closed
+  // even when the caller supplied punycode directly.
   asciiHostname = asciiHostname.toLowerCase();
+  const unicodeHostname = domainToUnicode(asciiHostname);
+  for (const label of unicodeHostname.split(".")) {
+    const hasLatin = /\p{Script=Latin}/u.test(label);
+    const hasCyrillic = /\p{Script=Cyrillic}/u.test(label);
+    const hasGreek = /\p{Script=Greek}/u.test(label);
+    if (hasLatin && (hasCyrillic || hasGreek)) {
+      throw new HostnameValidationError(
+        "AMBIGUOUS_UNICODE",
+        `Hostname label contains an ambiguous mixed-script form: "${rawHostname}"`,
+      );
+    }
+  }
 
   // Total length check: 1 to 253 characters
   if (asciiHostname.length < 1 || asciiHostname.length > 253) {
