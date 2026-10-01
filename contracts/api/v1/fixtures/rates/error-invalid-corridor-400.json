@@ -1,0 +1,14 @@
+{
+  "name": "rates.error_400_invalid",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 400,
+  "description": "Bad request error when corridor slug format is invalid",
+  "body": {
+    "error": {
+      "code": "invalid_corridor",
+      "message": "The corridor slug is invalid."
+    }
+  }
+}

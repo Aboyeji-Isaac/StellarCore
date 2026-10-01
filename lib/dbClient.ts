@@ -4,7 +4,11 @@ import type { Pool } from "pg";
 import { PrismaClient } from "@/app/generated/prisma/client";
 export type { PrismaClient };
 import { assertDatabaseEnvironmentMatchesRuntime } from "@/lib/config/environmentGuardDb";
-import { getRuntimeConfig, type RuntimeConfig } from "@/lib/config/runtimeConfig";
+import {
+  getRuntimeConfig,
+  type RuntimeConfig,
+} from "@/lib/config/runtimeConfig";
+import { resolveDatabaseTlsPolicyForEnvironment } from "@/lib/database/tlsPolicyRuntime";
 import {
   createHardenedPool,
   evictStalePoolConnections,
@@ -22,7 +26,9 @@ const globalForPrisma = globalThis as unknown as {
  * Validates a DATABASE_URL value.
  * Exported for testing and external validation.
  */
-export function validateDatabaseUrl(connectionString: string | undefined): string {
+export function validateDatabaseUrl(
+  connectionString: string | undefined,
+): string {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not defined");
   }
@@ -32,7 +38,9 @@ export function validateDatabaseUrl(connectionString: string | undefined): strin
   try {
     protocol = new URL(connectionString).protocol;
   } catch {
-    throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL");
+    throw new Error(
+      "DATABASE_URL must be a valid PostgreSQL connection URL",
+    );
   }
 
   if (protocol === "prisma:" || protocol === "prisma+postgres:") {
@@ -42,19 +50,51 @@ export function validateDatabaseUrl(connectionString: string | undefined): strin
   }
 
   if (protocol !== "postgres:" && protocol !== "postgresql:") {
-    throw new Error("DATABASE_URL must use postgres:// or postgresql://");
+    throw new Error(
+      "DATABASE_URL must use postgres:// or postgresql://",
+    );
   }
 
   return connectionString;
 }
 
-function createPrismaClient(config: RuntimeConfig = getRuntimeConfig()): PrismaClient {
+function createPrismaClient(
+  config: RuntimeConfig = getRuntimeConfig(),
+): PrismaClient {
   const connectionString = validateDatabaseUrl(config.databaseUrl);
-  const pool = createHardenedPool(connectionString);
+
+  const tls = resolveDatabaseTlsPolicyForEnvironment({
+    databaseUrl: connectionString,
+    environmentId: config.environment,
+    environment: process.env,
+  });
+
+  if (!tls.resolution.accepted) {
+    const { code, message } = tls.resolution.rejection;
+
+    throw new Error(
+      `Database TLS policy failure (${code}): ${message}`,
+    );
+  }
+
+  if (tls.emergencyBypassActive) {
+    console.warn(
+      "[stellarcore:database] emergency TLS verification bypass active",
+    );
+  }
+
+  const pool = createHardenedPool(
+    tls.sanitizedConnectionString,
+    undefined,
+    tls.resolution.mode === "DISABLED"
+      ? undefined
+      : tls.resolution.sslConfig,
+  );
 
   const adapter = new PrismaPg(pool, {
     onPoolError: (error) => handlePoolError(pool, error),
-    onConnectionError: (error) => handleConnectionError(pool, error),
+    onConnectionError: (error) =>
+      handleConnectionError(pool, error),
   });
 
   // Store pool for global access in non-production
@@ -67,10 +107,17 @@ function createPrismaClient(config: RuntimeConfig = getRuntimeConfig()): PrismaC
 
 const activeInstance =
   globalForPrisma.prisma
-    ? { prisma: globalForPrisma.prisma, pool: globalForPrisma.pool }
+    ? {
+        prisma: globalForPrisma.prisma,
+        pool: globalForPrisma.pool,
+      }
     : (() => {
         const client = createPrismaClient();
-        return { prisma: client, pool: globalForPrisma.pool };
+
+        return {
+          prisma: client,
+          pool: globalForPrisma.pool,
+        };
       })();
 
 export const db: PrismaClient = activeInstance.prisma;
@@ -83,7 +130,9 @@ export function getDatabasePool(): Pool | undefined {
 /** Proactively evicts currently idle pooled connections after a failover signal. */
 export function evictStaleConnections(): number {
   const pool = globalForPrisma.pool;
+
   if (!pool) return 0;
+
   return evictStalePoolConnections(pool);
 }
 
@@ -104,6 +153,7 @@ export async function ensureDatabaseEnvironment(): Promise<void> {
   globalForPrisma.prismaEnvironmentVerified ??= (async () => {
     await assertDatabaseEnvironmentMatchesRuntime(db);
   })();
+
   await globalForPrisma.prismaEnvironmentVerified;
 }
 
@@ -113,7 +163,9 @@ export function resetDatabaseEnvironmentForTests(): void {
 }
 
 /** Test hook: allows injecting a test runtime configuration. */
-export function setRuntimeConfigForTests(config: RuntimeConfig): void {
+export function setRuntimeConfigForTests(
+  config: RuntimeConfig,
+): void {
   globalForPrisma.prisma = createPrismaClient(config);
 }
 

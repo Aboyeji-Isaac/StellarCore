@@ -1,4 +1,16 @@
-export type ExportVersion = "1.0";
+export const EVIDENCE_EXPORT_VERSION = "1.0" as const;
+export type EvidenceExportVersion = typeof EVIDENCE_EXPORT_VERSION;
+
+export const EVIDENCE_MEMBER_PATHS = Object.freeze([
+  "registry.json",
+  "rate-snapshots.ndjson",
+  "transfer-outcomes.ndjson",
+  "reputation-scores.ndjson",
+] as const);
+
+export type EvidenceMemberPath = (typeof EVIDENCE_MEMBER_PATHS)[number];
+
+export type ExportVersion = EvidenceExportVersion;
 
 export type ExportSelection = Readonly<{
   timeRange: Readonly<{
@@ -13,8 +25,10 @@ export type ExportProvenance = Readonly<{
   exportedAt: string;
   exportedBy: string;
   stellarCoreVersion: string;
-  schemaVersion: ExportVersion;
+  schemaVersion: EvidenceExportVersion;
   selection: ExportSelection;
+  deploymentRevision?: string;
+  configurationFingerprint?: string;
 }>;
 
 export type ExportAnchor = Readonly<{
@@ -39,6 +53,12 @@ export type ExportCorridor = Readonly<{
 export type ExportAnchorCorridor = Readonly<{
   anchorSlug: string;
   corridorSlug: string;
+}>;
+
+export type ExportRegistry = Readonly<{
+  anchors: readonly ExportAnchor[];
+  corridors: readonly ExportCorridor[];
+  anchorCorridors: readonly ExportAnchorCorridor[];
 }>;
 
 export type ExportRateSnapshot = Readonly<{
@@ -80,38 +100,48 @@ export type ExportReputationScore = Readonly<{
   computedAt: string;
 }>;
 
-export type ExportRegistry = Readonly<{
-  anchors: readonly ExportAnchor[];
-  corridors: readonly ExportCorridor[];
-  anchorCorridors: readonly ExportAnchorCorridor[];
-}>;
-
-export type ExportEvidence = Readonly<{
-  rateSnapshots: readonly ExportRateSnapshot[];
-  transferOutcomes: readonly ExportTransferOutcome[];
-  reputationScores: readonly ExportReputationScore[];
-}>;
-
 export type ExportManifestEntry = Readonly<{
-  path: string;
+  path: EvidenceMemberPath;
   sha256: string;
   byteLength: number;
   recordCount: number;
 }>;
 
 export type ExportManifest = Readonly<{
-  version: ExportVersion;
+  version: EvidenceExportVersion;
   provenance: ExportProvenance;
-  registry: ExportManifestEntry;
-  evidence: ExportManifestEntry;
+  members: readonly ExportManifestEntry[];
   rootSha256: string;
 }>;
 
-export type ExportPackage = Readonly<{
-  manifest: ExportManifest;
-  registry: ExportRegistry;
-  evidence: ExportEvidence;
+export type ExportDependencies = Readonly<{
+  queryRegistry: (selection: ExportSelection) => Promise<ExportRegistry>;
+  streamRateSnapshots: (
+    selection: ExportSelection,
+  ) => AsyncIterable<ExportRateSnapshot>;
+  streamTransferOutcomes: (
+    selection: ExportSelection,
+  ) => AsyncIterable<ExportTransferOutcome>;
+  streamReputationScores: (
+    selection: ExportSelection,
+  ) => AsyncIterable<ExportReputationScore>;
 }>;
+
+export type ExportResult =
+  | Readonly<{
+      ok: true;
+      outputPath: string;
+      manifest: ExportManifest;
+    }>
+  | Readonly<{
+      ok: false;
+      code:
+        | "INVALID_SELECTION"
+        | "DATABASE_ERROR"
+        | "IO_ERROR"
+        | "SECRET_DETECTED";
+      message: string;
+    }>;
 
 export type VerificationResult =
   | Readonly<{
@@ -120,27 +150,11 @@ export type VerificationResult =
     }>
   | Readonly<{
       ok: false;
-      code: "MANIFEST_MISMATCH" | "MISSING_MEMBER" | "CORRUPTED_DATA" | "INVALID_SCHEMA" | "SECRET_DETECTED";
-      message: string;
-      details?: Readonly<Record<string, unknown>>;
-    }>;
-
-export type ExportErrorCode =
-  | "INVALID_SELECTION"
-  | "DATABASE_ERROR"
-  | "SERIALIZATION_ERROR"
-  | "MANIFEST_GENERATION_ERROR"
-  | "IO_ERROR"
-  | "SECRET_REDACTION_ERROR";
-
-export type ExportResult =
-  | Readonly<{
-      ok: true;
-      manifest: ExportManifest;
-      outputPath: string;
-    }>
-  | Readonly<{
-      ok: false;
-      code: ExportErrorCode;
+      code:
+        | "MISSING_MEMBER"
+        | "CORRUPTED_DATA"
+        | "INVALID_SCHEMA"
+        | "UNSUPPORTED_VERSION"
+        | "SECRET_DETECTED";
       message: string;
     }>;

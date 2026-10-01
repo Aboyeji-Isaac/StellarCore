@@ -1,3 +1,5 @@
+import type { StaleEvidenceMetadata } from "@/types/api/staleEvidence";
+
 export type PublicReputationState =
   | "not_evaluated"
   | "insufficient_evidence"
@@ -31,11 +33,13 @@ export type PublicReputation = Readonly<{
 }>;
 
 export type PublicReputationListResponse = Readonly<{
+  degraded?: StaleEvidenceMetadata;
   reputation: readonly PublicReputation[];
   count: number;
 }>;
 
 export type PublicReputationDetailResponse = Readonly<{
+  degraded?: StaleEvidenceMetadata;
   reputation: PublicReputation;
 }>;
 
@@ -47,9 +51,9 @@ export type ReputationApiErrorResponse = Readonly<{
 }>;
 
 export type ReputationApiListResult =
-  | Readonly<{ status: 200; body: PublicReputationListResponse }>
+  | Readonly<{ status: 200; body: PublicReputationListResponse; degraded?: StaleEvidenceMetadata }>
   | Readonly<{ status: 500; body: ReputationApiErrorResponse }>;
 
 export type ReputationApiDetailResult =
-  | Readonly<{ status: 200; body: PublicReputationDetailResponse }>
+  | Readonly<{ status: 200; body: PublicReputationDetailResponse; degraded?: StaleEvidenceMetadata }>
   | Readonly<{ status: 400 | 404 | 500; body: ReputationApiErrorResponse }>;

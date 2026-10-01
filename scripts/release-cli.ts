@@ -8,6 +8,8 @@ import {
   type BuildProvenance,
   type CyclonedxSbom,
 } from "@/scripts/generate-release-manifest";
+import { computeRuntimeConfigFingerprint } from "@/lib/config/runtimeConfigFingerprint";
+import type { RuntimeConfig } from "@/lib/config/runtimeConfig";
 
 /**
  * Release manifest CLI (#142).
@@ -51,12 +53,48 @@ function runGit(args: string[]): string {
 }
 
 async function generate(): Promise<void> {
+  const revision = commitSha();
+  const releaseEnvironment = environmentId();
+  const runtimeEnvironment =
+    releaseEnvironment === "production" ||
+    releaseEnvironment === "preview" ||
+    releaseEnvironment === "development" ||
+    releaseEnvironment === "test" ||
+    releaseEnvironment === "ci"
+      ? releaseEnvironment
+      : "development";
+
+  const fingerprintConfig: RuntimeConfig = Object.freeze({
+    environment: runtimeEnvironment,
+    environmentSource: "explicit-env",
+    // Presence metadata only: the fingerprint function converts these to booleans
+    // and never receives production secret values.
+    databaseUrl:
+      runtimeEnvironment === "test" ? undefined : "configured",
+    cronSecret:
+      runtimeEnvironment === "production" ? "configured" : undefined,
+    rateFreshnessThresholdMs: readPositiveInteger(
+      process.env.RATE_FRESHNESS_THRESHOLD_MS,
+      120_000,
+    ),
+    minFreshSources: readPositiveInteger(
+      process.env.MIN_FRESH_SOURCES,
+      2,
+    ),
+  });
+
+  const runtimeConfigFingerprint = computeRuntimeConfigFingerprint(
+    fingerprintConfig,
+    revision,
+  );
+
   const manifest = generateReleaseManifest({
     repositoryRoot: process.cwd(),
-    commitSha: commitSha(),
+    commitSha: revision,
     buildInvocationId: invocationId(),
     sourceWorkflowRef: workflowRef(),
-    environmentId: environmentId(),
+    environmentId: releaseEnvironment,
+    runtimeConfigFingerprint,
   });
 
   mkdirSync(RELEASE_DIR, { recursive: true });
@@ -71,6 +109,7 @@ async function generate(): Promise<void> {
     provenance: provenancePath,
     lockfileSha256: manifest.provenance.lockfile.sha256,
     componentCount: manifest.sbom.components.length,
+    runtimeConfigFingerprint,
   }, null, 2));
 }
 
@@ -109,6 +148,17 @@ async function verify(): Promise<void> {
   }
   if (!provenance.lockfile?.sha256) failures.push("provenance.lockfile.sha256 missing");
   if (!provenance.toolchain?.node) failures.push("provenance.toolchain.node missing");
+  if (!/^[0-9a-f]{64}$/.test(provenance.runtimeConfiguration?.fingerprint ?? "")) {
+    failures.push("provenance.runtimeConfiguration.fingerprint must be sha256 hex");
+  }
+  if (
+    provenance.runtimeConfiguration?.fingerprintVersion !==
+    "stellarcore-runtime-config-v1"
+  ) {
+    failures.push(
+      "provenance.runtimeConfiguration.fingerprintVersion must be stellarcore-runtime-config-v1",
+    );
+  }
 
   // 3. Lockfile drift: the digest must match the lockfile in this checkout.
   const currentLockDigest = sha256(readFileSync("package-lock.json", "utf8"));
@@ -153,6 +203,21 @@ const SECRET_PATTERNS: readonly { label: string; regex: RegExp }[] = [
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function readPositiveInteger(
+  raw: string | undefined,
+  fallback: number,
+): number {
+  if (raw === undefined || raw.trim() === "") return fallback;
+  if (!/^[1-9]\d*$/.test(raw)) {
+    throw new Error("release runtime policy values must be positive integers");
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error("release runtime policy values must be safe integers");
+  }
+  return parsed;
 }
 
 function reportFailure(failures: readonly string[]): never {

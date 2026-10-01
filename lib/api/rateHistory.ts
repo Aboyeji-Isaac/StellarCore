@@ -1,4 +1,16 @@
 import { readCorridorRateHistory } from "@/lib/rates/rateHistoryReadModel";
+import {
+  FILE_STALE_EVIDENCE_STORE,
+  restoreStaleEvidence,
+  saveLastKnownGoodEvidence,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
+import {
+  consolePublicApiErrorReporter,
+  publicApiErrorResult,
+  type PublicApiErrorReporter,
+} from "@/lib/api/errors";
 import type {
   CorridorRateHistory,
   CorridorRateHistoryReadResult,
@@ -7,7 +19,6 @@ import type {
   PublicRateHistoryObservation,
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
-  RateHistoryApiErrorCode,
   RateHistoryApiResult,
 } from "@/types/api/rateHistory";
 
@@ -23,6 +34,8 @@ export type RateHistoryApiDependencies = Readonly<{
     options: Readonly<{ evaluatedAt: Date; days: number }>,
   ) => Promise<CorridorRateHistoryReadResult>;
   now?: () => Date;
+  staleEvidenceStore?: StaleEvidenceStore;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export async function getRateHistoryApiResult(
@@ -37,6 +50,8 @@ export async function getRateHistoryApiResult(
   if (!daysValidation.ok) return daysValidation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const snapshotKey = `rate-history:v1:${corridorValidation.corridorSlug}:${daysValidation.days}`;
   const read = dependencies.readHistory ?? readCorridorRateHistory;
   let result: CorridorRateHistoryReadResult;
 
@@ -45,29 +60,60 @@ export async function getRateHistoryApiResult(
       evaluatedAt,
       days: daysValidation.days,
     });
-  } catch {
-    return errorResult(500, "internal_error", "Unable to read rate history.");
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRateHistoryResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    reportError(dependencies, error, "rate-history.read");
+    return publicApiErrorResult("internal_error", "Unable to read rate history.");
   }
 
   if (!result.ok) {
     if (result.code === "CORRIDOR_NOT_FOUND") {
-      return errorResult(404, "corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
     }
     if (result.code === "INVALID_WINDOW") {
-      return errorResult(
-        400,
+      return publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
       );
     }
-    return errorResult(500, "internal_error", "Unable to read rate history.");
+    if (result.code === "DATABASE_UNAVAILABLE") {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRateHistoryResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    return publicApiErrorResult("internal_error", "Unable to read rate history.");
   }
 
   try {
-    return Object.freeze({ status: 200, body: serializeRateHistory(result) });
-  } catch {
-    return errorResult(500, "internal_error", "Unable to read rate history.");
+    const body = serializeRateHistory(result);
+    const sourceTimes = body.points
+      .flatMap(({ observations }) => observations.map(({ capturedAt }) => capturedAt))
+      .filter(isValidTimestamp);
+    await saveLastKnownGoodEvidence(store, snapshotKey, body, sourceTimes, evaluatedAt);
+    return Object.freeze({ status: 200, body });
+  } catch (error) {
+    reportError(dependencies, error, "rate-history.serialize");
+    return publicApiErrorResult("internal_error", "Unable to read rate history.");
   }
+}
+
+function isValidTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 export function serializeRateHistory(
@@ -125,7 +171,7 @@ function validateCorridorParameter(
   if (value === null || value === "") {
     return Object.freeze({
       ok: false,
-      result: errorResult(400, "missing_corridor", "A corridor slug is required."),
+      result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
     });
   }
 
@@ -135,7 +181,7 @@ function validateCorridorParameter(
   ) {
     return Object.freeze({
       ok: false,
-      result: errorResult(400, "invalid_corridor", "The corridor slug is invalid."),
+      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
     });
   }
 
@@ -154,8 +200,7 @@ function validateDaysParameter(
   if (!/^\d+$/.test(value)) {
     return Object.freeze({
       ok: false,
-      result: errorResult(
-        400,
+      result: publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
       ),
@@ -166,8 +211,7 @@ function validateDaysParameter(
   if (!Number.isSafeInteger(parsed) || parsed < MIN_DAYS || parsed > MAX_DAYS) {
     return Object.freeze({
       ok: false,
-      result: errorResult(
-        400,
+      result: publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
       ),
@@ -177,15 +221,13 @@ function validateDaysParameter(
   return Object.freeze({ ok: true, days: parsed });
 }
 
-function errorResult(
-  status: 400 | 404 | 500,
-  code: RateHistoryApiErrorCode,
-  message: string,
-): RateHistoryApiResult {
-  return Object.freeze({
-    status,
-    body: Object.freeze({
-      error: Object.freeze({ code, message }),
-    }),
+function reportError(
+  dependencies: RateHistoryApiDependencies,
+  error: unknown,
+  operation: string,
+): void {
+  (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
+    operation,
+    code: "internal_error",
   });
 }

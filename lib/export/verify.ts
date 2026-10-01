@@ -1,210 +1,249 @@
-import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 
-import type {
-  ExportManifest,
-  ExportRegistry,
-  ExportEvidence,
-  ExportPackage,
-  VerificationResult,
+import { computeRootHash } from "@/lib/export/canonical";
+import { assertExportSafe } from "@/lib/export/safety";
+import {
+  EVIDENCE_EXPORT_VERSION,
+  EVIDENCE_MEMBER_PATHS,
+  type ExportManifest,
+  type ExportManifestEntry,
+  type VerificationResult,
 } from "@/lib/export/types";
-import { canonicalStringify, computeSha256FromString, computeRootHash } from "@/lib/export/canonical";
-import { assertNoSecrets } from "@/lib/export/redact";
 
-async function readJsonFile<T>(filePath: string): Promise<T> {
-  const fs = await import("node:fs/promises");
-  const content = await fs.readFile(filePath, "utf-8");
-  return JSON.parse(content) as T;
+export async function verifyExportPackage(
+  packageDir: string,
+): Promise<VerificationResult> {
+  try {
+    const manifest = await readManifest(join(packageDir, "manifest.json"));
+    if (manifest.version !== EVIDENCE_EXPORT_VERSION) {
+      return verificationFailure(
+        "UNSUPPORTED_VERSION",
+        `Unsupported evidence export version: ${manifest.version}`,
+      );
+    }
+
+    const entries = validateMemberSet(manifest.members);
+    const expectedRoot = computeRootHash(entries, manifest.provenance);
+    if (expectedRoot !== manifest.rootSha256) {
+      return verificationFailure(
+        "CORRUPTED_DATA",
+        "Manifest root hash does not match provenance/member descriptors",
+      );
+    }
+
+    for (const entry of entries) {
+      const path = join(packageDir, entry.path);
+      const actual = await hashFile(path);
+
+      if (
+        actual.sha256 !== entry.sha256 ||
+        actual.byteLength !== entry.byteLength
+      ) {
+        return verificationFailure(
+          "CORRUPTED_DATA",
+          `Member integrity mismatch: ${entry.path}`,
+        );
+      }
+
+      const recordCount =
+        entry.path === "registry.json"
+          ? await verifyRegistry(path)
+          : await verifyNdjson(path);
+
+      if (recordCount !== entry.recordCount) {
+        return verificationFailure(
+          "CORRUPTED_DATA",
+          `Member record count mismatch: ${entry.path}`,
+        );
+      }
+    }
+
+    return Object.freeze({ ok: true, manifest });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      return verificationFailure(
+        "MISSING_MEMBER",
+        "Export package is missing a required member",
+      );
+    }
+
+    if (error instanceof Error && error.message === "INVALID_SCHEMA") {
+      return verificationFailure(
+        "INVALID_SCHEMA",
+        "Export package schema is invalid",
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message.startsWith("SECRET_DETECTED")
+    ) {
+      return verificationFailure(
+        "SECRET_DETECTED",
+        "Export package contains sensitive data",
+      );
+    }
+
+    return verificationFailure(
+      "CORRUPTED_DATA",
+      "Export package verification failed",
+    );
+  }
 }
 
-async function computeFileSha256(filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    const stream = createReadStream(filePath);
+export function formatVerificationResult(
+  result: VerificationResult,
+): string {
+  if (!result.ok) {
+    return `Verification failed: ${result.code} - ${result.message}`;
+  }
+
+  return [
+    "Verification successful",
+    `Version: ${result.manifest.version}`,
+    `Exported at: ${result.manifest.provenance.exportedAt}`,
+    `Root SHA256: ${result.manifest.rootSha256}`,
+  ].join("\n");
+}
+
+async function readManifest(path: string): Promise<ExportManifest> {
+  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("INVALID_SCHEMA");
+  }
+
+  const manifest = parsed as Partial<ExportManifest>;
+
+  if (
+    typeof manifest.version !== "string" ||
+    !manifest.provenance ||
+    typeof manifest.provenance !== "object" ||
+    !Array.isArray(manifest.members) ||
+    typeof manifest.rootSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(manifest.rootSha256)
+  ) {
+    throw new Error("INVALID_SCHEMA");
+  }
+
+  assertExportSafe(manifest.provenance);
+
+  return manifest as ExportManifest;
+}
+
+function validateMemberSet(
+  entries: readonly ExportManifestEntry[],
+): readonly ExportManifestEntry[] {
+  if (entries.length !== EVIDENCE_MEMBER_PATHS.length) {
+    throw new Error("INVALID_SCHEMA");
+  }
+
+  const byPath = new Map(entries.map((entry) => [entry.path, entry]));
+
+  if (byPath.size !== entries.length) {
+    throw new Error("INVALID_SCHEMA");
+  }
+
+  for (const expected of EVIDENCE_MEMBER_PATHS) {
+    const entry = byPath.get(expected);
+
+    if (
+      !entry ||
+      !/^[0-9a-f]{64}$/.test(entry.sha256) ||
+      !Number.isSafeInteger(entry.byteLength) ||
+      entry.byteLength < 0 ||
+      !Number.isSafeInteger(entry.recordCount) ||
+      entry.recordCount < 0
+    ) {
+      throw new Error("INVALID_SCHEMA");
+    }
+  }
+
+  return Object.freeze(
+    EVIDENCE_MEMBER_PATHS.map((path) => byPath.get(path)!),
+  );
+}
+
+async function hashFile(
+  path: string,
+): Promise<Readonly<{ sha256: string; byteLength: number }>> {
+  const metadata = await stat(path);
+  const hash = createHash("sha256");
+
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(path);
+
     stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("end", resolve);
     stream.on("error", reject);
   });
-}
-
-async function verifyFileIntegrity(
-  filePath: string,
-  expectedSha256: string,
-  expectedByteLength: number,
-): Promise<void> {
-  const fs = await import("node:fs/promises");
-  const stats = await fs.stat(filePath);
-  if (stats.size !== expectedByteLength) {
-    throw new Error(
-      `Byte length mismatch for ${filePath}: expected ${expectedByteLength}, got ${stats.size}`,
-    );
-  }
-  const actualSha256 = await computeFileSha256(filePath);
-  if (actualSha256 !== expectedSha256) {
-    throw new Error(
-      `SHA256 mismatch for ${filePath}: expected ${expectedSha256}, got ${actualSha256}`,
-    );
-  }
-}
-
-function verifyManifestStructure(manifest: unknown): manifest is ExportManifest {
-  if (!manifest || typeof manifest !== "object") {
-    return false;
-  }
-  const m = manifest as Record<string, unknown>;
-  return (
-    typeof m.version === "string" &&
-    m.provenance !== undefined &&
-    typeof m.provenance === "object" &&
-    m.registry !== undefined &&
-    typeof m.registry === "object" &&
-    m.evidence !== undefined &&
-    typeof m.evidence === "object" &&
-    typeof m.rootSha256 === "string"
-  );
-}
-
-function verifyRegistryStructure(registry: unknown): registry is ExportRegistry {
-  if (!registry || typeof registry !== "object") {
-    return false;
-  }
-  const r = registry as Record<string, unknown>;
-  return (
-    Array.isArray(r.anchors) &&
-    Array.isArray(r.corridors) &&
-    Array.isArray(r.anchorCorridors)
-  );
-}
-
-function verifyEvidenceStructure(evidence: unknown): evidence is ExportEvidence {
-  if (!evidence || typeof evidence !== "object") {
-    return false;
-  }
-  const e = evidence as Record<string, unknown>;
-  return (
-    Array.isArray(e.rateSnapshots) &&
-    Array.isArray(e.transferOutcomes) &&
-    Array.isArray(e.reputationScores)
-  );
-}
-
-export async function verifyExportPackage(packageDir: string): Promise<VerificationResult> {
-  try {
-    const manifestPath = `${packageDir}/manifest.json`;
-    const registryPath = `${packageDir}/registry.json`;
-    const evidencePath = `${packageDir}/evidence.json`;
-
-    const manifest = await readJsonFile<ExportManifest>(manifestPath);
-
-    if (!verifyManifestStructure(manifest)) {
-      return Object.freeze({
-        ok: false,
-        code: "INVALID_SCHEMA",
-        message: "Manifest structure is invalid",
-      });
-    }
-
-    await verifyFileIntegrity(manifestPath, manifest.rootSha256, 0);
-
-    await verifyFileIntegrity(registryPath, manifest.registry.sha256, manifest.registry.byteLength);
-    await verifyFileIntegrity(evidencePath, manifest.evidence.sha256, manifest.evidence.byteLength);
-
-    const registry = await readJsonFile<ExportRegistry>(registryPath);
-    if (!verifyRegistryStructure(registry)) {
-      return Object.freeze({
-        ok: false,
-        code: "INVALID_SCHEMA",
-        message: "Registry structure is invalid",
-      });
-    }
-
-    const evidence = await readJsonFile<ExportEvidence>(evidencePath);
-    if (!verifyEvidenceStructure(evidence)) {
-      return Object.freeze({
-        ok: false,
-        code: "INVALID_SCHEMA",
-        message: "Evidence structure is invalid",
-      });
-    }
-
-    assertNoSecrets(registry);
-    assertNoSecrets(evidence);
-
-    const computedRegistrySha256 = computeSha256FromString(canonicalStringify(registry));
-    if (computedRegistrySha256 !== manifest.registry.sha256) {
-      return Object.freeze({
-        ok: false,
-        code: "CORRUPTED_DATA",
-        message: "Registry content does not match manifest hash",
-      });
-    }
-
-    const computedEvidenceSha256 = computeSha256FromString(canonicalStringify(evidence));
-    if (computedEvidenceSha256 !== manifest.evidence.sha256) {
-      return Object.freeze({
-        ok: false,
-        code: "CORRUPTED_DATA",
-        message: "Evidence content does not match manifest hash",
-      });
-    }
-
-    const computedRootSha256 = computeRootHash([
-      { sha256: manifest.registry.sha256 },
-      { sha256: manifest.evidence.sha256 },
-    ]);
-    if (computedRootSha256 !== manifest.rootSha256) {
-      return Object.freeze({
-        ok: false,
-        code: "MANIFEST_MISMATCH",
-        message: "Root hash does not match computed root hash",
-      });
-    }
-
-    return Object.freeze({
-      ok: true,
-      manifest,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    let code: "MANIFEST_MISMATCH" | "MISSING_MEMBER" | "CORRUPTED_DATA" | "INVALID_SCHEMA" | "SECRET_DETECTED" = "CORRUPTED_DATA";
-    if (message.includes("Byte length mismatch") || message.includes("SHA256 mismatch")) {
-      code = "CORRUPTED_DATA";
-    } else if (message.includes("Missing") || message.includes("ENOENT")) {
-      code = "MISSING_MEMBER";
-    } else if (message.includes("secret") || message.includes("REDACTED")) {
-      code = "SECRET_DETECTED";
-    }
-    return Object.freeze({
-      ok: false,
-      code,
-      message,
-    });
-  }
-}
-
-export async function loadExportPackage(packageDir: string): Promise<ExportPackage> {
-  const manifest = await readJsonFile<ExportManifest>(`${packageDir}/manifest.json`);
-  const registry = await readJsonFile<ExportRegistry>(`${packageDir}/registry.json`);
-  const evidence = await readJsonFile<ExportEvidence>(`${packageDir}/evidence.json`);
 
   return Object.freeze({
-    manifest,
-    registry,
-    evidence,
+    sha256: hash.digest("hex"),
+    byteLength: metadata.size,
   });
 }
 
-export function formatVerificationResult(result: VerificationResult): string {
-  if (result.ok) {
-    return `✓ Verification successful\n` +
-      `  Exported at: ${result.manifest.provenance.exportedAt}\n` +
-      `  Exported by: ${result.manifest.provenance.exportedBy}\n` +
-      `  StellarCore version: ${result.manifest.provenance.stellarCoreVersion}\n` +
-      `  Schema version: ${result.manifest.provenance.schemaVersion}\n` +
-      `  Selection: ${JSON.stringify(result.manifest.provenance.selection)}\n` +
-      `  Registry: ${result.manifest.registry.recordCount} records (${result.manifest.registry.byteLength} bytes)\n` +
-      `  Evidence: ${result.manifest.evidence.recordCount} records (${result.manifest.evidence.byteLength} bytes)\n` +
-      `  Root SHA256: ${result.manifest.rootSha256}`;
+async function verifyRegistry(path: string): Promise<number> {
+  const registry = JSON.parse(await readFile(path, "utf8")) as unknown;
+
+  if (!registry || typeof registry !== "object") {
+    throw new Error("INVALID_SCHEMA");
   }
-  return `✗ Verification failed: ${result.code}\n  ${result.message}`;
+
+  const value = registry as Record<string, unknown>;
+
+  if (
+    !Array.isArray(value.anchors) ||
+    !Array.isArray(value.corridors) ||
+    !Array.isArray(value.anchorCorridors)
+  ) {
+    throw new Error("INVALID_SCHEMA");
+  }
+
+  assertExportSafe(registry);
+
+  return (
+    value.anchors.length +
+    value.corridors.length +
+    value.anchorCorridors.length
+  );
+}
+
+async function verifyNdjson(path: string): Promise<number> {
+  const input = createReadStream(path, { encoding: "utf8" });
+  const lines = createInterface({
+    input,
+    crlfDelay: Infinity,
+  });
+
+  let count = 0;
+
+  for await (const line of lines) {
+    if (line.length === 0) continue;
+
+    const value = JSON.parse(line) as unknown;
+    assertExportSafe(value);
+    count += 1;
+  }
+
+  return count;
+}
+
+function verificationFailure(
+  code: Extract<VerificationResult, { ok: false }>["code"],
+  message: string,
+): VerificationResult {
+  return Object.freeze({
+    ok: false as const,
+    code,
+    message,
+  });
 }

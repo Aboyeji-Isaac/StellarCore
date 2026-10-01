@@ -37,6 +37,14 @@ test("provenance binds the SBOM to commit, lockfile digest, and toolchain", () =
   assert.ok(manifest.provenance.toolchain.node.startsWith("v"));
   assert.equal(manifest.provenance.invocationId, input.buildInvocationId);
   assert.equal(manifest.provenance.environmentId, input.environmentId);
+  assert.equal(
+    manifest.provenance.runtimeConfiguration.fingerprint,
+    input.runtimeConfigFingerprint,
+  );
+  assert.equal(
+    manifest.provenance.runtimeConfiguration.fingerprintVersion,
+    "stellarcore-runtime-config-v1",
+  );
   // SBOM digest is computed over the emitted SBOM document.
   assert.match(manifest.provenance.artifact.sbomSha256, /^[0-9a-f]{64}$/);
 });
@@ -74,6 +82,7 @@ test("a changed lockfile digest changes the provenance (drift is detectable)", (
     buildInvocationId: "run-2",
     sourceWorkflowRef: "refs/heads/drift",
     environmentId: "ci",
+    runtimeConfigFingerprint: "c".repeat(64),
   });
 
   assert.notEqual(first.provenance.lockfile.sha256, drifted.provenance.lockfile.sha256);
@@ -99,6 +108,7 @@ function manifestInput() {
     buildInvocationId: "run-test-1",
     sourceWorkflowRef: "refs/heads/test",
     environmentId: "ci",
+    runtimeConfigFingerprint: "d".repeat(64),
   };
 }
 

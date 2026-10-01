@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  evictStaleConnections,
-  getDatabasePool,
-  validateDatabaseUrl,
-} from "@/lib/dbClient";
+process.env.STELLARCORE_ENVIRONMENT = "test";
+process.env.DATABASE_URL ??= "postgresql://test:test@localhost:5432/test";
 
-test("validateDatabaseUrl requires defined string", () => {
+const dbClientModule = import("@/lib/dbClient");
+
+test("validateDatabaseUrl requires defined string", async () => {
+  const { validateDatabaseUrl } = await dbClientModule;
   assert.throws(
     () => validateDatabaseUrl(undefined),
     /DATABASE_URL is not defined/,
@@ -18,14 +18,16 @@ test("validateDatabaseUrl requires defined string", () => {
   );
 });
 
-test("validateDatabaseUrl requires valid URL", () => {
+test("validateDatabaseUrl requires valid URL", async () => {
+  const { validateDatabaseUrl } = await dbClientModule;
   assert.throws(
     () => validateDatabaseUrl("not-a-url"),
     /DATABASE_URL must be a valid PostgreSQL connection URL/,
   );
 });
 
-test("validateDatabaseUrl rejects unsupported protocols", () => {
+test("validateDatabaseUrl rejects unsupported protocols", async () => {
+  const { validateDatabaseUrl } = await dbClientModule;
   assert.throws(
     () => validateDatabaseUrl("prisma://user:pass@host/db"),
     /DATABASE_URL must use postgres:\/\/ or postgresql:\/\/ with PrismaPg/,
@@ -40,7 +42,8 @@ test("validateDatabaseUrl rejects unsupported protocols", () => {
   );
 });
 
-test("validateDatabaseUrl accepts postgres:// and postgresql://", () => {
+test("validateDatabaseUrl accepts postgres:// and postgresql://", async () => {
+  const { validateDatabaseUrl } = await dbClientModule;
   const url1 = "postgres://user:pass@localhost:5432/db";
   const url2 = "postgresql://user:pass@localhost:5432/db";
 
@@ -48,7 +51,8 @@ test("validateDatabaseUrl accepts postgres:// and postgresql://", () => {
   assert.equal(validateDatabaseUrl(url2), url2);
 });
 
-test("getDatabasePool and evictStaleConnections return operational objects", () => {
+test("getDatabasePool and evictStaleConnections return operational objects", async () => {
+  const { evictStaleConnections, getDatabasePool } = await dbClientModule;
   const pool = getDatabasePool();
   assert.ok(pool);
   assert.equal(typeof pool.connect, "function");

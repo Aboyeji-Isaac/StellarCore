@@ -46,6 +46,13 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+enum ScheduledSourceSuppressionState {
+  ACTIVE
+  SUPPRESSED
+
+  @@map("scheduled_source_suppression_state")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -163,4 +170,29 @@ model ReputationScore {
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+
+/// Durable reviewed state for deterministic scheduled-source failures (#234).
+/// Slug identity is stored directly so an invalid/missing registry reference can
+/// still be suppressed and audited without requiring a resolvable foreign key.
+model ScheduledSourceSuppression {
+  id                  String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorSlug          String                          @map("anchor_slug")
+  corridorSlug        String                          @map("corridor_slug")
+  state               ScheduledSourceSuppressionState @default(ACTIVE)
+  reason              String
+  failureCode         String                          @map("failure_code")
+  failurePhase        String                          @map("failure_phase")
+  consecutiveFailures Int                             @default(0) @map("consecutive_failures")
+  firstFailedAt       DateTime                        @map("first_failed_at") @db.Timestamptz(6)
+  lastFailedAt        DateTime                        @map("last_failed_at") @db.Timestamptz(6)
+  suppressedAt        DateTime?                       @map("suppressed_at") @db.Timestamptz(6)
+  reactivatedAt       DateTime?                       @map("reactivated_at") @db.Timestamptz(6)
+  reactivationReason  String?                         @map("reactivation_reason")
+  updatedAt           DateTime                        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([anchorSlug, corridorSlug], map: "scheduled_source_suppressions_source_key")
+  @@index([state], map: "scheduled_source_suppressions_state_idx")
+  @@map("scheduled_source_suppressions")
 }

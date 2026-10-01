@@ -113,3 +113,22 @@ test("policy logging is bounded and excludes paths, queries, and credentials", a
   assert.doesNotMatch(serialized, /private|token|secret|Authorization/);
   assert.match(serialized, /anchor\.example/);
 });
+
+
+test("egress resolves and requests the canonical hostname", async () => {
+  const seen: string[] = [];
+  const fetcher = createEgressFetch({
+    resolver: async (hostname) => {
+      seen.push(hostname);
+      return [{ address: "8.8.8.8", family: 4 }];
+    },
+    request: async (url) => {
+      seen.push(url.hostname);
+      return new Response("ok");
+    },
+    logger: () => {},
+  });
+
+  await fetcher("https://MÜNCHEN.DE./path");
+  assert.deepEqual(seen, ["xn--mnchen-3ya.de", "xn--mnchen-3ya.de"]);
+});

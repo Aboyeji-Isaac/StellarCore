@@ -1,267 +1,149 @@
-import { Prisma } from "@/app/generated/prisma/client";
-import { createWriteStream } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdir, open, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
-import type {
-  ExportSelection,
-  ExportProvenance,
-  ExportAnchor,
-  ExportCorridor,
-  ExportAnchorCorridor,
-  ExportRateSnapshot,
-  ExportTransferOutcome,
-  ExportReputationScore,
-  ExportRegistry,
-  ExportEvidence,
-  ExportManifest,
-  ExportManifestEntry,
-  ExportPackage,
-  ExportResult,
-  ExportErrorCode,
-} from "@/lib/export/types";
+import type { Prisma } from "@/app/generated/prisma/client";
 import {
   withTransactionRetry,
   DEFAULT_RETRY_POLICY,
 } from "@/lib/db/retry";
+import { canonicalStringify, computeRootHash, sha256 } from "@/lib/export/canonical";
+import { assertExportSafe } from "@/lib/export/safety";
 import {
-  canonicalStringify,
-  computeSha256FromString,
-  computeRootHash,
-  serializeToBuffer,
-} from "@/lib/export/canonical";
-import { sanitizeForExport, assertNoSecrets } from "@/lib/export/redact";
+  EVIDENCE_EXPORT_VERSION,
+  type EvidenceMemberPath,
+  type ExportDependencies,
+  type ExportManifest,
+  type ExportManifestEntry,
+  type ExportRegistry,
+  type ExportResult,
+  type ExportSelection,
+} from "@/lib/export/types";
 
 const STELLARCORE_VERSION = "0.1.0";
+const PAGE_SIZE = 250;
 
-export interface ExportDependencies {
-  queryAnchors: (selection: ExportSelection) => Promise<ExportAnchor[]>;
-  queryCorridors: (selection: ExportSelection) => Promise<ExportCorridor[]>;
-  queryAnchorCorridors: (selection: ExportSelection) => Promise<ExportAnchorCorridor[]>;
-  queryRateSnapshots: (selection: ExportSelection) => AsyncIterable<ExportRateSnapshot>;
-  queryTransferOutcomes: (selection: ExportSelection) => AsyncIterable<ExportTransferOutcome>;
-  queryReputationScores: (selection: ExportSelection) => Promise<ExportReputationScore[]>;
-}
-
-function validateSelection(selection: ExportSelection): void {
-  const start = new Date(selection.timeRange.start);
-  const end = new Date(selection.timeRange.end);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    throw new Error("Invalid time range: start and end must be valid ISO 8601 dates");
+class InvalidExportSelectionError extends Error {
+  constructor() {
+    super("INVALID_SELECTION");
+    this.name = "InvalidExportSelectionError";
   }
-  if (start >= end) {
-    throw new Error("Invalid time range: start must be before end");
-  }
-  if (selection.anchorSlugs !== undefined) {
-    for (const slug of selection.anchorSlugs) {
-      if (!slug || slug.trim() === "") {
-        throw new Error("Invalid anchor slug: empty string");
-      }
-    }
-  }
-  if (selection.corridorSlugs !== undefined) {
-    for (const slug of selection.corridorSlugs) {
-      if (!slug || slug.trim() === "") {
-        throw new Error("Invalid corridor slug: empty string");
-      }
-    }
-  }
-}
-
-async function collectRegistry(
-  deps: ExportDependencies,
-  selection: ExportSelection,
-): Promise<ExportRegistry> {
-  const [anchors, corridors, anchorCorridors] = await Promise.all([
-    deps.queryAnchors(selection),
-    deps.queryCorridors(selection),
-    deps.queryAnchorCorridors(selection),
-  ]);
-
-  return Object.freeze({
-    anchors: Object.freeze(anchors.sort((a, b) => a.slug.localeCompare(b.slug))),
-    corridors: Object.freeze(corridors.sort((a, b) => a.slug.localeCompare(b.slug))),
-    anchorCorridors: Object.freeze(
-      anchorCorridors.sort((a, b) =>
-        a.anchorSlug.localeCompare(b.anchorSlug) || a.corridorSlug.localeCompare(b.corridorSlug),
-      ),
-    ),
-  });
-}
-
-async function collectEvidence(
-  deps: ExportDependencies,
-  selection: ExportSelection,
-): Promise<ExportEvidence> {
-  const [reputationScores] = await Promise.all([
-    deps.queryReputationScores(selection),
-  ]);
-
-  const rateSnapshots: ExportRateSnapshot[] = [];
-  for await (const snapshot of deps.queryRateSnapshots(selection)) {
-    rateSnapshots.push(snapshot);
-  }
-
-  const transferOutcomes: ExportTransferOutcome[] = [];
-  for await (const outcome of deps.queryTransferOutcomes(selection)) {
-    transferOutcomes.push(outcome);
-  }
-
-  return Object.freeze({
-    rateSnapshots: Object.freeze(
-      rateSnapshots.sort((a, b) =>
-        a.anchorSlug.localeCompare(b.anchorSlug) ||
-        a.corridorSlug.localeCompare(b.corridorSlug) ||
-        a.capturedAt.localeCompare(b.capturedAt) ||
-        a.id.localeCompare(b.id),
-      ),
-    ),
-    transferOutcomes: Object.freeze(
-      transferOutcomes.sort((a, b) =>
-        a.anchorSlug.localeCompare(b.anchorSlug) ||
-        a.corridorSlug.localeCompare(b.corridorSlug) ||
-        a.recordedAt.localeCompare(b.recordedAt) ||
-        a.id.localeCompare(b.id),
-      ),
-    ),
-    reputationScores: Object.freeze(
-      reputationScores.sort((a, b) => a.anchorSlug.localeCompare(b.anchorSlug)),
-    ),
-  });
-}
-
-async function writeJsonFile<T>(
-  data: T,
-  filePath: string,
-  stringify: (value: T) => string = canonicalStringify,
-): Promise<ExportManifestEntry> {
-  const json = stringify(data);
-  const sanitized = sanitizeForExport(json);
-  assertNoSecrets(sanitized);
-
-  const buffer = serializeToBuffer(sanitized);
-  const sha256 = computeSha256FromString(sanitized);
-
-  const stream = createWriteStream(filePath, { flags: "w" });
-  stream.write(buffer);
-  await new Promise<void>((resolve, reject) => {
-    stream.end((err: Error | null) => (err ? reject(err) : resolve()));
-  });
-
-  return Object.freeze({
-    path: filePath,
-    sha256,
-    byteLength: buffer.length,
-    recordCount: Array.isArray(data) ? data.length : 1,
-  });
-}
-
-export async function createExportPackage(
-  deps: ExportDependencies,
-  selection: ExportSelection,
-  exportedBy: string,
-): Promise<ExportPackage> {
-  validateSelection(selection);
-
-  const exportedAt = new Date().toISOString();
-
-  const provenance: ExportProvenance = Object.freeze({
-    exportedAt,
-    exportedBy,
-    stellarCoreVersion: STELLARCORE_VERSION,
-    schemaVersion: "1.0",
-    selection: Object.freeze({ ...selection }),
-  });
-
-  const registry = await collectRegistry(deps, selection);
-  const evidence = await collectEvidence(deps, selection);
-
-  const manifest: ExportManifest = Object.freeze({
-    version: "1.0",
-    provenance,
-    registry: { path: "", sha256: "", byteLength: 0, recordCount: 0 },
-    evidence: { path: "", sha256: "", byteLength: 0, recordCount: 0 },
-    rootSha256: "",
-  });
-
-  return Object.freeze({
-    manifest,
-    registry,
-    evidence,
-  });
-}
-
-export async function writeExportPackage(
-  pkg: ExportPackage,
-  outputDir: string,
-): Promise<ExportManifest> {
-  const fs = await import("node:fs/promises");
-  await fs.mkdir(outputDir, { recursive: true });
-
-  const registryPath = `${outputDir}/registry.json`;
-  const evidencePath = `${outputDir}/evidence.json`;
-  const manifestPath = `${outputDir}/manifest.json`;
-
-  const registryEntry = await writeJsonFile(pkg.registry, registryPath);
-  const evidenceEntry = await writeJsonFile(pkg.evidence, evidencePath);
-
-  const rootSha256 = computeRootHash([registryEntry, evidenceEntry]);
-
-  const manifest: ExportManifest = Object.freeze({
-    version: "1.0",
-    provenance: pkg.manifest.provenance,
-    registry: registryEntry,
-    evidence: evidenceEntry,
-    rootSha256,
-  });
-
-  await writeJsonFile(manifest, manifestPath);
-
-  return manifest;
 }
 
 export async function exportEvidence(
-  deps: ExportDependencies,
+  dependencies: ExportDependencies,
   selection: ExportSelection,
   outputDir: string,
   exportedBy: string,
+  now: () => Date = () => new Date(),
 ): Promise<ExportResult> {
   try {
-    validateSelection(selection);
+    const normalizedSelection = normalizeSelection(selection);
+    const normalizedExporter = exportedBy.trim();
+    if (!normalizedExporter || normalizedExporter.length > 200) {
+      throw new InvalidExportSelectionError();
+    }
 
-    const pkg = await createExportPackage(deps, selection, exportedBy);
-    const manifest = await writeExportPackage(pkg, outputDir);
+    await mkdir(outputDir, { recursive: true });
+
+    const registry = await dependencies.queryRegistry(normalizedSelection);
+    assertExportSafe(registry);
+
+    const members: ExportManifestEntry[] = [];
+    members.push(
+      await writeCanonicalJsonMember(
+        outputDir,
+        "registry.json",
+        registry,
+        registry.anchors.length +
+          registry.corridors.length +
+          registry.anchorCorridors.length,
+      ),
+    );
+    members.push(
+      await writeNdjsonMember(
+        outputDir,
+        "rate-snapshots.ndjson",
+        dependencies.streamRateSnapshots(normalizedSelection),
+      ),
+    );
+    members.push(
+      await writeNdjsonMember(
+        outputDir,
+        "transfer-outcomes.ndjson",
+        dependencies.streamTransferOutcomes(normalizedSelection),
+      ),
+    );
+    members.push(
+      await writeNdjsonMember(
+        outputDir,
+        "reputation-scores.ndjson",
+        dependencies.streamReputationScores(normalizedSelection),
+      ),
+    );
+
+    const sortedMembers = Object.freeze(
+      [...members].sort((a, b) => a.path.localeCompare(b.path)),
+    );
+
+    const provenance = Object.freeze({
+      exportedAt: now().toISOString(),
+      exportedBy: normalizedExporter,
+      stellarCoreVersion: STELLARCORE_VERSION,
+      schemaVersion: EVIDENCE_EXPORT_VERSION,
+      selection: normalizedSelection,
+      ...(process.env.STELLARCORE_DEPLOYMENT_REVISION?.trim()
+        ? { deploymentRevision: process.env.STELLARCORE_DEPLOYMENT_REVISION.trim() }
+        : {}),
+      ...(process.env.STELLARCORE_CONFIG_FINGERPRINT?.trim()
+        ? {
+            configurationFingerprint:
+              process.env.STELLARCORE_CONFIG_FINGERPRINT.trim().toLowerCase(),
+          }
+        : {}),
+    });
+
+    assertExportSafe(provenance);
+
+    const manifest: ExportManifest = Object.freeze({
+      version: EVIDENCE_EXPORT_VERSION,
+      provenance,
+      members: sortedMembers,
+      rootSha256: computeRootHash(sortedMembers, provenance),
+    });
+
+    await writeFile(
+      join(outputDir, "manifest.json"),
+      canonicalStringify(manifest) + "\n",
+      "utf8",
+    );
 
     return Object.freeze({
       ok: true,
-      manifest,
       outputPath: outputDir,
+      manifest,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    let code: ExportErrorCode = "IO_ERROR";
-    if (message.includes("Invalid selection") || message.includes("Invalid time range") || message.includes("Invalid anchor slug") || message.includes("Invalid corridor slug")) {
-      code = "INVALID_SELECTION";
-    } else if (message.includes("database") || message.includes("Prisma") || message.includes("query")) {
-      code = "DATABASE_ERROR";
-    } else if (message.includes("serializ") || message.includes("stringify") || message.includes("JSON")) {
-      code = "SERIALIZATION_ERROR";
-    } else if (message.includes("manifest")) {
-      code = "MANIFEST_GENERATION_ERROR";
-    } else if (message.includes("secret") || message.includes("REDACTED")) {
-      code = "SECRET_REDACTION_ERROR";
+    if (error instanceof InvalidExportSelectionError) {
+      return exportFailure(
+        "INVALID_SELECTION",
+        "Export selection is invalid",
+      );
     }
-
-    return Object.freeze({
-      ok: false,
-      code,
-      message,
-    });
+    if (error instanceof Error && error.message.startsWith("SECRET_DETECTED")) {
+      return exportFailure(
+        "SECRET_DETECTED",
+        "Export safety policy rejected sensitive data",
+      );
+    }
+    return exportFailure(
+      "IO_ERROR",
+      "Evidence export failed",
+    );
   }
 }
 
-export async function createPrismaExportDependencies(): Promise<ExportDependencies> {
-  const { db } = await import("@/lib/dbClient");
-
-  // Retry policy for export database queries: bounded attempts, exponential backoff, deadline
+export function createPrismaExportDependencies(): ExportDependencies {
   const exportRetryPolicy = {
     ...DEFAULT_RETRY_POLICY,
     maxAttempts: 3,
@@ -270,26 +152,43 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
     deadlineMs: 5000,
   };
 
-  // Wraps a Prisma query with bounded retry for transient failures (P2034).
-  // Non-retryable errors (validation, auth, etc.) are thrown immediately.
   async function withExportRetry<T>(query: () => Promise<T>): Promise<T> {
     return withTransactionRetry(query, {
       policy: exportRetryPolicy,
-      // Only retry on P2034 (serialization failure / deadlock)
-      // The withTransactionRetry uses isRetryablePrismaError which checks for P2034
     });
   }
 
   return Object.freeze({
-    async queryAnchors(selection: ExportSelection) {
-      return withExportRetry(async () => {
-        const where: Prisma.AnchorWhereInput = {};
-        if (selection.anchorSlugs?.length) {
-          where.slug = { in: [...selection.anchorSlugs] };
-        }
-        const anchors = await db.anchor.findMany({
-          where,
-          orderBy: { slug: "asc" },
+    async queryRegistry(selection): Promise<ExportRegistry> {
+      const { db } = await import("@/lib/dbClient");
+
+      const anchorWhere: Prisma.AnchorWhereInput = {};
+      if (selection.anchorSlugs?.length) {
+        anchorWhere.slug = { in: [...selection.anchorSlugs] };
+      }
+
+      const corridorWhere: Prisma.CorridorWhereInput = {};
+      if (selection.corridorSlugs?.length) {
+        corridorWhere.slug = { in: [...selection.corridorSlugs] };
+      }
+
+      const associationWhere: Prisma.AnchorCorridorWhereInput = {};
+      if (selection.anchorSlugs?.length) {
+        associationWhere.anchor = {
+          slug: { in: [...selection.anchorSlugs] },
+        };
+      }
+      if (selection.corridorSlugs?.length) {
+        associationWhere.corridor = {
+          slug: { in: [...selection.corridorSlugs] },
+        };
+      }
+
+      const [anchors, corridors, associations] = await Promise.all([
+        withExportRetry(() =>
+          db.anchor.findMany({
+            where: anchorWhere,
+            orderBy: { slug: "asc" },
           select: {
             slug: true,
             name: true,
@@ -300,29 +199,12 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
             createdAt: true,
             updatedAt: true,
           },
-        });
-        return anchors.map((a) => ({
-          slug: a.slug,
-          name: a.name,
-          homeDomain: a.homeDomain,
-          status: a.status,
-          seps: [...a.seps],
-          isTransferCapable: a.isTransferCapable,
-          createdAt: a.createdAt.toISOString(),
-          updatedAt: a.updatedAt.toISOString(),
-        }));
-      });
-    },
-
-    async queryCorridors(selection: ExportSelection) {
-      return withExportRetry(async () => {
-        const where: Prisma.CorridorWhereInput = {};
-        if (selection.corridorSlugs?.length) {
-          where.slug = { in: [...selection.corridorSlugs] };
-        }
-        const corridors = await db.corridor.findMany({
-          where,
-          orderBy: { slug: "asc" },
+          }),
+        ),
+        withExportRetry(() =>
+          db.corridor.findMany({
+            where: corridorWhere,
+            orderBy: { slug: "asc" },
           select: {
             slug: true,
             assetCodeFrom: true,
@@ -330,55 +212,53 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
             assetCodeTo: true,
             countryTo: true,
           },
-        });
-        return corridors.map((c) => ({
-          slug: c.slug,
-          assetCodeFrom: c.assetCodeFrom,
-          countryFrom: c.countryFrom,
-          assetCodeTo: c.assetCodeTo,
-          countryTo: c.countryTo,
-        }));
-      });
-    },
-
-    async queryAnchorCorridors(selection: ExportSelection) {
-      return withExportRetry(async () => {
-        const where: Prisma.AnchorCorridorWhereInput = {};
-        if (selection.anchorSlugs?.length) {
-          where.anchorId = { in: [] };
-          const anchorIds = await db.anchor.findMany({
-            where: { slug: { in: [...selection.anchorSlugs] } },
-            select: { id: true },
-          });
-          if (anchorIds.length > 0) {
-            where.anchorId = { in: anchorIds.map((a) => a.id) };
-          }
-        }
-        if (selection.corridorSlugs?.length) {
-          const corridorIds = await db.corridor.findMany({
-            where: { slug: { in: [...selection.corridorSlugs] } },
-            select: { id: true },
-          });
-          if (corridorIds.length > 0) {
-            where.corridorId = { in: corridorIds.map((c) => c.id) };
-          }
-        }
-        const associations = await db.anchorCorridor.findMany({
-          where,
-          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }],
+          }),
+        ),
+        withExportRetry(() =>
+          db.anchorCorridor.findMany({
+            where: associationWhere,
+            orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }],
           select: {
             anchor: { select: { slug: true } },
             corridor: { select: { slug: true } },
-          },
-        });
-        return associations.map((a) => ({
-          anchorSlug: a.anchor.slug,
-          corridorSlug: a.corridor.slug,
-        }));
+            },
+          }),
+        ),
+      ]);
+
+      return Object.freeze({
+        anchors: Object.freeze(
+          anchors.map((anchor) =>
+            Object.freeze({
+              ...anchor,
+              seps: Object.freeze([...anchor.seps]),
+              createdAt: anchor.createdAt.toISOString(),
+              updatedAt: anchor.updatedAt.toISOString(),
+            }),
+          ),
+        ),
+        corridors: Object.freeze(
+          corridors.map((corridor) => Object.freeze({ ...corridor })),
+        ),
+        anchorCorridors: Object.freeze(
+          associations
+            .map(({ anchor, corridor }) =>
+              Object.freeze({
+                anchorSlug: anchor.slug,
+                corridorSlug: corridor.slug,
+              }),
+            )
+            .sort(
+              (a, b) =>
+                a.anchorSlug.localeCompare(b.anchorSlug) ||
+                a.corridorSlug.localeCompare(b.corridorSlug),
+            ),
+        ),
       });
     },
 
-    async *queryRateSnapshots(selection: ExportSelection) {
+    async *streamRateSnapshots(selection) {
+      const { db } = await import("@/lib/dbClient");
       const where: Prisma.RateSnapshotWhereInput = {
         capturedAt: {
           gte: new Date(selection.timeRange.start),
@@ -386,32 +266,19 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
         },
       };
       if (selection.anchorSlugs?.length) {
-        const anchorIds = await withExportRetry(async () => {
-          return db.anchor.findMany({
-            where: { slug: { in: [...selection.anchorSlugs!] } },
-            select: { id: true },
-          });
-        });
-        if (anchorIds.length > 0) {
-          where.anchorId = { in: anchorIds.map((a) => a.id) };
-        }
+        where.anchor = { slug: { in: [...selection.anchorSlugs] } };
       }
       if (selection.corridorSlugs?.length) {
-        const corridorIds = await withExportRetry(async () => {
-          return db.corridor.findMany({
-            where: { slug: { in: [...selection.corridorSlugs!] } },
-            select: { id: true },
-          });
-        });
-        if (corridorIds.length > 0) {
-          where.corridorId = { in: corridorIds.map((c) => c.id) };
-        }
+        where.corridor = { slug: { in: [...selection.corridorSlugs] } };
       }
 
-      const snapshots = await withExportRetry(async () => {
-        return db.rateSnapshot.findMany({
+      let cursor: string | undefined;
+      for (;;) {
+        const rows = await withExportRetry(() => db.rateSnapshot.findMany({
           where,
-          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { capturedAt: "asc" }, { id: "asc" }],
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
           select: {
             id: true,
             anchor: { select: { slug: true } },
@@ -422,24 +289,29 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
             fee: true,
             capturedAt: true,
           },
-        });
-      });
+        }));
+        if (rows.length === 0) break;
 
-      for (const s of snapshots) {
-        yield {
-          id: s.id,
-          anchorSlug: s.anchor.slug,
-          corridorSlug: s.corridor.slug,
-          rate: s.rate.toString(),
-          sourceAmount: s.sourceAmount.toString(),
-          destinationAmount: s.destinationAmount.toString(),
-          fee: s.fee.toString(),
-          capturedAt: s.capturedAt.toISOString(),
-        };
+        for (const row of rows) {
+          yield Object.freeze({
+            id: row.id,
+            anchorSlug: row.anchor.slug,
+            corridorSlug: row.corridor.slug,
+            rate: row.rate.toString(),
+            sourceAmount: row.sourceAmount.toString(),
+            destinationAmount: row.destinationAmount.toString(),
+            fee: row.fee.toString(),
+            capturedAt: row.capturedAt.toISOString(),
+          });
+        }
+
+        cursor = rows[rows.length - 1]!.id;
+        if (rows.length < PAGE_SIZE) break;
       }
     },
 
-    async *queryTransferOutcomes(selection: ExportSelection) {
+    async *streamTransferOutcomes(selection) {
+      const { db } = await import("@/lib/dbClient");
       const where: Prisma.TransferOutcomeWhereInput = {
         recordedAt: {
           gte: new Date(selection.timeRange.start),
@@ -447,32 +319,19 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
         },
       };
       if (selection.anchorSlugs?.length) {
-        const anchorIds = await withExportRetry(async () => {
-          return db.anchor.findMany({
-            where: { slug: { in: [...selection.anchorSlugs!] } },
-            select: { id: true },
-          });
-        });
-        if (anchorIds.length > 0) {
-          where.anchorId = { in: anchorIds.map((a) => a.id) };
-        }
+        where.anchor = { slug: { in: [...selection.anchorSlugs] } };
       }
       if (selection.corridorSlugs?.length) {
-        const corridorIds = await withExportRetry(async () => {
-          return db.corridor.findMany({
-            where: { slug: { in: [...selection.corridorSlugs!] } },
-            select: { id: true },
-          });
-        });
-        if (corridorIds.length > 0) {
-          where.corridorId = { in: corridorIds.map((c) => c.id) };
-        }
+        where.corridor = { slug: { in: [...selection.corridorSlugs] } };
       }
 
-      const outcomes = await withExportRetry(async () => {
-        return db.transferOutcome.findMany({
+      let cursor: string | undefined;
+      for (;;) {
+        const rows = await withExportRetry(() => db.transferOutcome.findMany({
           where,
-          orderBy: [{ anchorId: "asc" }, { corridorId: "asc" }, { recordedAt: "asc" }, { id: "asc" }],
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
           select: {
             id: true,
             anchor: { select: { slug: true } },
@@ -483,39 +342,46 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
             slippage: true,
             recordedAt: true,
           },
-        });
-      });
+        }));
+        if (rows.length === 0) break;
 
-      for (const o of outcomes) {
-        yield {
-          id: o.id,
-          anchorSlug: o.anchor.slug,
-          corridorSlug: o.corridor.slug,
-          status: o.status,
-          fillRate: o.fillRate,
-          settlementMs: o.settlementMs,
-          slippage: o.slippage,
-          recordedAt: o.recordedAt.toISOString(),
-        };
+        for (const row of rows) {
+          yield Object.freeze({
+            id: row.id,
+            anchorSlug: row.anchor.slug,
+            corridorSlug: row.corridor.slug,
+            status: row.status,
+            fillRate: row.fillRate,
+            settlementMs: row.settlementMs,
+            slippage: row.slippage,
+            recordedAt: row.recordedAt.toISOString(),
+          });
+        }
+
+        cursor = rows[rows.length - 1]!.id;
+        if (rows.length < PAGE_SIZE) break;
       }
     },
 
-    async queryReputationScores(selection: ExportSelection) {
-      return withExportRetry(async () => {
-        const where: Prisma.ReputationScoreWhereInput = {};
-        if (selection.anchorSlugs?.length) {
-          const anchorIds = await db.anchor.findMany({
-            where: { slug: { in: [...selection.anchorSlugs] } },
-            select: { id: true },
-          });
-          if (anchorIds.length > 0) {
-            where.anchorId = { in: anchorIds.map((a) => a.id) };
-          }
-        }
+    async *streamReputationScores(selection) {
+      const { db } = await import("@/lib/dbClient");
+      const where: Prisma.ReputationScoreWhereInput = {
+        computedAt: {
+          gte: new Date(selection.timeRange.start),
+          lte: new Date(selection.timeRange.end),
+        },
+      };
+      if (selection.anchorSlugs?.length) {
+        where.anchor = { slug: { in: [...selection.anchorSlugs] } };
+      }
 
-        const scores = await db.reputationScore.findMany({
+      let cursor: string | undefined;
+      for (;;) {
+        const rows = await withExportRetry(() => db.reputationScore.findMany({
           where,
-          orderBy: { anchorId: "asc" },
+          orderBy: { id: "asc" },
+          take: PAGE_SIZE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
           select: {
             id: true,
             anchor: { select: { slug: true } },
@@ -532,25 +398,128 @@ export async function createPrismaExportDependencies(): Promise<ExportDependenci
             state: true,
             computedAt: true,
           },
-        });
-
-        return scores.map((s) => ({
-          id: s.id,
-          anchorSlug: s.anchor.slug,
-          compositeScore: s.compositeScore,
-          scoreBand: s.scoreBand,
-          fillRate7d: s.fillRate7d,
-          fillRate30d: s.fillRate30d,
-          fillRate90d: s.fillRate90d,
-          settleP50Ms: s.settleP50Ms,
-          settleP95Ms: s.settleP95Ms,
-          slippageP50: s.slippageP50,
-          slippageP95: s.slippageP95,
-          sampleSize: s.sampleSize,
-          state: s.state,
-          computedAt: s.computedAt.toISOString(),
         }));
-      });
+        if (rows.length === 0) break;
+
+        for (const row of rows) {
+          yield Object.freeze({
+            id: row.id,
+            anchorSlug: row.anchor.slug,
+            compositeScore: row.compositeScore,
+            scoreBand: row.scoreBand,
+            fillRate7d: row.fillRate7d,
+            fillRate30d: row.fillRate30d,
+            fillRate90d: row.fillRate90d,
+            settleP50Ms: row.settleP50Ms,
+            settleP95Ms: row.settleP95Ms,
+            slippageP50: row.slippageP50,
+            slippageP95: row.slippageP95,
+            sampleSize: row.sampleSize,
+            state: row.state,
+            computedAt: row.computedAt.toISOString(),
+          });
+        }
+
+        cursor = rows[rows.length - 1]!.id;
+        if (rows.length < PAGE_SIZE) break;
+      }
     },
   });
+}
+
+function normalizeSelection(selection: ExportSelection): ExportSelection {
+  const start = new Date(selection.timeRange.start);
+  const end = new Date(selection.timeRange.end);
+  if (
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime()) ||
+    start.getTime() >= end.getTime()
+  ) {
+    throw new InvalidExportSelectionError();
+  }
+
+  const anchorSlugs = normalizeSlugs(selection.anchorSlugs);
+  const corridorSlugs = normalizeSlugs(selection.corridorSlugs);
+
+  return Object.freeze({
+    timeRange: Object.freeze({
+      start: start.toISOString(),
+      end: end.toISOString(),
+    }),
+    ...(anchorSlugs ? { anchorSlugs } : {}),
+    ...(corridorSlugs ? { corridorSlugs } : {}),
+  });
+}
+
+function normalizeSlugs(values: readonly string[] | undefined):
+  | readonly string[]
+  | undefined {
+  if (values === undefined) return undefined;
+  const normalized = [...new Set(values.map((value) => value.trim()))].sort();
+  if (
+    normalized.length === 0 ||
+    normalized.some(
+      (slug) =>
+        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120,
+    )
+  ) {
+    throw new InvalidExportSelectionError();
+  }
+  return Object.freeze(normalized);
+}
+
+async function writeCanonicalJsonMember(
+  outputDir: string,
+  path: EvidenceMemberPath,
+  value: unknown,
+  recordCount: number,
+): Promise<ExportManifestEntry> {
+  assertExportSafe(value);
+  const data = canonicalStringify(value) + "\n";
+  await writeFile(join(outputDir, path), data, "utf8");
+  return Object.freeze({
+    path,
+    sha256: sha256(data),
+    byteLength: Buffer.byteLength(data, "utf8"),
+    recordCount,
+  });
+}
+
+async function writeNdjsonMember(
+  outputDir: string,
+  path: EvidenceMemberPath,
+  rows: AsyncIterable<unknown>,
+): Promise<ExportManifestEntry> {
+  const handle = await open(join(outputDir, path), "w");
+  const hash = createHash("sha256");
+  let byteLength = 0;
+  let recordCount = 0;
+
+  try {
+    for await (const row of rows) {
+      assertExportSafe(row);
+      const line = canonicalStringify(row) + "\n";
+      await handle.write(line);
+      hash.update(line);
+      byteLength += Buffer.byteLength(line, "utf8");
+      recordCount += 1;
+    }
+  } finally {
+    await handle.close();
+  }
+
+  return Object.freeze({
+    path,
+    sha256: hash.digest("hex"),
+    byteLength,
+    recordCount,
+  });
+}
+
+
+function exportFailure(
+  code: Extract<ExportResult, { ok: false }>["code"],
+  message: string,
+): ExportResult {
+  return Object.freeze({ ok: false as const, code, message });
 }

@@ -83,6 +83,12 @@ Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
 
+Production database transport is guarded before pool construction by the
+verified-TLS policy in `lib/database/tlsPolicy.ts`. The policy strips
+connection-string TLS overrides, rejects plaintext or unverifiable production
+modes, and passes an explicit certificate-verifying SSL object into the
+hardened pool. Optional provider CA material remains server-only.
+
 The database connection is managed through `@prisma/adapter-pg` backed by a
 hardened `pg.Pool`. Connection acquisition and timeouts are bounded by
 `connectionTimeoutMillis` and explicit request deadlines, with TCP keepalive
@@ -93,11 +99,30 @@ sockets. Interrupted transactions never report success without positive commit
 confirmation, and bounded pool capacity prevents connection storms against
 newly promoted primaries. See `docs/database-failover.md` for full details.
 
-Routes under `app/api/` expose anchors, corridors, rates, and reputation as
-read-only JSON. They serialize bounded fields, avoid raw errors and internal
-identifiers, and use no-store behavior where data is dynamic. The
+Routes under `app/api/` expose anchors, corridors, rates, rate history, and
+reputation as read-only JSON. Public failures use one shared bounded
+`error.code` / `error.message` envelope and a common response serializer.
+Unknown exceptions are retained only through the server-side reporter seam;
+stack traces, database details, raw upstream responses, and secrets never enter
+the public envelope. Successful response shapes and stale-evidence degradation
+headers remain unchanged. Dynamic responses use no-store behavior. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
+
+## Integrity audit
+
+`npm run audit:integrity` is a read-only, defense-in-depth check of the
+persisted evidence graph. It loads a bounded snapshot of anchors, corridors,
+reviewed memberships, rate snapshots, transfer outcomes, and reputation rows
+using `findMany` selects only, then evaluates cross-table semantic invariants
+that database constraints cannot fully express.
+
+The pure evaluator emits bounded, deterministic findings keyed by stable record
+identifiers, violation codes, and non-destructive remediation guidance. It does
+not include raw evidence payloads in reports and does not write, update, delete,
+or open a transaction. Database constraints and write-boundary validation remain
+the first line of defense; this audit detects drift after migrations, imports,
+or operational mistakes.
 
 ## Scheduled refresh and operations
 

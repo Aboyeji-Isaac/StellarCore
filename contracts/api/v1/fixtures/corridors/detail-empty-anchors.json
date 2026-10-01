@@ -1,0 +1,19 @@
+{
+  "name": "corridors.detail.empty_anchors",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors/:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Corridor detail response with zero associated anchors",
+  "body": {
+    "corridor": {
+      "slug": "usdc-us-brl-br",
+      "sourceAsset": "USDC",
+      "sourceCountry": "US",
+      "destinationAsset": "BRL",
+      "destinationCountry": "BR",
+      "anchorCount": 0,
+      "anchors": []
+    }
+  }
+}

@@ -26,11 +26,19 @@ import {
 export const RUNTIME_ENV_KEYS = [
   "DATABASE_URL",
   "CRON_SECRET",
+  "CRON_SECRET_PREVIOUS",
+  "CRON_SECRET_ROTATION_UNTIL",
   "STELLARCORE_ENVIRONMENT",
   "VERCEL_ENV",
   "NODE_ENV",
   "RATE_FRESHNESS_THRESHOLD_MS",
   "MIN_FRESH_SOURCES",
+  "STELLARCORE_CONFIG_FINGERPRINT",
+  "STELLARCORE_CONFIG_DRIFT_POLICY",
+  "STELLARCORE_DEPLOYMENT_REVISION",
+  "STELLARCORE_DB_CA",
+  "STELLARCORE_DB_CA_PATH",
+  "STELLARCORE_DB_TLS_EMERGENCY_BYPASS",
 ] as const;
 
 export type RuntimeEnvKey = (typeof RUNTIME_ENV_KEYS)[number];
@@ -45,27 +53,67 @@ export type EnvInput = Readonly<Record<string, string | undefined>>;
 export type RuntimeConfig = Readonly<{
   /** The declared runtime environment (production, preview, development, test, ci). */
   environment: DatabaseEnvironmentId;
+
   /** Source of the resolved environment. */
   environmentSource: "explicit-env" | "vercel-env" | "test-default";
-  /** Validated PostgreSQL connection URL (postgres:// or postgresql://). */
-  databaseUrl: string;
+
+  /** Validated PostgreSQL connection URL when configured. */
+  databaseUrl: string | undefined;
+
   /** Cron secret for authenticated scheduled refresh (required in production). */
   cronSecret: string | undefined;
+
   /** Rate freshness threshold in milliseconds (default: 120000). */
   rateFreshnessThresholdMs: number;
+
   /** Minimum fresh independent sources required for a median (default: 2). */
   minFreshSources: number;
 }>;
 
 /** Validation error with bounded, secret-free diagnostics. */
 export type RuntimeConfigError =
-  | Readonly<{ ok: false; code: "MISSING_REQUIRED"; variable: RuntimeEnvKey; environment: DatabaseEnvironmentId }>
-  | Readonly<{ ok: false; code: "INVALID_DATABASE_URL"; variable: "DATABASE_URL"; environment: DatabaseEnvironmentId; reason: string }>
-  | Readonly<{ ok: false; code: "INVALID_NUMERIC"; variable: "RATE_FRESHNESS_THRESHOLD_MS" | "MIN_FRESH_SOURCES"; environment: DatabaseEnvironmentId; reason: string }>
-  | Readonly<{ ok: false; code: "INVALID_ENVIRONMENT"; variable: "STELLARCORE_ENVIRONMENT" | "VERCEL_ENV"; environment: string }>
-  | Readonly<{ ok: false; code: "MISSING_RUNTIME_ENVIRONMENT" }>
-  | Readonly<{ ok: false; code: "RUNTIME_ENVIRONMENT_INVALID"; environment: string }>
-  | Readonly<{ ok: false; code: "CRON_SECRET_REQUIRED_IN_PRODUCTION"; environment: "production" }>;
+  | Readonly<{
+      ok: false;
+      code: "MISSING_REQUIRED";
+      variable: RuntimeEnvKey;
+      environment: DatabaseEnvironmentId;
+    }>
+  | Readonly<{
+      ok: false;
+      code: "INVALID_DATABASE_URL";
+      variable: "DATABASE_URL";
+      environment: DatabaseEnvironmentId;
+      reason: string;
+    }>
+  | Readonly<{
+      ok: false;
+      code: "INVALID_NUMERIC";
+      variable:
+        | "RATE_FRESHNESS_THRESHOLD_MS"
+        | "MIN_FRESH_SOURCES";
+      environment: DatabaseEnvironmentId;
+      reason: string;
+    }>
+  | Readonly<{
+      ok: false;
+      code: "INVALID_ENVIRONMENT";
+      variable: "STELLARCORE_ENVIRONMENT" | "VERCEL_ENV";
+      environment: string;
+    }>
+  | Readonly<{
+      ok: false;
+      code: "MISSING_RUNTIME_ENVIRONMENT";
+    }>
+  | Readonly<{
+      ok: false;
+      code: "RUNTIME_ENVIRONMENT_INVALID";
+      environment: string;
+    }>
+  | Readonly<{
+      ok: false;
+      code: "CRON_SECRET_REQUIRED_IN_PRODUCTION";
+      environment: "production";
+    }>;
 
 /** Result of runtime configuration validation. */
 export type RuntimeConfigResult =
@@ -82,7 +130,10 @@ const DEFAULTS = Object.freeze({
 const REQUIRED_BY_ENVIRONMENT: Readonly<
   Record<DatabaseEnvironmentId, ReadonlySet<RuntimeEnvKey>>
 > = Object.freeze({
-  production: new Set<RuntimeEnvKey>(["DATABASE_URL", "CRON_SECRET"]),
+  production: new Set<RuntimeEnvKey>([
+    "DATABASE_URL",
+    "CRON_SECRET",
+  ]),
   preview: new Set<RuntimeEnvKey>(["DATABASE_URL"]),
   development: new Set<RuntimeEnvKey>(["DATABASE_URL"]),
   test: new Set<RuntimeEnvKey>([]),
@@ -93,8 +144,11 @@ const REQUIRED_BY_ENVIRONMENT: Readonly<
  * Validates a DATABASE_URL value.
  * Returns the validated URL or an error reason.
  */
-function validateDatabaseUrl(value: string): { ok: true; url: string } | { ok: false; reason: string } {
+function validateDatabaseUrl(
+  value: string,
+): { ok: true; url: string } | { ok: false; reason: string } {
   let protocol: string;
+
   try {
     protocol = new URL(value).protocol;
   } catch {
@@ -102,11 +156,17 @@ function validateDatabaseUrl(value: string): { ok: true; url: string } | { ok: f
   }
 
   if (protocol === "prisma:" || protocol === "prisma+postgres:") {
-    return { ok: false, reason: "must use postgres:// or postgresql:// with PrismaPg" };
+    return {
+      ok: false,
+      reason: "must use postgres:// or postgresql:// with PrismaPg",
+    };
   }
 
   if (protocol !== "postgres:" && protocol !== "postgresql:") {
-    return { ok: false, reason: "must use postgres:// or postgresql://" };
+    return {
+      ok: false,
+      reason: "must use postgres:// or postgresql://",
+    };
   }
 
   return { ok: true, url: value };
@@ -117,26 +177,44 @@ function validateDatabaseUrl(value: string): { ok: true; url: string } | { ok: f
  */
 function validateNumeric(
   value: string | undefined,
-  variable: "RATE_FRESHNESS_THRESHOLD_MS" | "MIN_FRESH_SOURCES",
+  variable:
+    | "RATE_FRESHNESS_THRESHOLD_MS"
+    | "MIN_FRESH_SOURCES",
 ): { ok: true; value: number } | { ok: false; reason: string } {
   if (value === undefined) {
-    return { ok: true, value: DEFAULTS[variable] };
+    return {
+      ok: true,
+      value: DEFAULTS[variable],
+    };
   }
 
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) {
-    return { ok: false, reason: "not a valid integer" };
+  if (!/^[1-9]\d*$/.test(value)) {
+    return {
+      ok: false,
+      reason: "must be a positive integer",
+    };
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isSafeInteger(parsed)) {
+    return {
+      ok: false,
+      reason: "must be a safe positive integer",
+    };
   }
 
   if (variable === "MIN_FRESH_SOURCES" && parsed < 1) {
-    return { ok: false, reason: "must be at least 1" };
+    return {
+      ok: false,
+      reason: "must be at least 1",
+    };
   }
 
-  if (parsed <= 0) {
-    return { ok: false, reason: "must be a positive integer" };
-  }
-
-  return { ok: true, value: parsed };
+  return {
+    ok: true,
+    value: parsed,
+  };
 }
 
 /**
@@ -145,17 +223,27 @@ function validateNumeric(
  * @param env - Environment variable map (defaults to process.env).
  * @returns Validated runtime configuration or a bounded error.
  */
-export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfigResult {
+export function validateRuntimeConfig(
+  env: EnvInput = process.env,
+): RuntimeConfigResult {
   // Resolve the runtime environment first.
   const envResult = resolveRuntimeEnvironment(env);
+
   if (!envResult.ok) {
     if (envResult.code === "RUNTIME_ENVIRONMENT_MISSING") {
-      return { ok: false, code: "MISSING_RUNTIME_ENVIRONMENT" };
+      return {
+        ok: false,
+        code: "MISSING_RUNTIME_ENVIRONMENT",
+      };
     }
+
     return {
       ok: false,
       code: "RUNTIME_ENVIRONMENT_INVALID",
-      environment: env.STELLARCORE_ENVIRONMENT ?? env.VERCEL_ENV ?? "(unknown)",
+      environment:
+        env.STELLARCORE_ENVIRONMENT ??
+        env.VERCEL_ENV ??
+        "(unknown)",
     };
   }
 
@@ -163,8 +251,10 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
 
   // Validate required variables for this environment.
   const required = REQUIRED_BY_ENVIRONMENT[environment];
+
   for (const variable of required) {
     const value = env[variable];
+
     if (!value || value.trim() === "") {
       return {
         ok: false,
@@ -175,16 +265,27 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
     }
   }
 
-  // Validate DATABASE_URL format.
-  const databaseUrlValidation = validateDatabaseUrl(env.DATABASE_URL ?? "");
-  if (!databaseUrlValidation.ok) {
-    return {
-      ok: false,
-      code: "INVALID_DATABASE_URL",
-      variable: "DATABASE_URL",
-      environment,
-      reason: databaseUrlValidation.reason,
-    };
+  // Validate DATABASE_URL format whenever it is configured.
+  // Test environments may omit it until a database-backed module is actually used.
+  const rawDatabaseUrl = env.DATABASE_URL?.trim();
+
+  let databaseUrl: string | undefined;
+
+  if (rawDatabaseUrl) {
+    const databaseUrlValidation =
+      validateDatabaseUrl(rawDatabaseUrl);
+
+    if (!databaseUrlValidation.ok) {
+      return {
+        ok: false,
+        code: "INVALID_DATABASE_URL",
+        variable: "DATABASE_URL",
+        environment,
+        reason: databaseUrlValidation.reason,
+      };
+    }
+
+    databaseUrl = databaseUrlValidation.url;
   }
 
   // Validate numeric options.
@@ -192,6 +293,7 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
     env.RATE_FRESHNESS_THRESHOLD_MS,
     "RATE_FRESHNESS_THRESHOLD_MS",
   );
+
   if (!rateFreshnessValidation.ok) {
     return {
       ok: false,
@@ -202,7 +304,11 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
     };
   }
 
-  const minFreshSourcesValidation = validateNumeric(env.MIN_FRESH_SOURCES, "MIN_FRESH_SOURCES");
+  const minFreshSourcesValidation = validateNumeric(
+    env.MIN_FRESH_SOURCES,
+    "MIN_FRESH_SOURCES",
+  );
+
   if (!minFreshSourcesValidation.ok) {
     return {
       ok: false,
@@ -216,7 +322,11 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
   // CRON_SECRET is required in production (checked above), but validate presence
   // for all environments where it's provided.
   const cronSecret = env.CRON_SECRET?.trim();
-  if (environment === "production" && (!cronSecret || cronSecret === "")) {
+
+  if (
+    environment === "production" &&
+    (!cronSecret || cronSecret === "")
+  ) {
     return {
       ok: false,
       code: "CRON_SECRET_REQUIRED_IN_PRODUCTION",
@@ -226,6 +336,7 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
 
   // Determine environment source for diagnostics.
   let environmentSource: RuntimeConfig["environmentSource"];
+
   if (env.STELLARCORE_ENVIRONMENT?.trim()) {
     environmentSource = "explicit-env";
   } else if (env.VERCEL_ENV?.trim()) {
@@ -237,13 +348,18 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
   const config: RuntimeConfig = Object.freeze({
     environment,
     environmentSource,
-    databaseUrl: databaseUrlValidation.url,
+    databaseUrl,
     cronSecret,
-    rateFreshnessThresholdMs: rateFreshnessValidation.value,
-    minFreshSources: minFreshSourcesValidation.value,
+    rateFreshnessThresholdMs:
+      rateFreshnessValidation.value,
+    minFreshSources:
+      minFreshSourcesValidation.value,
   });
 
-  return { ok: true, config };
+  return {
+    ok: true,
+    config,
+  };
 }
 
 /**
@@ -254,11 +370,15 @@ export function validateRuntimeConfig(env: EnvInput = process.env): RuntimeConfi
  * @returns The validated runtime configuration.
  * @throws {RuntimeConfigError} When validation fails, with a bounded message.
  */
-export function assertRuntimeConfig(env: EnvInput = process.env): RuntimeConfig {
+export function assertRuntimeConfig(
+  env: EnvInput = process.env,
+): RuntimeConfig {
   const result = validateRuntimeConfig(env);
+
   if (!result.ok) {
     throw new RuntimeConfigValidationError(result);
   }
+
   return result.config;
 }
 
@@ -272,10 +392,19 @@ let cachedRuntimeConfig: RuntimeConfig | undefined;
  * @returns The validated runtime configuration.
  * @throws {RuntimeConfigValidationError} When validation fails, with a bounded message.
  */
-export function getRuntimeConfig(env: EnvInput = process.env): RuntimeConfig {
-  if (!cachedRuntimeConfig) {
-    cachedRuntimeConfig = assertRuntimeConfig(env);
+export function getRuntimeConfig(
+  env?: EnvInput,
+): RuntimeConfig {
+  // Explicit inputs are intentionally never cached so tests and callers can
+  // validate isolated configurations without contaminating process-wide state.
+  if (env) {
+    return assertRuntimeConfig(env);
   }
+
+  if (!cachedRuntimeConfig) {
+    cachedRuntimeConfig = assertRuntimeConfig(process.env);
+  }
+
   return cachedRuntimeConfig;
 }
 
@@ -299,34 +428,50 @@ export class RuntimeConfigValidationError extends Error {
 
   constructor(error: RuntimeConfigError) {
     const message = formatConfigErrorMessage(error);
+
     super(message);
+
     this.name = "RuntimeConfigValidationError";
     this.code = error.code;
-    this.variable = "variable" in error ? error.variable : undefined;
-    this.environment = "environment" in error ? error.environment : "(unknown)";
-    this.reason = "reason" in error ? error.reason : undefined;
+    this.variable =
+      "variable" in error ? error.variable : undefined;
+    this.environment =
+      "environment" in error
+        ? error.environment
+        : "(unknown)";
+    this.reason =
+      "reason" in error ? error.reason : undefined;
   }
 }
 
 /**
  * Formats a bounded, secret-free error message for a configuration error.
  */
-function formatConfigErrorMessage(error: RuntimeConfigError): string {
+function formatConfigErrorMessage(
+  error: RuntimeConfigError,
+): string {
   switch (error.code) {
     case "MISSING_REQUIRED":
       return `Missing required environment variable: ${error.variable} (required in ${error.environment} environment)`;
+
     case "INVALID_DATABASE_URL":
       return `Invalid DATABASE_URL: ${error.reason} (environment: ${error.environment})`;
+
     case "INVALID_NUMERIC":
       return `Invalid ${error.variable}: ${error.reason} (environment: ${error.environment})`;
+
     case "INVALID_ENVIRONMENT":
       return `Invalid environment value for ${error.variable}: "${error.environment}"`;
+
     case "MISSING_RUNTIME_ENVIRONMENT":
       return "Runtime environment not configured. Set STELLARCORE_ENVIRONMENT (production|preview|development|test|ci) or run on Vercel with VERCEL_ENV, or run under NODE_ENV=test.";
+
     case "RUNTIME_ENVIRONMENT_INVALID":
       return `Invalid runtime environment: "${error.environment}". Allowed: production, preview, development, test, ci`;
+
     case "CRON_SECRET_REQUIRED_IN_PRODUCTION":
       return "CRON_SECRET is required in production environment";
+
     default:
       return "Runtime configuration validation failed";
   }
@@ -346,25 +491,35 @@ export function createTestRuntimeConfig(
   const baseConfig: RuntimeConfig = Object.freeze({
     environment: "test",
     environmentSource: "test-default",
-    databaseUrl: "postgresql://test:test@localhost:5432/test",
+    databaseUrl:
+      "postgresql://test:test@localhost:5432/test",
     cronSecret: "test-secret",
-    rateFreshnessThresholdMs: DEFAULTS.RATE_FRESHNESS_THRESHOLD_MS,
-    minFreshSources: DEFAULTS.MIN_FRESH_SOURCES,
+    rateFreshnessThresholdMs:
+      DEFAULTS.RATE_FRESHNESS_THRESHOLD_MS,
+    minFreshSources:
+      DEFAULTS.MIN_FRESH_SOURCES,
   });
 
-  return Object.freeze({ ...baseConfig, ...overrides });
+  return Object.freeze({
+    ...baseConfig,
+    ...overrides,
+  });
 }
 
 /**
  * Type guard for checking if a RuntimeConfigResult is successful.
  */
-export function isRuntimeConfigOk(result: RuntimeConfigResult): result is { ok: true; config: RuntimeConfig } {
+export function isRuntimeConfigOk(
+  result: RuntimeConfigResult,
+): result is { ok: true; config: RuntimeConfig } {
   return result.ok === true;
 }
 
 /**
  * Type guard for checking if a RuntimeConfigResult is an error.
  */
-export function isRuntimeConfigError(result: RuntimeConfigResult): result is RuntimeConfigError {
+export function isRuntimeConfigError(
+  result: RuntimeConfigResult,
+): result is RuntimeConfigError {
   return result.ok === false;
 }
