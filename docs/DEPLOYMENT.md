@@ -15,7 +15,37 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
-| `STALE_EVIDENCE_DIRECTORY` | Optional | No | Writable directory for bounded last-known-good public evidence snapshots. Defaults to the Node.js temporary directory. A local temporary directory is per-instance and disposable; a shared persistent mount is needed to share fallback state across instances. |
+| `STELLARCORE_ENVIRONMENT` | Set to `production` | No | Explicit runtime environment identity checked against the database's durable stamp before any evidence access (#143). On Vercel, `VERCEL_ENV` is used automatically when this is absent. |
+| `STELLARCORE_STAMP_ENVIRONMENT` | Migration workflow only | No | Stamp target for `npm run stamp:environment`; names the identity written into the database's `database_environment` table. |
+
+## Environment isolation (#143)
+
+Every runtime declares which environment it runs in (`STELLARCORE_ENVIRONMENT`
+or Vercel's `VERCEL_ENV`; `NODE_ENV=test` resolves to `test` in test runs), and
+every database carries a durable identity stamp in its
+`database_environment` table (created by migration
+`20260929000000_add_database_environment`). Before the first evidence read or
+write, the application verifies the two identities match and **fails closed**
+on any mismatch, missing stamp, or missing runtime identity. There is no
+fallback and no hostname inference: a preview deployment pointed at a
+production-marked database cannot read or mutate a single evidence row, and
+production cannot silently fall back to another environment.
+
+Rules for operators:
+
+- Stamp each database exactly once, immediately after its migrations, using
+  the protected migration workflow (which runs `npm run stamp:environment`
+  with `STELLARCORE_STAMP_ENVIRONMENT=production` after
+  `prisma migrate deploy`). The stamp script is idempotent for the same
+  identity and refuses to rewrite a different existing identity.
+- Application runtimes hold read privilege on the stamp only; the migration
+  revokes write access from `PUBLIC`, so a compromised runtime cannot re-label
+  its database to make itself match.
+- Allowed pairings are equality only: production→production, preview→preview,
+  development→development, test→test, ci→ci. Test and CI runtimes additionally
+  can never hold evidence data, regardless of stamp.
+- Mismatch errors are bounded and secret-free: they name the two identities
+  and never echo database URLs, credentials, or driver messages.
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
@@ -32,8 +62,9 @@ back to PostgreSQL reads.
 
 1. Configure the server-only runtime `DATABASE_URL` for the production deployment, and separately configure the protected GitHub Actions `production` environment's direct Prisma Postgres credential as its `DATABASE_URL` secret.
 2. From a protected CI/release step, run `npx prisma migrate deploy` once against that environment.
-3. Confirm `npx prisma migrate status` is current.
-4. Deploy the application with `npm run build`.
+3. Stamp the database identity with `npm run stamp:environment` (automated by the migration workflow's dedicated step, #143).
+4. Confirm `npx prisma migrate status` is current.
+5. Deploy the application with `npm run build`.
 
 Do not run `prisma migrate dev`, `prisma db push`, reset commands, or `migrate deploy` from ordinary Vercel builds. Keeping migrations outside the build prevents preview deployments from mutating a shared production database.
 
@@ -158,6 +189,30 @@ The locally verified run took about ten seconds. At the current reviewed scope o
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
 4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
 5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
+
+## Release SBOM and provenance (#142)
+
+Production releases carry a reproducible software-supply-chain record:
+
+- `npm run release:manifest` emits `dist-release/stellarcore-sbom.json`
+  (CycloneDX 1.5 SBOM of the locked **production** dependency graph) and
+  `dist-release/stellarcore-provenance.json` (commit SHA, workflow run
+  reference, invocation id, environment identity, Node/npm versions, and the
+  SHA-256 digest of the `package-lock.json` used for installation).
+- `.github/workflows/deploy-production.yml` generates the manifest from the
+  checked-out revision in CI (never handwritten), wraps both files in a
+  verifiable attestation via `actions/attest-build-provenance` (OIDC-signed,
+  `id-token: write` + `attestations: write`), verifies them with
+  `npm run verify:release`, and uploads them with 90-day retention.
+- `npm run verify:release` fails the release on: missing/malformed artifacts,
+  lockfile digest drift, SBOM digest mismatch against provenance, or secret
+  material (connection strings, bearer tokens, secret-shaped assignments)
+  appearing in the artifacts. Verification failures are never ignored on
+  release paths.
+- Local verification: run `npm run release:manifest` then
+  `npm run verify:release`; both are offline. Artifacts contain only paths,
+  digests, versions, and identity strings — never environment secrets or
+  database contents.
 
 ## Rollback
 

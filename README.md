@@ -483,6 +483,15 @@ prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
 
+SEP-10 contract notes: the signer callback must return the challenge it was
+given with signatures added; StellarCore compares the SDK transaction hash of
+the returned body with the original challenge before any token POST. When a
+client domain was requested, the returned token's `client_domain` claim must be
+present, well formed, and equal to it; otherwise no such claim is required.
+Token claims are decoded, not cryptographically verified: decoding is not JWT
+signature verification, and the SEP-10 signing key is not assumed to be the JWT
+verification key.
+
 ## Production deployment
 
 StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma ORM. The full staged deployment procedure is in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); it does not provision or deploy infrastructure.

@@ -12,6 +12,7 @@ with your pull request.
 ### Added
 
 - GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
+- Exact asset identity enforcement and exact decimal arithmetic validation for normalized SEP-38 rate observations (#164).
 
 ## [Prior work] — 2026-09-25
 
