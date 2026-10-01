@@ -1,4 +1,13 @@
-import type { MigrationRecord } from "./core.ts";
+export type MigrationRecord = Readonly<{
+  id: string;
+  checksum: string;
+  finishedAt: Date | null;
+  migrationName: string;
+  logs: string;
+  rolledBackAt: Date | null;
+  startedAt: Date;
+  appliedStepsCount: number;
+}>;
 
 export type RehearsalScenarioId =
   | "pre-schema-failure"
