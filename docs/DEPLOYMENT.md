@@ -49,6 +49,26 @@ Rules for operators:
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
+### Database TLS policy
+
+Production PostgreSQL connections are forced through certificate-verified TLS
+before the PrismaPg adapter is created. Keep TLS query parameters out of
+`DATABASE_URL`; the application strips them before handing the connection
+string to `pg` and supplies its own `ssl.rejectUnauthorized=true` policy.
+Production rejects plaintext and verification-bypass URL modes.
+
+Providers using public certificate roots require no extra setting. For private
+or provider-specific roots, configure either server-only
+`STELLARCORE_DB_CA` or `STELLARCORE_DB_CA_PATH`. A configured CA path that
+cannot be read fails production startup rather than silently falling back.
+
+The incident-only `STELLARCORE_DB_TLS_EMERGENCY_BYPASS=allow-unverified`
+permits encrypted but unverified TLS, never plaintext. It is production-only,
+emits a bounded warning without credentials or certificate material, and must
+be removed after the incident. See
+[database-tls-policy.md](database-tls-policy.md).
+
+
 ## Runtime configuration fingerprinting (#214)
 
 Production releases bind the checked-in reviewed configuration and selected
