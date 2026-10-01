@@ -4,7 +4,6 @@ import test from "node:test";
 const TEST_ENV = process.env as Record<string, string | undefined>;
 
 import {
-  assertEvidenceCapability,
   EnvironmentIsolationError,
   isEnvironmentPairingAllowed,
   resolveRuntimeEnvironment,
@@ -97,12 +96,11 @@ test("runtime identity resolution is explicit-only and never hostname-derived", 
   );
 });
 
-test("test and ci runtimes can never hold evidence data", () => {
-  assert.throws(() => assertEvidenceCapability("test"), EnvironmentIsolationError);
-  assert.throws(() => assertEvidenceCapability("ci"), EnvironmentIsolationError);
-  for (const capable of ["production", "preview", "development"] as const) {
-    assert.doesNotThrow(() => assertEvidenceCapability(capable));
-  }
+test("test and ci runtimes are allowed only with matching isolated database identities", () => {
+  assert.equal(isEnvironmentPairingAllowed("test", "test"), true);
+  assert.equal(isEnvironmentPairingAllowed("ci", "ci"), true);
+  assert.equal(isEnvironmentPairingAllowed("test", "production"), false);
+  assert.equal(isEnvironmentPairingAllowed("ci", "production"), false);
 });
 
 test("guard failures are bounded and secret-free even when URLs leak into inputs", () => {
