@@ -1,4 +1,5 @@
 import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
+import { staleEvidenceHeaders } from "@/lib/api/staleEvidence";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,6 @@ export async function GET(request: Request): Promise<Response> {
 
   return Response.json(result.body, {
     status: result.status,
-    headers: { "Cache-Control": "no-store" },
+    headers: staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
   });
 }

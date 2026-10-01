@@ -71,5 +71,6 @@ export type CorridorRateHistoryReadResult =
         | "CORRIDOR_NOT_FOUND"
         | "INVALID_EVALUATION_TIME"
         | "INVALID_WINDOW"
-        | "READ_FAILURE";
+        | "READ_FAILURE"
+        | "DATABASE_UNAVAILABLE";
     }>;

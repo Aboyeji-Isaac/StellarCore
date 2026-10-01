@@ -49,6 +49,15 @@ Rules for operators:
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
 
+The read-only rates, rate-history, and reputation APIs can serve verified public
+snapshots for at most five minutes after a recognized transient database
+connectivity failure. These responses carry explicit stale metadata and remain
+`Cache-Control: no-store`. Snapshots preserve the evidence timestamps and are
+not inputs to rate or reputation calculations. If the snapshot directory is
+unavailable or a snapshot fails integrity, schema, provenance, or expiry checks,
+the endpoint returns its normal safe 500 response. Recovery switches directly
+back to PostgreSQL reads.
+
 ## Migration strategy
 
 1. Configure the server-only runtime `DATABASE_URL` for the production deployment, and separately configure the protected GitHub Actions `production` environment's direct Prisma Postgres credential as its `DATABASE_URL` secret.

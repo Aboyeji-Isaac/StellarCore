@@ -1,6 +1,7 @@
 import { computeFreshMedian } from "@/lib/rates/median";
 import { selectLatestPerAnchor } from "@/lib/rates/latestRateReadModel";
 import { PRISMA_RATE_HISTORY_REPOSITORY } from "@/lib/rates/rateHistoryRepository";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
 import type {
   CorridorRateHistoryPoint,
   CorridorRateHistoryReadResult,
@@ -104,8 +105,8 @@ export async function readCorridorRateHistory(
       windowDays: days,
       points: Object.freeze(points),
     });
-  } catch {
-    return failure(corridorSlug, "READ_FAILURE");
+  } catch (error) {
+    return failure(corridorSlug, isTransientDatabaseFailure(error) ? "DATABASE_UNAVAILABLE" : "READ_FAILURE");
   }
 }
 
@@ -154,7 +155,7 @@ function formatTimestamp(value: Date | string): string {
 
 function failure(
   corridorSlug: string,
-  code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "INVALID_WINDOW" | "READ_FAILURE",
+  code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "INVALID_WINDOW" | "READ_FAILURE" | "DATABASE_UNAVAILABLE",
 ): CorridorRateHistoryReadResult {
   return Object.freeze({ ok: false, corridorSlug, code });
 }
