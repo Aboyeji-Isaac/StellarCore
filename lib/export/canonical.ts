@@ -15,6 +15,7 @@ export function computeRootHash(
     byteLength: number;
     recordCount: number;
   }>[],
+  provenance: unknown,
 ): string {
   const normalized = [...entries]
     .sort((a, b) => a.path.localeCompare(b.path))
@@ -24,7 +25,12 @@ export function computeRootHash(
       byteLength,
       recordCount,
     }));
-  return sha256(canonicalStringify(normalized));
+  return sha256(
+    canonicalStringify({
+      provenance,
+      members: normalized,
+    }),
+  );
 }
 
 function canonicalize(value: unknown): unknown {
