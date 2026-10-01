@@ -11,11 +11,18 @@ test("release manifest derives SBOM components from the locked production depend
   const manifest = generateReleaseManifest(manifestInput());
   const names = manifest.sbom.components.map((component) => component.name);
 
-  // Production dependencies present in the lockfile must be listed…
+  // Direct production dependencies must be listed.
   assert.ok(names.includes("next"));
   assert.ok(names.includes("@prisma/client"));
   assert.ok(names.includes("smol-toml"));
-  // …and devDependencies must never be.
+
+  // The SBOM must include the transitive production graph, not only the root
+  // dependency list.
+  const lockfile = JSON.parse(readLockfile());
+  const directCount = Object.keys(lockfile.packages[""].dependencies ?? {}).length;
+  assert.ok(manifest.sbom.components.length > directCount);
+
+  // Dev-only packages must never be emitted.
   assert.equal(names.includes("typescript"), false);
   assert.equal(names.includes("eslint"), false);
   assert.equal(names.includes("tsx"), false);
