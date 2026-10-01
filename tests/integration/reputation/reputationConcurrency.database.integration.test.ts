@@ -50,7 +50,7 @@ const REPUTATION_UPSERT_SQL = `
         computed_at = EXCLUDED.computed_at
       WHERE reputation_scores.computed_at < EXCLUDED.computed_at
          OR (reputation_scores.computed_at = EXCLUDED.computed_at AND reputation_scores.anchor_id > EXCLUDED.anchor_id)
-    RETURNING id, computed_at
+    RETURNING id, anchor_id, computed_at
   ),
   existing AS (
     SELECT id, computed_at, anchor_id
@@ -61,7 +61,10 @@ const REPUTATION_UPSERT_SQL = `
     COALESCE(u.id, e.id) AS id,
     COALESCE(u.computed_at, e.computed_at) AS computed_at,
     COALESCE(u.anchor_id, e.anchor_id) AS anchor_id,
-    CASE WHEN u.id IS NOT NULL THEN 'INSERTED_OR_UPDATED' ELSE 'STALE' END AS result
+    CASE
+      WHEN u.id IS NOT NULL AND u.computed_at = $13::timestamptz THEN 'INSERTED_OR_UPDATED'
+      ELSE 'STALE'
+    END AS result
   FROM upserted u
   FULL JOIN existing e ON u.anchor_id = e.anchor_id
 `;
@@ -164,7 +167,7 @@ test("concurrent upsertScore calls protect newer evaluation from older one", {
       REPUTATION_UPSERT_SQL,
       anchor.id,
       95,
-      "GREEN",
+      "green",
       0.9,
       0.9,
       0.9,
@@ -173,7 +176,7 @@ test("concurrent upsertScore calls protect newer evaluation from older one", {
       0.01,
       0.02,
       30,
-      "OK",
+      "ok",
       olderComputedAt,
     );
 
@@ -186,7 +189,7 @@ test("concurrent upsertScore calls protect newer evaluation from older one", {
       REPUTATION_UPSERT_SQL,
       anchor.id,
       85,
-      "AMBER",
+      "amber",
       0.8,
       0.8,
       0.8,
@@ -195,7 +198,7 @@ test("concurrent upsertScore calls protect newer evaluation from older one", {
       0.015,
       0.025,
       30,
-      "OK",
+      "ok",
       newerComputedAt,
     );
 
@@ -260,7 +263,7 @@ test("concurrent upsertScore calls with equal computedAt resolve deterministical
         REPUTATION_UPSERT_SQL,
         anchor.id,
         95,
-        "GREEN",
+        "green",
         0.9,
         0.9,
         0.9,
@@ -269,7 +272,7 @@ test("concurrent upsertScore calls with equal computedAt resolve deterministical
         0.01,
         0.02,
         30,
-        "OK",
+        "ok",
         new Date(sharedComputedAt),
       ),
       db2.$queryRawUnsafe<
@@ -278,7 +281,7 @@ test("concurrent upsertScore calls with equal computedAt resolve deterministical
         REPUTATION_UPSERT_SQL,
         anchor.id,
         85,
-        "AMBER",
+        "amber",
         0.8,
         0.8,
         0.8,
@@ -287,7 +290,7 @@ test("concurrent upsertScore calls with equal computedAt resolve deterministical
         0.015,
         0.025,
         30,
-        "OK",
+        "ok",
         new Date(sharedComputedAt),
       ),
     ]);
@@ -346,7 +349,7 @@ test("concurrent upsertScore from separate database connections respects guard",
       REPUTATION_UPSERT_SQL,
       anchor.id,
       95,
-      "GREEN",
+      "green",
       0.9,
       0.9,
       0.9,
@@ -355,7 +358,7 @@ test("concurrent upsertScore from separate database connections respects guard",
       0.01,
       0.02,
       30,
-      "OK",
+      "ok",
       olderComputedAt,
     );
 
@@ -368,7 +371,7 @@ test("concurrent upsertScore from separate database connections respects guard",
       REPUTATION_UPSERT_SQL,
       anchor.id,
       85,
-      "AMBER",
+      "amber",
       0.8,
       0.8,
       0.8,
@@ -377,7 +380,7 @@ test("concurrent upsertScore from separate database connections respects guard",
       0.015,
       0.025,
       30,
-      "OK",
+      "ok",
       newerComputedAt,
     );
 

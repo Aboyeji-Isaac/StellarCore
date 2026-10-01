@@ -10,6 +10,7 @@ type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
 // Ordering rule: (computedAt ASC, anchorId ASC) - lexicographic tie-breaker
 // Only replace if incoming is strictly newer per this ordering.
+// Uses ON CONFLICT with WHERE clause for atomic compare-and-swap.
 const REPUTATION_UPSERT_SQL = `
   WITH incoming AS (
     SELECT
@@ -63,7 +64,10 @@ const REPUTATION_UPSERT_SQL = `
     COALESCE(u.id, e.id) AS id,
     COALESCE(u.computed_at, e.computed_at) AS computed_at,
     COALESCE(u.anchor_id, e.anchor_id) AS anchor_id,
-    CASE WHEN u.id IS NOT NULL THEN 'INSERTED_OR_UPDATED' ELSE 'STALE' END AS result
+    CASE
+      WHEN u.id IS NOT NULL AND u.computed_at = $13::timestamptz THEN 'INSERTED_OR_UPDATED'
+      ELSE 'STALE'
+    END AS result
   FROM upserted u
   FULL JOIN existing e ON u.anchor_id = e.anchor_id
 `;
