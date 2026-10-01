@@ -10,7 +10,7 @@ with your pull request.
 ## [Unreleased]
 
 ### Added
-
+- Database workload bulkheads (public / scheduled / maintenance) partition the connection budget so a saturating public-read burst cannot starve scheduled evidence work, with per-class acquisition/statement budgets and saturation tests (#199).
 - Isolated dependency-install reproducibility verification with bounded drift reports and toolchain capture (#237).
 - Bounded zero-downtime cron secret rotation with deterministic previous-secret revocation (#184).
 - Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).

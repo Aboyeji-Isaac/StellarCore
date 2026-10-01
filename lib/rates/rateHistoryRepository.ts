@@ -1,3 +1,4 @@
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { Prisma } from "@/app/generated/prisma/client";
 import type {
   RateHistoryRepository,
@@ -41,7 +42,7 @@ export function rateHistoryQuery(
 
 export const PRISMA_RATE_HISTORY_REPOSITORY: RateHistoryRepository = Object.freeze({
   async findCorridorBySlug(slug) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     return db.corridor.findUnique({
       where: { slug },
       select: {
@@ -56,7 +57,7 @@ export const PRISMA_RATE_HISTORY_REPOSITORY: RateHistoryRepository = Object.free
   },
 
   async findHistoryObservations(corridorId, fromDate, toDate) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const rows = await db.$queryRaw<PrismaRateHistoryRow[]>(
       rateHistoryQuery(corridorId, fromDate, toDate),
     );

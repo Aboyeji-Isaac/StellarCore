@@ -1,3 +1,4 @@
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { evaluateAnchorReputation } from "@/lib/reputation/engine";
 import type { ReputationEvaluationResult } from "@/types/reputation";
 
@@ -56,7 +57,7 @@ export async function evaluatePersistedAnchorReputations(
 }
 
 async function listPersistedAnchorSlugs(): Promise<readonly string[]> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(SCHEDULED_WORKLOAD);
   const anchors = await db.anchor.findMany({
     orderBy: { slug: "asc" },
     select: { slug: true },

@@ -1,3 +1,4 @@
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
 
 export type AnchorDirectoryRecord = Readonly<{
@@ -31,7 +32,7 @@ export type AnchorDirectoryRepository = Readonly<{
 
 export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly AnchorDirectoryRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const anchors = await db.anchor.findMany({
       orderBy: { slug: "asc" },
       select: {
@@ -55,7 +56,7 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   },
 
   async findBySlug(slug: string): Promise<AnchorDetailRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const anchor = await db.anchor.findUnique({
       where: { slug },
       select: {

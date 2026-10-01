@@ -1,3 +1,4 @@
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { Prisma } from "@/app/generated/prisma/client";
 import type {
   LatestRateRepository,
@@ -67,7 +68,7 @@ export function latestObservationsQuery(corridorId: string): Prisma.Sql {
 
 export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze({
   async findCorridorBySlug(slug) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     return db.corridor.findUnique({
       where: { slug },
       select: {
@@ -82,7 +83,7 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
   },
 
   async findLatestObservations(corridorId) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const rows = await db.$queryRaw<PrismaLatestRateRow[]>(latestObservationsQuery(corridorId));
 
     return Object.freeze(rows.map(toRepositoryObservation));

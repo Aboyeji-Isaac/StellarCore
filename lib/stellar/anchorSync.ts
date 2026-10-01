@@ -1,3 +1,4 @@
+import { getDbForWorkload, MAINTENANCE_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { AnchorStatus } from "@/app/generated/prisma/enums";
 import { ANCHOR_REGISTRY } from "@/constants/anchors";
 import {
@@ -62,7 +63,7 @@ export async function persistDiscoveredAnchor(
   anchor: DiscoveredAnchor,
   order: bigint,
 ): Promise<PersistedAnchor | null> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
   const affected = await db.$executeRaw`
     INSERT INTO anchors (slug, name, home_domain, toml_url, seps, is_transfer_capable, status, last_sync_order)
     VALUES (${anchor.slug}, ${anchor.name}, ${anchor.homeDomain}, ${anchor.tomlUrl}, ${[...anchor.seps]}, ${anchor.isTransferCapable}, 'LIVE'::anchor_status, ${order})
@@ -77,13 +78,13 @@ export async function persistDiscoveredAnchor(
 }
 
 export async function allocateAnchorSyncOrder(): Promise<bigint> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
   const rows = await db.$queryRaw<[{ order: bigint }]>`SELECT nextval('anchor_sync_order_seq') AS order`;
   return rows[0]!.order;
 }
 
 export async function markAnchorDownIfExists(slug: string, order: bigint): Promise<"MARKED_DOWN" | "NOT_FOUND" | "STALE"> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
   const result = await db.anchor.updateMany({
     where: { slug, lastSyncOrder: { lt: order } },
     data: { status: AnchorStatus.DOWN, lastSyncOrder: order },

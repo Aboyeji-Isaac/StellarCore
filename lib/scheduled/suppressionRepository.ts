@@ -1,3 +1,4 @@
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import {
   advancePermanentSuppression,
   reactivatePermanentSuppression,
@@ -21,7 +22,7 @@ export type SuppressionRepository = Readonly<{
 
 export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freeze({
   async listSuppressed() {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(SCHEDULED_WORKLOAD);
     const rows = await db.scheduledSourceSuppression.findMany({
       where: { state: "SUPPRESSED" },
       orderBy: [{ anchorSlug: "asc" }, { corridorSlug: "asc" }],
@@ -31,7 +32,7 @@ export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freez
   },
 
   async recordDeterministicFailure(input) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(SCHEDULED_WORKLOAD);
 
     return db.$transaction(async (tx) => {
       const existing = await tx.scheduledSourceSuppression.findUnique({
@@ -91,7 +92,7 @@ export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freez
   },
 
   async reactivate(input) {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(SCHEDULED_WORKLOAD);
     const existing = await db.scheduledSourceSuppression.findUnique({
       where: {
         anchorSlug_corridorSlug: {

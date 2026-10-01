@@ -1,3 +1,4 @@
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
 
 export type CorridorDirectoryRecord = Readonly<{
@@ -34,7 +35,7 @@ export type CorridorDetailRepository = Readonly<{
 
 export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly CorridorDirectoryRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const corridors = await db.corridor.findMany({
       orderBy: { slug: "asc" },
       select: {
@@ -58,7 +59,7 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
   },
 
   async findBySlug(slug: string): Promise<CorridorDetailRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+    const db = getDbForWorkload(PUBLIC_WORKLOAD);
     const corridor = await db.corridor.findUnique({
       where: { slug },
       select: {

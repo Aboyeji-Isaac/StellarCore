@@ -538,6 +538,7 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 - Synchronize the reviewed registry through the manual **Bootstrap production registry** GitHub Actions workflow (`.github/workflows/bootstrap-production-registry.yml`, `workflow_dispatch` only), which runs `npm run bootstrap:registry` once after migration and before the first refresh; it is idempotent and may be re-run after a reviewed registry change. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 - The Hobby-compatible Vercel Cron calls the authenticated refresh route daily at `0 0 * * *`.
 - Keep production database and cron secrets out of preview deployments until isolated preview infrastructure exists.
+- Database connections are partitioned into per-workload bulkheads (public / scheduled / maintenance); see [docs/workload-isolation.md](docs/workload-isolation.md).
 
 ---
 

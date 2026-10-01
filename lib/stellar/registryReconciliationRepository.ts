@@ -1,3 +1,4 @@
+import { getDbForWorkload, MAINTENANCE_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type { PersistedReconciliationState } from "@/types/registryReconciliation";
 
 /**
@@ -13,7 +14,7 @@ export type RegistryReconciliationRepository = Readonly<{
 export const PRISMA_REGISTRY_RECONCILIATION_REPOSITORY =
   Object.freeze<RegistryReconciliationRepository>({
     async loadPersistedState(): Promise<PersistedReconciliationState> {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
 
       const [anchors, corridors, associations] = await Promise.all([
         db.anchor.findMany({

@@ -1,3 +1,4 @@
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { Prisma } from "@/app/generated/prisma/client";
 import {
   readInReputationSnapshot,
@@ -40,8 +41,9 @@ export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
 
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
-    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    const { ensureDatabaseEnvironment } = await import("@/lib/dbClient");
     await ensureDatabaseEnvironment();
+    const db = getDbForWorkload(SCHEDULED_WORKLOAD);
 
     const snapshotResult = await readInReputationSnapshot(db, (tx, identity) =>
       readEvidenceInSnapshot(tx, identity, anchorSlug, outcomeWindowStart),
@@ -52,8 +54,9 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
   },
 
   async upsertScore(input: ReputationPersistenceInput): Promise<PersistedReputationScore> {
-    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    const { ensureDatabaseEnvironment } = await import("@/lib/dbClient");
     await ensureDatabaseEnvironment();
+    const db = getDbForWorkload(SCHEDULED_WORKLOAD);
 
     const { calculation } = input;
     const data = {

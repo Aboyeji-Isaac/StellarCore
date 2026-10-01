@@ -1,3 +1,4 @@
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   NormalizedRateObservation,
   PersistedRateSnapshot,
@@ -28,7 +29,7 @@ async function evidenceDb(): Promise<
 > {
   const environment = await assertRateSnapshotEnvironment();
   if (!environment.ok) return Object.freeze({ ok: false });
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(SCHEDULED_WORKLOAD);
   return Object.freeze({ ok: true, db });
 }
 

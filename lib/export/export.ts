@@ -1,3 +1,4 @@
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { createHash } from "node:crypto";
 import { mkdir, open, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -142,7 +143,7 @@ export async function exportEvidence(
 export function createPrismaExportDependencies(): ExportDependencies {
   return Object.freeze({
     async queryRegistry(selection): Promise<ExportRegistry> {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(PUBLIC_WORKLOAD);
 
       const anchorWhere: Prisma.AnchorWhereInput = {};
       if (selection.anchorSlugs?.length) {
@@ -234,7 +235,7 @@ export function createPrismaExportDependencies(): ExportDependencies {
     },
 
     async *streamRateSnapshots(selection) {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(PUBLIC_WORKLOAD);
       const where: Prisma.RateSnapshotWhereInput = {
         capturedAt: {
           gte: new Date(selection.timeRange.start),
@@ -287,7 +288,7 @@ export function createPrismaExportDependencies(): ExportDependencies {
     },
 
     async *streamTransferOutcomes(selection) {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(PUBLIC_WORKLOAD);
       const where: Prisma.TransferOutcomeWhereInput = {
         recordedAt: {
           gte: new Date(selection.timeRange.start),
@@ -340,7 +341,7 @@ export function createPrismaExportDependencies(): ExportDependencies {
     },
 
     async *streamReputationScores(selection) {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(PUBLIC_WORKLOAD);
       const where: Prisma.ReputationScoreWhereInput = {
         computedAt: {
           gte: new Date(selection.timeRange.start),

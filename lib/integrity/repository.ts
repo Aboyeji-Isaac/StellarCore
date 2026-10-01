@@ -1,3 +1,4 @@
+import { getDbForWorkload, MAINTENANCE_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   EvidenceIntegrityAuditDependencies,
   EvidenceIntegrityAuditLimits,
@@ -16,7 +17,7 @@ export const PRISMA_EVIDENCE_INTEGRITY_REPOSITORY: EvidenceIntegrityAuditDepende
     async readSnapshot(
       limits: EvidenceIntegrityAuditLimits,
     ): Promise<EvidenceIntegrityAuditReadResult> {
-      const { db } = await import("@/lib/dbClient");
+      const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
       const take = limits.maxRowsPerHighVolumeTable + 1;
 
       const [
