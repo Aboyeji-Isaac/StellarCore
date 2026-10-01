@@ -26,13 +26,6 @@ export const DATABASE_ENVIRONMENT_IDS = [
 
 export type DatabaseEnvironmentId = (typeof DATABASE_ENVIRONMENT_IDS)[number];
 
-/** Environments whose runtimes may read/write evidence data. */
-const EVIDENCE_CAPABLE_ENVIRONMENTS = new Set<DatabaseEnvironmentId>([
-  "production",
-  "preview",
-  "development",
-]);
-
 export type RuntimeEnvironmentSource =
   | "explicit-env"
   | "vercel-env"
@@ -47,8 +40,7 @@ export type EnvironmentGuardError =
         | "RUNTIME_ENVIRONMENT_INVALID"
         | "DATABASE_STAMP_MISSING"
         | "DATABASE_STAMP_INVALID"
-        | "ENVIRONMENT_MISMATCH"
-        | "ENVIRONMENT_CAPABILITY_DENIED";
+        | "ENVIRONMENT_MISMATCH";
       runtimeEnvironment: string | null;
       databaseEnvironment: string | null;
     }>;
@@ -106,9 +98,8 @@ export function isDatabaseEnvironmentId(value: string): value is DatabaseEnviron
 /**
  * The compatibility matrix. Returns true when a runtime of the given
  * environment may connect to a database stamped with the database environment.
- * The rule is equality: a runtime may only use a database stamped for the
- * same environment. Test/CI runtimes additionally must never see anything but
- * isolated synthetic stores, which their stamps guarantee.
+ * The rule is strict equality: production uses production, preview uses preview,
+ * and test/CI use their own isolated synthetic databases.
  */
 export function isEnvironmentPairingAllowed(
   runtime: DatabaseEnvironmentId,
@@ -176,7 +167,7 @@ export function assertEvidenceCapability(
 export class EnvironmentIsolationError extends Error {
   readonly code: Extract<
     Extract<EnvironmentGuardError, { ok: false }>["code"],
-    "ENVIRONMENT_MISMATCH" | "DATABASE_STAMP_MISSING" | "DATABASE_STAMP_INVALID" | "RUNTIME_ENVIRONMENT_MISSING" | "RUNTIME_ENVIRONMENT_INVALID" | "ENVIRONMENT_CAPABILITY_DENIED"
+    "ENVIRONMENT_MISMATCH" | "DATABASE_STAMP_MISSING" | "DATABASE_STAMP_INVALID" | "RUNTIME_ENVIRONMENT_MISSING" | "RUNTIME_ENVIRONMENT_INVALID"
   >;
   readonly runtimeEnvironment: string | null;
   readonly databaseEnvironment: string | null;
