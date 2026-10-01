@@ -20,21 +20,19 @@ export async function verifyExportPackage(
   try {
     const manifest = await readManifest(join(packageDir, "manifest.json"));
     if (manifest.version !== EVIDENCE_EXPORT_VERSION) {
-      return Object.freeze({
-        ok: false,
-        code: "UNSUPPORTED_VERSION",
-        message: `Unsupported evidence export version: ${manifest.version}`,
-      });
+      return verificationFailure(
+        "UNSUPPORTED_VERSION",
+        `Unsupported evidence export version: ${manifest.version}`,
+      );
     }
 
     const entries = validateMemberSet(manifest.members);
     const expectedRoot = computeRootHash(entries, manifest.provenance);
     if (expectedRoot !== manifest.rootSha256) {
-      return Object.freeze({
-        ok: false,
-        code: "CORRUPTED_DATA",
-        message: "Manifest root hash does not match provenance/member descriptors",
-      });
+      return verificationFailure(
+        "CORRUPTED_DATA",
+        "Manifest root hash does not match provenance/member descriptors",
+      );
     }
 
     for (const entry of entries) {
@@ -44,11 +42,10 @@ export async function verifyExportPackage(
         actual.sha256 !== entry.sha256 ||
         actual.byteLength !== entry.byteLength
       ) {
-        return Object.freeze({
-          ok: false,
-          code: "CORRUPTED_DATA",
-          message: `Member integrity mismatch: ${entry.path}`,
-        });
+        return verificationFailure(
+          "CORRUPTED_DATA",
+          `Member integrity mismatch: ${entry.path}`,
+        );
       }
 
       const recordCount =
@@ -57,11 +54,10 @@ export async function verifyExportPackage(
           : await verifyNdjson(path);
 
       if (recordCount !== entry.recordCount) {
-        return Object.freeze({
-          ok: false,
-          code: "CORRUPTED_DATA",
-          message: `Member record count mismatch: ${entry.path}`,
-        });
+        return verificationFailure(
+          "CORRUPTED_DATA",
+          `Member record count mismatch: ${entry.path}`,
+        );
       }
     }
 
@@ -71,31 +67,27 @@ export async function verifyExportPackage(
       error instanceof Error &&
       (error as NodeJS.ErrnoException).code === "ENOENT"
     ) {
-      return Object.freeze({
-        ok: false,
-        code: "MISSING_MEMBER",
-        message: "Export package is missing a required member",
-      });
+      return verificationFailure(
+        "MISSING_MEMBER",
+        "Export package is missing a required member",
+      );
     }
     if (error instanceof Error && error.message === "INVALID_SCHEMA") {
-      return Object.freeze({
-        ok: false,
-        code: "INVALID_SCHEMA",
-        message: "Export package schema is invalid",
-      });
+      return verificationFailure(
+        "INVALID_SCHEMA",
+        "Export package schema is invalid",
+      );
     }
     if (error instanceof Error && error.message.startsWith("SECRET_DETECTED")) {
-      return Object.freeze({
-        ok: false,
-        code: "SECRET_DETECTED",
-        message: "Export package contains sensitive data",
-      });
+      return verificationFailure(
+        "SECRET_DETECTED",
+        "Export package contains sensitive data",
+      );
     }
-    return Object.freeze({
-      ok: false,
-      code: "CORRUPTED_DATA",
-      message: "Export package verification failed",
-    });
+    return verificationFailure(
+      "CORRUPTED_DATA",
+      "Export package verification failed",
+    );
   }
 }
 
@@ -213,4 +205,12 @@ async function verifyNdjson(path: string): Promise<number> {
   }
 
   return count;
+}
+
+
+function verificationFailure(
+  code: Extract<VerificationResult, { ok: false }>["code"],
+  message: string,
+): VerificationResult {
+  return Object.freeze({ ok: false as const, code, message });
 }
