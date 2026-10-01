@@ -31,16 +31,26 @@ export interface RetryContext {
   policy: RetryPolicy;
 }
 
-export function calculateDelay(context: RetryContext): number {
+export function calculateDelay(context: RetryContext, remainingBudgetMs?: number): number {
   const { attempt, policy } = context;
   const exponentialDelay = policy.baseDelayMs * Math.pow(2, attempt - 1);
   const cappedDelay = Math.min(exponentialDelay, policy.maxDelayMs);
   const jitter = cappedDelay * Math.random();
-  return Math.floor(cappedDelay / 2 + jitter);
+  let delay = Math.floor(cappedDelay / 2 + jitter);
+
+  if (remainingBudgetMs !== undefined && remainingBudgetMs > 0) {
+    delay = Math.min(delay, remainingBudgetMs);
+  }
+
+  return delay;
 }
 
 export function isDeadlineExceeded(context: RetryContext): boolean {
   return Date.now() >= context.deadline;
+}
+
+export function getRemainingBudgetMs(deadline: number): number {
+  return deadline - Date.now();
 }
 
 export class RetryExhaustedError extends Error {
@@ -49,9 +59,7 @@ export class RetryExhaustedError extends Error {
     public readonly lastError: Error,
     public readonly deadlineMs: number,
   ) {
-    super(
-      `Transaction retry exhausted after ${attempts} attempts within ${deadlineMs}ms: ${lastError.message}`,
-    );
+    super(`Transaction retry exhausted after ${attempts} attempts within ${deadlineMs}ms`);
     this.name = "RetryExhaustedError";
   }
 }
@@ -60,15 +68,35 @@ export class NonRetryableError extends Error {
   constructor(
     public readonly originalError: Error,
   ) {
-    super(`Non-retryable error: ${originalError.message}`);
+    super("Non-retryable database error");
     this.name = "NonRetryableError";
   }
 }
 
+/**
+ * Options for transaction retry behavior.
+ *
+ * IMPORTANT: The callback passed to `withTransactionRetry` MUST be idempotent
+ * with respect to the database transaction. The retry helper will re-execute
+ * the callback on retryable failures (P2034 serialization/deadlock errors).
+ *
+ * Callers MUST ensure:
+ * - The callback performs ALL database writes within a single Prisma transaction
+ *   (via `prisma.$transaction(...)` or `tx` callback). Do not perform writes
+ *   outside the transaction.
+ * - The callback does NOT contain external side effects (HTTP calls, file writes,
+ *   message queue publishes, etc.) — these would execute multiple times on retry.
+ * - The callback is deterministic: given the same inputs, it produces the same
+ *   database effects.
+ *
+ * The `idempotencyKey` parameter has been intentionally removed. A real
+ * distributed idempotency mechanism (e.g., using database advisory locks or a
+ * dedicated idempotency table) is out of scope for this retry helper and should
+ * be implemented at the application layer if needed.
+ */
 export interface TransactionRetryOptions {
   policy?: Partial<RetryPolicy>;
   onRetry?: (error: Error, attempt: number) => void;
-  idempotencyKey?: string;
   signal?: AbortSignal;
 }
 
@@ -125,7 +153,12 @@ export async function withTransactionRetry<T>(
 
       options.onRetry?.(lastError, attempt);
 
-      const delay = calculateDelay(context);
+      const remainingBudgetMs = getRemainingBudgetMs(deadline);
+      if (remainingBudgetMs <= 0) {
+        throw new RetryExhaustedError(attempt, lastError, policy.deadlineMs);
+      }
+
+      const delay = calculateDelay(context, remainingBudgetMs);
       await new Promise<void>((resolve, reject) => {
         const timeoutId = setTimeout(resolve, delay);
         signal.addEventListener("abort", () => {
@@ -135,34 +168,4 @@ export async function withTransactionRetry<T>(
       });
     }
   }
-}
-
-export function createIdempotentTransaction<T>(
-  key: string,
-  callback: (signal: AbortSignal) => Promise<T>,
-  options: TransactionRetryOptions = {},
-): () => Promise<T> {
-  let executed = false;
-  let result: T;
-  let error: Error | null = null;
-
-  return async () => {
-    if (executed) {
-      if (error) throw error;
-      return result;
-    }
-
-    try {
-      result = await withTransactionRetry(callback, {
-        ...options,
-        idempotencyKey: key,
-      });
-      executed = true;
-      return result;
-    } catch (e) {
-      error = e instanceof Error ? e : new Error(String(e));
-      executed = true;
-      throw error;
-    }
-  };
 }

@@ -10,7 +10,6 @@ import {
   withTransactionRetry,
   RetryExhaustedError,
   NonRetryableError,
-  createIdempotentTransaction,
   DEFAULT_RETRY_POLICY,
 } from "@/lib/db/retry";
 
@@ -161,6 +160,7 @@ test("withTransactionRetry throws RetryExhaustedError after max attempts", async
   assert.ok(lastError instanceof RetryExhaustedError);
   assert.equal(callCount, 3);
   assert.ok(lastError!.message.includes("3 attempts"));
+  assert.ok(!lastError!.message.includes("deadlock"), "should not leak raw error message");
 });
 
 test("withTransactionRetry throws NonRetryableError for non-retryable errors", async () => {
@@ -178,7 +178,8 @@ test("withTransactionRetry throws NonRetryableError for non-retryable errors", a
   }
 
   assert.ok(lastError instanceof NonRetryableError);
-  assert.ok(lastError!.message.includes("Non-retryable"));
+  assert.ok(lastError!.message === "Non-retryable database error");
+  assert.ok(!lastError!.message.includes("FK violation"), "should not leak raw error message");
 });
 
 test("withTransactionRetry respects deadline", async () => {
@@ -254,51 +255,6 @@ test("withTransactionRetry calls onRetry callback", async () => {
   assert.deepEqual(retries, [1, 2]);
 });
 
-test("createIdempotentTransaction executes once and caches result", async () => {
-  let callCount = 0;
-  const idempotentFn = createIdempotentTransaction("test-key", async () => {
-    callCount++;
-    return "result";
-  });
-
-  const result1 = await idempotentFn();
-  const result2 = await idempotentFn();
-  const result3 = await idempotentFn();
-
-  assert.equal(result1, "result");
-  assert.equal(result2, "result");
-  assert.equal(result3, "result");
-  assert.equal(callCount, 1);
-});
-
-test("createIdempotentTransaction caches error", async () => {
-  let callCount = 0;
-  const idempotentFn = createIdempotentTransaction("test-key-error", async () => {
-    callCount++;
-    throw new Error("fail");
-  });
-
-  let error1: Error | null = null;
-  let error2: Error | null = null;
-
-  try {
-    await idempotentFn();
-  } catch (e) {
-    error1 = e as Error;
-  }
-
-  try {
-    await idempotentFn();
-  } catch (e) {
-    error2 = e as Error;
-  }
-
-  assert.ok(error1 instanceof NonRetryableError);
-  assert.ok(error1!.message.includes("fail"));
-  assert.strictEqual(error1, error2);
-  assert.equal(callCount, 1);
-});
-
 test("withTransactionRetry does not retry on deadline exceeded", async () => {
   let callCount = 0;
   let lastError: Error | null = null;
@@ -343,4 +299,28 @@ test("RetryExhaustedError includes attempt count and deadline", async () => {
   assert.equal(lastError!.attempts, 2);
   assert.equal(lastError!.deadlineMs, 1000);
   assert.ok(lastError!.lastError instanceof PrismaClientKnownRequestError);
+});
+
+test("retries never exceed the documented total deadline even with large backoff", async () => {
+  const deadlineMs = 200;
+  const startTime = Date.now();
+  let lastError: Error | null = null;
+
+  try {
+    await withTransactionRetry(
+      async () => {
+        throw new PrismaClientKnownRequestError("deadlock", {
+          code: "P2034",
+          clientVersion: "7.9.1",
+        });
+      },
+      { policy: { maxAttempts: 10, baseDelayMs: 100, maxDelayMs: 500, deadlineMs } },
+    );
+  } catch (error) {
+    lastError = error as Error;
+  }
+
+  const elapsed = Date.now() - startTime;
+  assert.ok(lastError instanceof RetryExhaustedError);
+  assert.ok(elapsed <= deadlineMs + 50, `elapsed ${elapsed}ms should not exceed deadline ${deadlineMs}ms by more than 50ms`);
 });
