@@ -1,4 +1,7 @@
-import { PERMANENT_FAILURE_SUPPRESSION_THRESHOLD } from "@/lib/scheduled/suppression";
+import {
+  advancePermanentSuppression,
+  reactivatePermanentSuppression,
+} from "@/lib/scheduled/suppression";
 import type {
   ScheduledSourceIdentity,
   ScheduledSourceSuppression,
@@ -40,13 +43,16 @@ export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freez
         },
       });
 
-      const nextFailures =
-        existing?.state === "SUPPRESSED"
-          ? existing.consecutiveFailures
-          : (existing?.consecutiveFailures ?? 0) + 1;
-      const shouldSuppress =
-        existing?.state === "SUPPRESSED" ||
-        nextFailures >= PERMANENT_FAILURE_SUPPRESSION_THRESHOLD;
+      const next = advancePermanentSuppression(
+        existing
+          ? {
+              state: existing.state,
+              consecutiveFailures: existing.consecutiveFailures,
+              suppressedAt: existing.suppressedAt,
+            }
+          : null,
+        input.observedAt,
+      );
 
       const row = await tx.scheduledSourceSuppression.upsert({
         where: {
@@ -58,26 +64,23 @@ export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freez
         create: {
           anchorSlug: input.anchorSlug,
           corridorSlug: input.corridorSlug,
-          state: shouldSuppress ? "SUPPRESSED" : "ACTIVE",
+          state: next.state,
           reason: input.reason,
           failureCode: input.failureCode,
           failurePhase: input.failurePhase,
-          consecutiveFailures: nextFailures,
+          consecutiveFailures: next.consecutiveFailures,
           firstFailedAt: input.observedAt,
           lastFailedAt: input.observedAt,
-          suppressedAt: shouldSuppress ? input.observedAt : null,
+          suppressedAt: next.suppressedAt,
         },
         update: {
-          state: shouldSuppress ? "SUPPRESSED" : "ACTIVE",
+          state: next.state,
           reason: input.reason,
           failureCode: input.failureCode,
           failurePhase: input.failurePhase,
-          consecutiveFailures: nextFailures,
+          consecutiveFailures: next.consecutiveFailures,
           lastFailedAt: input.observedAt,
-          suppressedAt:
-            shouldSuppress && !existing?.suppressedAt
-              ? input.observedAt
-              : existing?.suppressedAt,
+          suppressedAt: next.suppressedAt,
           reactivatedAt: null,
           reactivationReason: null,
         },
@@ -102,11 +105,13 @@ export const PRISMA_SUPPRESSION_REPOSITORY: SuppressionRepository = Object.freez
       throw new Error("Suppression reactivation requires a reviewed reason");
     }
 
+    const reset = reactivatePermanentSuppression();
     const row = await db.scheduledSourceSuppression.update({
       where: { id: existing.id },
       data: {
-        state: "ACTIVE",
-        consecutiveFailures: 0,
+        state: reset.state,
+        consecutiveFailures: reset.consecutiveFailures,
+        suppressedAt: reset.suppressedAt,
         reactivatedAt: input.reactivatedAt,
         reactivationReason: input.reason.trim(),
       },
