@@ -99,6 +99,21 @@ identifiers, and use no-store behavior where data is dynamic. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
 
+## Integrity audit
+
+`npm run audit:integrity` is a read-only, defense-in-depth check of the
+persisted evidence graph. It loads a bounded snapshot of anchors, corridors,
+reviewed memberships, rate snapshots, transfer outcomes, and reputation rows
+using `findMany` selects only, then evaluates cross-table semantic invariants
+that database constraints cannot fully express.
+
+The pure evaluator emits bounded, deterministic findings keyed by stable record
+identifiers, violation codes, and non-destructive remediation guidance. It does
+not include raw evidence payloads in reports and does not write, update, delete,
+or open a transaction. Database constraints and write-boundary validation remain
+the first line of defense; this audit detects drift after migrations, imports,
+or operational mistakes.
+
 ## Scheduled refresh and operations
 
 The protected `GET /api/internal/cron/refresh` route requires the exact
