@@ -144,8 +144,13 @@ export async function runScenario2(dbUrl: string): Promise<{
     }
   }
 
-  // Now run prisma migrate deploy to finalize
-  const deployResult = runCommand("npx", ["prisma", "migrate", "deploy"], { DATABASE_URL: dbUrl });
+  // Finalize metadata only through Prisma's documented resolve command after
+  // the remaining schema changes have been verified.
+  const deployResult = runCommand(
+    "npx",
+    ["prisma", "migrate", "resolve", "--applied", latestMigration.migrationName],
+    { DATABASE_URL: dbUrl },
+  );
   const deploySuccess = deployResult.exitCode === 0;
 
   const recoverySuccess = recoveryFailed.length === 0 && deploySuccess;
@@ -155,7 +160,7 @@ export async function runScenario2(dbUrl: string): Promise<{
     phase: "recovery",
     success: recoverySuccess,
     message: recoverySuccess
-      ? "Forward fix applied remaining statements and migration deployed successfully"
+      ? "Forward fix applied remaining statements and Prisma marked the migration applied"
       : `Forward fix incomplete: ${recoveryFailed.length} failed, deploy: ${deploySuccess ? "ok" : "failed"}`,
     details: {
       remainingStatements: remainingStatements.length,
@@ -213,7 +218,7 @@ export async function runScenario2(dbUrl: string): Promise<{
         ]
       : [
           "-- Forward fix completed by applying remaining statements",
-          "-- Then run: npx prisma migrate deploy",
+          `npx prisma migrate resolve --applied ${latestMigration.migrationName}`,
           "-- If manual completion needed, apply these remaining statements:",
           ...remainingStatements.map((s) => s + ";"),
         ],
