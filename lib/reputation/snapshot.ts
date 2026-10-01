@@ -12,12 +12,9 @@ import type { ReputationSnapshotContext } from "@/types/reputation";
  *
  * Isolation semantics (documented contract):
  * - REPEATABLE READ gives the whole evidence set a single consistent snapshot
- *   taken at the first statement of the transaction. READ ONLY additionally
- *   forbids writes on this path, so evidence cannot be mutated here by
- *   accident. (Prisma's interactive transaction issues BEGIN, then SET
- *   TRANSACTION ISOLATION LEVEL ... before the first query; READ ONLY is
- *   enforced by the first statement below via pg_current_snapshot reads and
- *   by never exposing executeRaw write helpers to the callback.)
+ *   taken at the first statement of the transaction. The transaction is also
+ *   explicitly switched to READ ONLY before any evidence query, so PostgreSQL
+ *   itself rejects accidental writes on this path.
  * - No external SEP/network request ever runs inside the transaction: the
  *   callback receives only the transaction client, and the bounded Prisma
  *   interactive-transaction timeout caps how long the transaction can live.
@@ -27,11 +24,9 @@ import type { ReputationSnapshotContext } from "@/types/reputation";
  *   evidence set comes from one snapshot, or the caller receives a typed,
  *   secret-free failure.
  *
- * Read-only enforcement: the read callback receives the transaction client
- * with the write helpers removed at the type level (ReputationSnapshotTxClient
- * omits $executeRaw/$executeRawUnsafe) and readSnapshotIdentity is the first
- * statement inside the transaction, so any accidental write would surface as
- * a PostgreSQL error on a READ ONLY-compatible path review can audit.
+ * Read-only enforcement: SET TRANSACTION READ ONLY is executed before the
+ * snapshot identity or evidence is read, so PostgreSQL rejects accidental
+ * writes for the lifetime of the transaction.
  */
 
 export const REPUTATION_SNAPSHOT_ISOLATION = "REPEATABLE READ" as const;
@@ -95,6 +90,7 @@ export async function readInReputationSnapshot<T>(
   for (let attempt = 1; attempt <= REPUTATION_SNAPSHOT_MAX_ATTEMPTS; attempt += 1) {
     try {
       const result = await db.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
         const identity = await readSnapshotIdentity(tx);
         return Object.freeze({ value: await read(tx, identity), identity });
       }, {
