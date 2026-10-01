@@ -77,8 +77,8 @@ test("normalization explicitly maps SEP-38 fields without losing decimal precisi
   );
 });
 
-test("normalization succeeds with reciprocal rate quote (buy = price * sell)", () => {
-  const reciprocalQuote: Sep38IndicativePrice = Object.freeze({
+test("normalization rejects reciprocal-only arithmetic that is not SEP-38 price semantics", () => {
+  const reciprocalOnlyQuote: Sep38IndicativePrice = Object.freeze({
     sellAsset: USDC,
     buyAsset: USD,
     totalPrice: "0.18",
@@ -87,17 +87,17 @@ test("normalization succeeds with reciprocal rate quote (buy = price * sell)", (
     buyAmount: "17",
     fee: Object.freeze({ total: "1.00", asset: USD, details: Object.freeze([]) }),
   });
-  const result = normalizeIndicativeRate({
-    anchorSlug: "zeam",
-    corridor: CORRIDOR,
-    request: reviewedRequest({ sellAmount: "100" }),
-    quote: reciprocalQuote,
-    capturedAt: CAPTURED_AT,
-  });
-  assert.equal(result.rate, "0.17");
-  assert.equal(result.sourceAmount, "100");
-  assert.equal(result.destinationAmount, "17");
-  assert.equal(result.fee, "1.00");
+
+  assert.throws(
+    () => normalizeIndicativeRate({
+      anchorSlug: "zeam",
+      corridor: CORRIDOR,
+      request: reviewedRequest({ sellAmount: "100" }),
+      quote: reciprocalOnlyQuote,
+      capturedAt: CAPTURED_AT,
+    }),
+    hasCode("ARITHMETIC_INCONSISTENCY"),
+  );
 });
 
 test("normalization accepts legitimate decimal rounding within 1 ULP tolerance", () => {
@@ -122,6 +122,29 @@ test("normalization accepts legitimate decimal rounding within 1 ULP tolerance",
   assert.equal(result.rate, "3.00");
   assert.equal(result.sourceAmount, "100.00");
   assert.equal(result.destinationAmount, "33.33");
+});
+
+test("rounding tolerance preserves trailing-zero wire precision", () => {
+  const quote: Sep38IndicativePrice = Object.freeze({
+    sellAsset: USDC,
+    buyAsset: USD,
+    totalPrice: "1.0000",
+    price: "1.0000",
+    sellAmount: "100.0000",
+    buyAmount: "99.9900",
+    fee: Object.freeze({ total: "0.0000", asset: USD, details: Object.freeze([]) }),
+  });
+
+  assert.throws(
+    () => normalizeIndicativeRate({
+      anchorSlug: "moneygram",
+      corridor: CORRIDOR,
+      request: reviewedRequest({ sellAmount: "100.0000" }),
+      quote,
+      capturedAt: CAPTURED_AT,
+    }),
+    hasCode("ARITHMETIC_INCONSISTENCY"),
+  );
 });
 
 // ---------------------------------------------------------------------------
