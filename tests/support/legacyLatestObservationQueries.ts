@@ -96,7 +96,7 @@ export const LEGACY_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       anchorSlug,
       outcomeWindowStart,
     );
-    if (!evidence) return evidence;
+    if (!evidence || "code" in evidence) return evidence;
 
     const { db } = await import("@/lib/dbClient");
     const rows = await db.$queryRaw<Array<{ corridorSlug: string; capturedAt: Date }>>(
