@@ -314,3 +314,43 @@ npm run suppression:reactivate
 The command resets the suppression counter/state only. It never deletes,
 rewrites, or fabricates evidence. The source is eligible for the next scheduled
 run, where normal validation and quote handling apply again.
+
+
+## Production maintenance mode
+
+Maintenance mode is an explicit production-only freeze for evidence and
+registry mutations. Public read-only APIs remain unchanged.
+
+Operator status:
+
+```bash
+npm run maintenance -- status
+```
+
+Activation requires an operator identity and reviewed reason:
+
+```bash
+STELLARCORE_MAINTENANCE_OPERATOR="oncall@example.com" \
+STELLARCORE_MAINTENANCE_REASON="Reviewed incident freeze for database recovery" \
+npm run maintenance -- activate
+```
+
+Deactivate explicitly after recovery:
+
+```bash
+STELLARCORE_MAINTENANCE_OPERATOR="oncall@example.com" \
+npm run maintenance -- deactivate
+```
+
+Activation/deactivation is rejected outside the validated `production`
+runtime identity. Historical rows retain reason, activation/deactivation times,
+and operator identities for audit. Scheduled refresh, registry bootstrap, and
+manual rate snapshot commands preflight the state before work begins.
+
+The database migration also installs statement-level write guards on anchors,
+corridors, reviewed memberships, rate snapshots, transfer outcomes, reputation
+scores, and scheduled-source suppression state. This closes the race where a
+worker sees maintenance clear and the mode activates immediately before its
+write. If maintenance state cannot be read, application mutation paths fail
+closed. The maintenance table itself is intentionally not guarded so operators
+can deactivate the freeze.
