@@ -35,15 +35,15 @@ export function resolveDatabaseTlsPolicyForEnvironment(
 
   if (input.environmentId === "production" && caPath && !caPathExists) {
     return Object.freeze({
-      resolution: {
-        accepted: false,
+      resolution: Object.freeze({
+        accepted: false as const,
         rejection: Object.freeze({
           code: "PRODUCTION_TLS_CA_MISSING",
           message:
             "Configured PostgreSQL CA file is unavailable. Provide a readable STELLARCORE_DB_CA_PATH or remove it to use the platform trust store.",
           signal: null,
         }),
-      },
+      }),
       sanitizedConnectionString: stripTlsParameters(input.databaseUrl ?? ""),
       emergencyBypassActive,
     });
