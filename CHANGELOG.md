@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Versioned public API compatibility fixtures and CI breaking-change gates for anchors, corridors, rates, and reputation (#208).
 - Typed startup runtime configuration validation with environment-specific requirements and secret-safe diagnostics (#175).
 - GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
 - Exact asset identity enforcement and exact decimal arithmetic validation for normalized SEP-38 rate observations (#164).
