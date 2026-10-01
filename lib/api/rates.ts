@@ -1,13 +1,16 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
+import type { LatestRateReadModelDependencies } from "@/lib/rates/latestRateReadModel";
 import type {
   PublicRateObservation,
   PublicRatesResponse,
   RatesApiErrorCode,
   RatesApiResult,
 } from "@/types/api/rates";
+import { PrismaClient } from "@/app/generated/prisma/client";
 
 const MAX_CORRIDOR_SLUG_LENGTH = 100;
 const CORRIDOR_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -15,10 +18,21 @@ const CORRIDOR_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export type RatesApiDependencies = Readonly<{
   readLatestRate?: (
     corridorSlug: string,
-    options: Readonly<{ evaluatedAt: Date }>,
+    options: Readonly<{ evaluatedAt: Date }> & LatestRateReadModelDependencies,
   ) => Promise<LatestCorridorRateReadResult>;
   now?: () => Date;
+  db?: PrismaClient;
 }>;
+
+async function getReadModelDependencies(
+  dependencies: RatesApiDependencies = {},
+): Promise<LatestRateReadModelDependencies> {
+  return {
+    repositoryDependencies: {
+      db: dependencies.db ?? getDbForWorkload(PUBLIC_WORKLOAD),
+    },
+  };
+}
 
 export async function getRatesApiResult(
   corridorParameter: string | null,
@@ -29,10 +43,11 @@ export async function getRatesApiResult(
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
   const read = dependencies.readLatestRate ?? readLatestCorridorRate;
+  const repoDeps = await getReadModelDependencies(dependencies);
   let result: LatestCorridorRateReadResult;
 
   try {
-    result = await read(validation.corridorSlug, { evaluatedAt });
+    result = await read(validation.corridorSlug, { evaluatedAt, ...repoDeps });
   } catch {
     return errorResult(500, "internal_error", "Unable to read rates.");
   }

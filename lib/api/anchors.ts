@@ -3,7 +3,9 @@ import {
   type AnchorDetailRecord,
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
+  type AnchorDirectoryRepositoryDependencies,
 } from "@/lib/api/anchorRepository";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   AnchorApiResult,
@@ -19,6 +21,7 @@ const MAX_ANCHOR_SLUG_LENGTH = 100;
 
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
+  dbDependencies?: AnchorDirectoryRepositoryDependencies;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -27,15 +30,24 @@ export function isValidAnchorSlug(slug: string): boolean {
     && ANCHOR_SLUG_PATTERN.test(slug);
 }
 
+async function getRepositoryDependencies(
+  dependencies: AnchorsApiDependencies = {},
+): Promise<AnchorDirectoryRepositoryDependencies> {
+  return {
+    db: dependencies.dbDependencies?.db ?? getDbForWorkload(PUBLIC_WORKLOAD),
+  };
+}
+
 export async function getAnchorsApiResult(
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorsApiResult> {
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
+    const repoDeps = await getRepositoryDependencies(dependencies);
     return Object.freeze({
       status: 200,
-      body: serializeAnchors(await repository.findAll()),
+      body: serializeAnchors(await repository.findAll(repoDeps)),
     });
   } catch {
     return internalError();
@@ -61,7 +73,8 @@ export async function getAnchorApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
-    const anchor = await repository.findBySlug(slug);
+    const repoDeps = await getRepositoryDependencies(dependencies);
+    const anchor = await repository.findBySlug(slug, repoDeps);
     if (!anchor) {
       return Object.freeze({
         status: 404,

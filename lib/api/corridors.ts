@@ -4,7 +4,10 @@ import {
   type CorridorDetailRepository,
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
+  type CorridorDirectoryRepositoryDependencies,
+  type CorridorDetailRepositoryDependencies,
 } from "@/lib/api/corridorRepository";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   CorridorApiResult,
@@ -20,10 +23,12 @@ const MAX_CORRIDOR_SLUG_LENGTH = 100;
 
 export type CorridorsApiDependencies = Readonly<{
   repository?: CorridorDirectoryRepository;
+  dbDependencies?: CorridorDirectoryRepositoryDependencies;
 }>;
 
 export type CorridorApiDependencies = Readonly<{
   repository?: CorridorDetailRepository;
+  dbDependencies?: CorridorDetailRepositoryDependencies;
 }>;
 
 export function isValidCorridorSlug(slug: string): boolean {
@@ -32,15 +37,32 @@ export function isValidCorridorSlug(slug: string): boolean {
     && CORRIDOR_SLUG_PATTERN.test(slug);
 }
 
+async function getDirectoryRepositoryDependencies(
+  dependencies: CorridorsApiDependencies = {},
+): Promise<CorridorDirectoryRepositoryDependencies> {
+  return {
+    db: dependencies.dbDependencies?.db ?? getDbForWorkload(PUBLIC_WORKLOAD),
+  };
+}
+
+async function getDetailRepositoryDependencies(
+  dependencies: CorridorApiDependencies = {},
+): Promise<CorridorDetailRepositoryDependencies> {
+  return {
+    db: dependencies.dbDependencies?.db ?? getDbForWorkload(PUBLIC_WORKLOAD),
+  };
+}
+
 export async function getCorridorsApiResult(
   dependencies: CorridorsApiDependencies = {},
 ): Promise<CorridorsApiResult> {
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
+    const repoDeps = await getDirectoryRepositoryDependencies(dependencies);
     return Object.freeze({
       status: 200,
-      body: serializeCorridors(await repository.findAll()),
+      body: serializeCorridors(await repository.findAll(repoDeps)),
     });
   } catch {
     return Object.freeze({
@@ -70,7 +92,8 @@ export async function getCorridorApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const corridor = await repository.findBySlug(slug);
+    const repoDeps = await getDetailRepositoryDependencies(dependencies);
+    const corridor = await repository.findBySlug(slug, repoDeps);
 
     if (!corridor) {
       return errorResult(404, "corridor_not_found", "Corridor not found.");

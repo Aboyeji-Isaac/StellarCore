@@ -7,26 +7,34 @@ import type {
   LatestRateRepositoryObservation,
   LatestRateSourceObservation,
 } from "@/types/latestRates";
+import type { LatestRateRepositoryDependencies } from "@/lib/rates/latestRateRepository";
+
+export type LatestRateReadModelDependencies = Readonly<{
+  repository?: LatestRateRepository;
+  repositoryDependencies?: LatestRateRepositoryDependencies;
+}>;
 
 export async function readLatestCorridorRate(
   corridorSlug: string,
   options: Readonly<{
     repository?: LatestRateRepository;
     evaluatedAt?: Date;
-  }> = {},
+  } & LatestRateReadModelDependencies> = {},
 ): Promise<LatestCorridorRateReadResult> {
   const evaluatedAt = options.evaluatedAt ?? new Date();
   if (!Number.isFinite(evaluatedAt.getTime())) {
     return failure(corridorSlug, "INVALID_EVALUATION_TIME");
   }
 
+  const repoDeps = options.repositoryDependencies ?? {};
+
   try {
     const repository = options.repository ?? PRISMA_LATEST_RATE_REPOSITORY;
-    const corridor = await repository.findCorridorBySlug(corridorSlug);
+    const corridor = await repository.findCorridorBySlug(corridorSlug, repoDeps);
     if (!corridor) return failure(corridorSlug, "CORRIDOR_NOT_FOUND");
 
     const latest = selectLatestPerAnchor(
-      await repository.findLatestObservations(corridor.id),
+      await repository.findLatestObservations(corridor.id, repoDeps),
     );
     const median = computeFreshMedian(latest.map((observation) => ({
       anchorSlug: observation.anchorSlug,

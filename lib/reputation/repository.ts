@@ -1,10 +1,20 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import { PrismaClient } from "@/app/generated/prisma/client";
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   ReputationEvidence,
   ReputationPersistenceInput,
   ReputationRepository,
   ReputationUpsertResult,
 } from "@/types/reputation";
+
+export type ReputationRepositoryDependencies = Readonly<{
+  db?: PrismaClient;
+}>;
+
+async function getDb(dependencies: ReputationRepositoryDependencies = {}): Promise<PrismaClient> {
+  return dependencies.db ?? getDbForWorkload(SCHEDULED_WORKLOAD);
+}
 
 type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
@@ -73,8 +83,8 @@ const REPUTATION_UPSERT_SQL = `
 `;
 
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
-  async readEvidence(anchorSlug, outcomeWindowStart) {
-    const { db } = await import("@/lib/dbClient");
+  async readEvidence(anchorSlug, outcomeWindowStart, dependencies: ReputationRepositoryDependencies = {}) {
+    const db = await getDb(dependencies);
     const anchor = await db.anchor.findUnique({
       where: { slug: anchorSlug },
       select: {
@@ -129,8 +139,8 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
     }) satisfies ReputationEvidence;
   },
 
-  async upsertScore(input: ReputationPersistenceInput): Promise<ReputationUpsertResult> {
-    const { db } = await import("@/lib/dbClient");
+  async upsertScore(input: ReputationPersistenceInput, dependencies: ReputationRepositoryDependencies = {}): Promise<ReputationUpsertResult> {
+    const db = await getDb(dependencies);
     const { calculation } = input;
     const computedAt = new Date(calculation.computedAt);
 

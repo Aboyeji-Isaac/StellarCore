@@ -1,4 +1,5 @@
 import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
+import type { LatestRateRepositoryDependencies } from "@/lib/rates/latestRateRepository";
 
 export type LatestRateRepositoryCorridor = Readonly<{
   id: string;
@@ -23,9 +24,11 @@ export type LatestRateRepositoryObservation = Readonly<{
 export type LatestRateRepository = Readonly<{
   findCorridorBySlug: (
     slug: string,
+    deps?: LatestRateRepositoryDependencies,
   ) => Promise<LatestRateRepositoryCorridor | null>;
   findLatestObservations: (
     corridorId: string,
+    deps?: LatestRateRepositoryDependencies,
   ) => Promise<readonly LatestRateRepositoryObservation[]>;
 }>;
 

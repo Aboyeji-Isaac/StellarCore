@@ -3,7 +3,9 @@ import {
   PRISMA_REPUTATION_API_REPOSITORY,
   type ReputationApiAnchorRecord,
   type ReputationApiRepository,
+  type ReputationApiRepositoryDependencies,
 } from "@/lib/api/reputationRepository";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   PublicReputation,
   PublicReputationListResponse,
@@ -16,14 +18,24 @@ import type {
 
 export type ReputationApiDependencies = Readonly<{
   repository?: ReputationApiRepository;
+  dbDependencies?: ReputationApiRepositoryDependencies;
 }>;
+
+async function getRepositoryDependencies(
+  dependencies: ReputationApiDependencies = {},
+): Promise<ReputationApiRepositoryDependencies> {
+  return {
+    db: dependencies.dbDependencies?.db ?? getDbForWorkload(PUBLIC_WORKLOAD),
+  };
+}
 
 export async function getReputationApiResult(
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiListResult> {
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    return Object.freeze({ status: 200, body: serializeReputationList(await repository.findAll()) });
+    const repoDeps = await getRepositoryDependencies(dependencies);
+    return Object.freeze({ status: 200, body: serializeReputationList(await repository.findAll(repoDeps)) });
   } catch {
     return listInternalError();
   }
@@ -42,7 +54,8 @@ export async function getAnchorReputationApiResult(
 
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    const record = await repository.findBySlug(slug);
+    const repoDeps = await getRepositoryDependencies(dependencies);
+    const record = await repository.findBySlug(slug, repoDeps);
     if (!record) {
       return Object.freeze({
         status: 404,

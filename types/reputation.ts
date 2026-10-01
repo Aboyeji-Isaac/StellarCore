@@ -76,13 +76,17 @@ export type ReputationPersistenceInput = Readonly<{
   calculation: ReputationCalculation;
 }>;
 
+import type { ReputationRepositoryDependencies } from "@/lib/reputation/repository";
+
 export type ReputationRepository = Readonly<{
   readEvidence: (
     anchorSlug: string,
     outcomeWindowStart: Date,
+    deps?: ReputationRepositoryDependencies,
   ) => Promise<ReputationEvidence | null>;
   upsertScore: (
     input: ReputationPersistenceInput,
+    deps?: ReputationRepositoryDependencies,
   ) => Promise<ReputationUpsertResult>;
 }>;
 

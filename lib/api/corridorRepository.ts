@@ -1,3 +1,5 @@
+import { PrismaClient } from "@/app/generated/prisma/client";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
 
 export type CorridorDirectoryRecord = Readonly<{
@@ -10,7 +12,7 @@ export type CorridorDirectoryRecord = Readonly<{
 }>;
 
 export type CorridorDirectoryRepository = Readonly<{
-  findAll: () => Promise<readonly CorridorDirectoryRecord[]>;
+  findAll: (deps?: CorridorDirectoryRepositoryDependencies) => Promise<readonly CorridorDirectoryRecord[]>;
 }>;
 
 export type CorridorDetailRecord = Readonly<{
@@ -29,12 +31,24 @@ export type CorridorDetailRecord = Readonly<{
 }>;
 
 export type CorridorDetailRepository = Readonly<{
-  findBySlug: (slug: string) => Promise<CorridorDetailRecord | null>;
+  findBySlug: (slug: string, deps?: CorridorDetailRepositoryDependencies) => Promise<CorridorDetailRecord | null>;
 }>;
 
+export type CorridorDirectoryRepositoryDependencies = Readonly<{
+  db?: PrismaClient;
+}>;
+
+export type CorridorDetailRepositoryDependencies = Readonly<{
+  db?: PrismaClient;
+}>;
+
+async function getDb(dependencies: CorridorDirectoryRepositoryDependencies = {}): Promise<PrismaClient> {
+  return dependencies.db ?? getDbForWorkload(PUBLIC_WORKLOAD);
+}
+
 export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
-  async findAll(): Promise<readonly CorridorDirectoryRecord[]> {
-    const { db } = await import("@/lib/dbClient");
+  async findAll(dependencies: CorridorDirectoryRepositoryDependencies = {}): Promise<readonly CorridorDirectoryRecord[]> {
+    const db = await getDb(dependencies);
     const corridors = await db.corridor.findMany({
       orderBy: { slug: "asc" },
       select: {
@@ -57,8 +71,8 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
     })));
   },
 
-  async findBySlug(slug: string): Promise<CorridorDetailRecord | null> {
-    const { db } = await import("@/lib/dbClient");
+  async findBySlug(slug: string, dependencies: CorridorDetailRepositoryDependencies = {}): Promise<CorridorDetailRecord | null> {
+    const db = await getDb(dependencies);
     const corridor = await db.corridor.findUnique({
       where: { slug },
       select: {

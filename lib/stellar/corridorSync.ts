@@ -2,6 +2,7 @@ import {
   ANCHOR_CORRIDOR_REGISTRY,
   CORRIDOR_REGISTRY,
 } from "@/constants/corridors";
+import { getDbForWorkload, MAINTENANCE_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   AnchorCorridorRegistryEntry,
   CorridorRegistryEntry,
@@ -67,7 +68,7 @@ const CORRIDOR_SELECT = {
 export async function persistCorridor(
   corridor: CorridorRegistryEntry,
 ): Promise<PersistedCorridor> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
   const data = {
     assetCodeFrom: corridor.assetCodeFrom,
     countryFrom: corridor.countryFrom,
@@ -88,7 +89,7 @@ export async function persistCorridor(
 export async function persistAnchorCorridorAssociations(
   mapping: AnchorCorridorRegistryEntry,
 ): Promise<AnchorCorridorAssociationResult> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
 
   return db.$transaction(async (transaction) => {
     const anchor = await transaction.anchor.findUnique({

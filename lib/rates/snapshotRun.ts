@@ -6,6 +6,8 @@ import {
 } from "@/lib/rates/liveRateSource";
 import { runRateEngine } from "@/lib/rates/rateEngine";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
+import { PrismaClient } from "@/app/generated/prisma/client";
 import type {
   PreparedLiveRateCandidate,
   SafeLiveRateRunSummary,
@@ -16,6 +18,7 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   buildCandidates: () => Promise<readonly PreparedLiveRateCandidate[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
+    db: PrismaClient,
   ) => Promise<SafeLiveRateRunSummary>;
 }>;
 
@@ -27,16 +30,18 @@ export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-  return dependencies.executeCandidates(await dependencies.buildCandidates());
+  const db = getDbForWorkload(SCHEDULED_WORKLOAD);
+  return dependencies.executeCandidates(await dependencies.buildCandidates(), db);
 }
 
 const DEFAULT_DEPENDENCIES = Object.freeze({
   assertConfiguration: assertCurrentStellarCoreConfiguration,
   buildCandidates: buildReviewedLiveRateCandidates,
-  executeCandidates: async (candidates) => formatLiveRateRunSummary(
+  executeCandidates: async (candidates, db: PrismaClient) => formatLiveRateRunSummary(
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
+      repositoryDependencies: { db },
     }),
   ),
 }) satisfies SnapshotReviewedLiveRatesDependencies;

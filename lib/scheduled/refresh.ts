@@ -3,12 +3,20 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
+import { PrismaClient } from "@/app/generated/prisma/client";
+import { runRateEngine } from "@/lib/rates/rateEngine";
+import { fetchReviewedIndicativeRate } from "@/lib/rates/liveRateSource";
+import { formatLiveRateRunSummary } from "@/lib/rates/liveRateSource";
+import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
+import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
+import { buildReviewedLiveRateCandidates } from "@/lib/rates/liveRateSource";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/scheduled";
 
 export type ScheduledRefreshDependencies = Readonly<{
-  snapshotRates: () => Promise<SafeLiveRateRunSummary>;
-  evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
+  snapshotRates: (db: PrismaClient) => Promise<SafeLiveRateRunSummary>;
+  evaluateReputation: (options: Readonly<{ evaluatedAt: Date; db: PrismaClient }>) => Promise<ReputationEvaluationRunSummary>;
   now: () => Date;
 }>;
 
@@ -21,16 +29,17 @@ export type ScheduledRefreshDependencies = Readonly<{
 export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
+  const db = getDbForWorkload(SCHEDULED_WORKLOAD);
   const startedAt = dependencies.now();
   let rates: ScheduledRefreshResult["rates"];
 
   try {
-    rates = toScheduledRates(await dependencies.snapshotRates());
+    rates = toScheduledRates(await dependencies.snapshotRates(db));
   } catch {
     rates = preparationFailure();
   }
 
-  const reputation = await dependencies.evaluateReputation({ evaluatedAt: startedAt });
+  const reputation = await dependencies.evaluateReputation({ evaluatedAt: startedAt, db });
   const completedAt = dependencies.now();
 
   return Object.freeze({
@@ -51,8 +60,19 @@ export async function runScheduledRefresh(
 }
 
 const DEFAULT_DEPENDENCIES = Object.freeze({
-  snapshotRates: snapshotReviewedLiveRates,
-  evaluateReputation: evaluatePersistedAnchorReputations,
+  snapshotRates: async () => snapshotReviewedLiveRates({
+    assertConfiguration: assertCurrentStellarCoreConfiguration,
+    buildCandidates: buildReviewedLiveRateCandidates,
+    executeCandidates: async (candidates, db: PrismaClient) => formatLiveRateRunSummary(
+      await runRateEngine(candidates, {
+        quote: fetchReviewedIndicativeRate,
+        repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
+        repositoryDependencies: { db },
+      }),
+    ),
+  }),
+  evaluateReputation: async ({ evaluatedAt, db }: Readonly<{ evaluatedAt: Date; db: PrismaClient }>) =>
+    evaluatePersistedAnchorReputations({ evaluatedAt, db }),
   now: () => new Date(),
 }) satisfies ScheduledRefreshDependencies;
 

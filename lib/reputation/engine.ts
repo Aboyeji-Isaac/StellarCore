@@ -1,11 +1,13 @@
 import { REPUTATION_OUTCOME_WINDOW_DAYS } from "@/constants/reputation";
 import { PRISMA_REPUTATION_REPOSITORY } from "@/lib/reputation/repository";
 import { calculateReputation } from "@/lib/reputation/score";
+import { getDbForWorkload, SCHEDULED_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   ReputationEvaluationResult,
   ReputationRepository,
   ReputationUpsertResult,
 } from "@/types/reputation";
+import type { ReputationRepositoryDependencies } from "@/lib/reputation/repository";
 
 const DAYS_TO_MS = 24 * 60 * 60 * 1_000;
 
@@ -15,6 +17,7 @@ export async function evaluateAnchorReputation(
     repository?: ReputationRepository;
     evaluatedAt?: Date;
     persist?: boolean;
+    dbDependencies?: ReputationRepositoryDependencies;
   }> = {},
 ): Promise<ReputationEvaluationResult> {
   const evaluatedAt = options.evaluatedAt ?? new Date();
@@ -22,13 +25,14 @@ export async function evaluateAnchorReputation(
     return failure(anchorSlug, "INVALID_EVALUATION_TIME");
   }
   const repository = options.repository ?? PRISMA_REPUTATION_REPOSITORY;
+  const dbDependencies = options.dbDependencies ?? { db: getDbForWorkload(SCHEDULED_WORKLOAD) };
   const outcomeWindowStart = new Date(
     evaluatedAt.getTime() - REPUTATION_OUTCOME_WINDOW_DAYS * DAYS_TO_MS,
   );
 
   let evidence;
   try {
-    evidence = await repository.readEvidence(anchorSlug, outcomeWindowStart);
+    evidence = await repository.readEvidence(anchorSlug, outcomeWindowStart, dbDependencies);
   } catch {
     return failure(anchorSlug, "EVIDENCE_READ_FAILURE");
   }
@@ -44,7 +48,7 @@ export async function evaluateAnchorReputation(
     upsertResult = await repository.upsertScore({
       anchorId: evidence.anchorId,
       calculation,
-    });
+    }, dbDependencies);
   } catch {
     return failure(anchorSlug, "PERSISTENCE_FAILURE");
   }

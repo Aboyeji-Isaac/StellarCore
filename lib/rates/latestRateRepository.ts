@@ -1,8 +1,18 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import { PrismaClient } from "@/app/generated/prisma/client";
+import { getDbForWorkload, PUBLIC_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   LatestRateRepository,
   LatestRateRepositoryObservation,
 } from "@/types/latestRates";
+
+export type LatestRateRepositoryDependencies = Readonly<{
+  db?: PrismaClient;
+}>;
+
+async function getDb(dependencies: LatestRateRepositoryDependencies = {}): Promise<PrismaClient> {
+  return dependencies.db ?? getDbForWorkload(PUBLIC_WORKLOAD);
+}
 
 type PrismaLatestRateRow = Readonly<{
   id: string;
@@ -16,8 +26,8 @@ type PrismaLatestRateRow = Readonly<{
 }>;
 
 export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze({
-  async findCorridorBySlug(slug) {
-    const { db } = await import("@/lib/dbClient");
+  async findCorridorBySlug(slug, dependencies: LatestRateRepositoryDependencies = {}) {
+    const db = await getDb(dependencies);
     return db.corridor.findUnique({
       where: { slug },
       select: {
@@ -31,8 +41,8 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
     });
   },
 
-  async findLatestObservations(corridorId) {
-    const { db } = await import("@/lib/dbClient");
+  async findLatestObservations(corridorId, dependencies: LatestRateRepositoryDependencies = {}) {
+    const db = await getDb(dependencies);
     const rows = await db.$queryRaw<PrismaLatestRateRow[]>(Prisma.sql`
       SELECT DISTINCT ON (snapshot.anchor_id)
         snapshot.id,

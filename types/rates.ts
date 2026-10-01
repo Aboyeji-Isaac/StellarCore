@@ -1,3 +1,4 @@
+import { PrismaClient } from "@/app/generated/prisma/client";
 import type { CorridorRegistryEntry } from "@/types/corridor";
 import type {
   Sep38IndicativePrice,
@@ -71,10 +72,14 @@ export type RateSnapshotPersistenceResult =
   | Readonly<{ ok: true; snapshot: PersistedRateSnapshot }>
   | Readonly<{ ok: false; code: RateSnapshotPersistenceCode }>;
 
+export type RateSnapshotRepositoryDependencies = Readonly<{
+  db?: PrismaClient;
+}>;
+
 export type RateSnapshotRepository = Readonly<{
-  findAnchorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
-  findCorridorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
-  hasAssociation: (anchorId: string, corridorId: string) => Promise<boolean>;
+  findAnchorBySlug: (slug: string, deps?: RateSnapshotRepositoryDependencies) => Promise<Readonly<{ id: string }> | null>;
+  findCorridorBySlug: (slug: string, deps?: RateSnapshotRepositoryDependencies) => Promise<Readonly<{ id: string }> | null>;
+  hasAssociation: (anchorId: string, corridorId: string, deps?: RateSnapshotRepositoryDependencies) => Promise<boolean>;
   createSnapshot: (input: Readonly<{
     anchorId: string;
     corridorId: string;
@@ -83,7 +88,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
-  }>) => Promise<Readonly<{
+  }>, deps?: RateSnapshotRepositoryDependencies) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
     sourceAmount: { toString(): string } | string;

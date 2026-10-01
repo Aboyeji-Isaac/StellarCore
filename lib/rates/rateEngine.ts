@@ -7,6 +7,7 @@ import type {
   RateEngineSkippedSource,
   RateQuoteProvider,
   RateSnapshotRepository,
+  RateSnapshotRepositoryDependencies,
 } from "@/types/rates";
 
 export async function runRateEngine(
@@ -15,6 +16,7 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
+    repositoryDependencies?: RateSnapshotRepositoryDependencies;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
@@ -22,6 +24,8 @@ export async function runRateEngine(
   const failures: RateEngineFailure[] = [];
   const skippedSources: RateEngineSkippedSource[] = [];
   let totalAttempted = 0;
+
+  const repoDeps = dependencies.repositoryDependencies ?? {};
 
   for (const candidate of candidates) {
     const key = `${candidate.anchorSlug}\0${candidate.corridor.slug}`;
@@ -61,7 +65,7 @@ export async function runRateEngine(
       continue;
     }
 
-    const persisted = await persistRateSnapshot(observation, dependencies.repository);
+    const persisted = await persistRateSnapshot(observation, dependencies.repository, repoDeps);
     if (!persisted.ok) {
       failures.push(engineFailure(candidate, "PERSISTENCE", persisted.code));
       continue;

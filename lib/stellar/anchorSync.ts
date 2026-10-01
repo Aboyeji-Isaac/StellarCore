@@ -5,6 +5,7 @@ import {
   Sep1DiscoveryError,
   type Sep1ErrorCode,
 } from "@/lib/stellar/sep1";
+import { getDbForWorkload, MAINTENANCE_WORKLOAD } from "@/lib/db/workloadAccessor";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -59,7 +60,7 @@ const ANCHOR_SELECT = {
 export async function persistDiscoveredAnchor(
   anchor: DiscoveredAnchor,
 ): Promise<PersistedAnchor> {
-  const { db } = await import("@/lib/dbClient");
+  const db = getDbForWorkload(MAINTENANCE_WORKLOAD);
   const data = {
     name: anchor.name,
     homeDomain: anchor.homeDomain,
