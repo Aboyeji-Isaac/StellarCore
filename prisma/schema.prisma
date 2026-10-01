@@ -55,6 +55,7 @@ model Anchor {
   seps              Int[]        @default([])
   isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
   status            AnchorStatus @default(UNKNOWN)
+  lastSyncOrder     BigInt       @default(0) @map("last_sync_order")
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
