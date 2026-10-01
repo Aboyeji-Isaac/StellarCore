@@ -11,16 +11,16 @@ with your pull request.
 
 ### Added
 
-- Hardened PostgreSQL connection pool management with bounded timeouts, TCP keepalive, connection lifetime recycling, and idle error handling.
-- Explicit classification of connection and failover errors to trigger pool eviction and fast failure without misclassifying normal query errors.
-- Bounded deadline utilities (`withDatabaseDeadline`) ensuring database operations respect request deadlines during network disruptions.
-- Transaction safety guards (`executeSafeTransaction`) guaranteeing that transactions interrupted by failover or ambiguous commits never report success without confirmation.
-- Isolated integration tests covering primary termination, endpoint switch, recovery, and storm prevention.
-- Operational documentation in `docs/database-failover.md` describing degraded behavior during failovers and recovery dynamics.
+- GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
+- Exact asset identity enforcement and exact decimal arithmetic validation for normalized SEP-38 rate observations (#164).
+- Hardened PostgreSQL pool management with bounded connection acquisition, TCP keepalive, connection lifetime recycling, and failover-aware stale-connection handling (#209).
+- Database deadline and transaction-safety helpers for failover windows, including explicit ambiguous-commit reporting (#209).
+- Isolated PostgreSQL wire-level failover tests covering outage, recovery, interrupted transactions, deadlines, and pool storm bounds (#209).
+- Operational failover behavior and tuning guidance in `docs/database-failover.md` (#209).
 
 ### Fixed
 
-- Prevented broken pooled PostgreSQL connections from hanging indefinitely or being reused after primary termination.
+- Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
 
 ## [Prior work] — 2026-09-25
 
