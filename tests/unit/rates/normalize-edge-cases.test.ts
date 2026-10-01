@@ -38,11 +38,11 @@ function quote(overrides: Partial<Sep38IndicativePrice> = {}): Sep38IndicativePr
   return Object.freeze({
     sellAsset: USDC,
     buyAsset: USD,
-    totalPrice: "1.01",
-    price: "1.01",
-    sellAmount: "100",
-    buyAmount: "101",
-    fee: Object.freeze({ total: "0.25", asset: USD, details: Object.freeze([]) }),
+    totalPrice: "1",
+    price: "1",
+    sellAmount: "1",
+    buyAmount: "1",
+    fee: Object.freeze({ total: "0", asset: USD, details: Object.freeze([]) }),
     ...overrides,
   });
 }
@@ -92,16 +92,33 @@ test("a zero fee is valid and preserved verbatim, unlike zero rate or amounts", 
 
 test("smallest positive value at full scale is accepted", () => {
   const tiny = "0.000000000000000001";
-  const result = normalize(quote({
+
+  const price = normalize(quote({
+    totalPrice: tiny,
     price: tiny,
     sellAmount: tiny,
+    buyAmount: "1",
+    fee: { total: "0", asset: USD, details: [] },
+  }));
+  assert.equal(price.rate, tiny);
+
+  const buy = normalize(quote({
+    totalPrice: "1",
+    price: "1",
+    sellAmount: tiny,
     buyAmount: tiny,
+    fee: { total: "0", asset: USD, details: [] },
+  }));
+  assert.equal(buy.destinationAmount, tiny);
+
+  const fee = normalize(quote({
+    totalPrice: "1.000000000000000001",
+    price: "1",
+    sellAmount: "1.000000000000000001",
+    buyAmount: "1",
     fee: { total: tiny, asset: USD, details: [] },
   }));
-  assert.equal(result.rate, tiny);
-  assert.equal(result.sourceAmount, tiny);
-  assert.equal(result.destinationAmount, tiny);
-  assert.equal(result.fee, tiny);
+  assert.equal(fee.fee, tiny);
 });
 
 test("negative values are rejected rather than normalized, including negative zero", () => {
@@ -114,16 +131,35 @@ test("negative values are rejected rather than normalized, including negative ze
 
 test("values at the Decimal(38,18) limits are accepted unchanged", () => {
   for (const value of [MAX_INTEGER, MAX_SCALE, MAX_BOTH]) {
-    const result = normalize(quote({
+    const price = normalize(quote({
+      totalPrice: value,
       price: value,
+      sellAmount: value,
+      buyAmount: "1",
+      fee: { total: "0", asset: USD, details: [] },
+    }));
+    assert.equal(price.rate, value);
+    assert.equal(price.sourceAmount, value);
+
+    const buy = normalize(quote({
+      totalPrice: "1",
+      price: "1",
+      sellAmount: value,
+      buyAmount: value,
+      fee: { total: "0", asset: USD, details: [] },
+    }));
+    assert.equal(buy.destinationAmount, value);
+
+    // For any positive fee v, choosing buy=v, price=0.5, sell=v and
+    // total_price=1 satisfies both SEP-38 formulas exactly.
+    const fee = normalize(quote({
+      totalPrice: "1",
+      price: "0.5",
       sellAmount: value,
       buyAmount: value,
       fee: { total: value, asset: USD, details: [] },
     }));
-    assert.equal(result.rate, value);
-    assert.equal(result.sourceAmount, value);
-    assert.equal(result.destinationAmount, value);
-    assert.equal(result.fee, value);
+    assert.equal(fee.fee, value);
   }
 });
 
@@ -188,13 +224,14 @@ test("non-string runtime values from untyped anchor JSON are rejected", () => {
 
 test("accepted values are returned as the original strings, not reformatted", () => {
   const result = normalize(quote({
+    totalPrice: "2.250",
     price: "1.500",
-    sellAmount: "100.10",
+    sellAmount: "1.125",
     buyAmount: "0.5",
     fee: { total: "0.250", asset: USD, details: [] },
   }));
   assert.equal(result.rate, "1.500");
-  assert.equal(result.sourceAmount, "100.10");
+  assert.equal(result.sourceAmount, "1.125");
   assert.equal(result.destinationAmount, "0.5");
   assert.equal(result.fee, "0.250");
 });
