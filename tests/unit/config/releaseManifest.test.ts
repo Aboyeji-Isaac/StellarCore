@@ -65,6 +65,7 @@ test("a changed lockfile digest changes the provenance (drift is detectable)", (
   mkdirSync(sandbox, { recursive: true });
   const lockfile = JSON.parse(readLockfile());
   (lockfile.packages[""].dependencies ??= {}).__driftCanary = "1.0.0";
+  lockfile.packages["node_modules/__driftCanary"] = { version: "1.0.0" };
   writeFileSync(join(sandbox, "package-lock.json"), JSON.stringify(lockfile));
 
   const drifted = generateReleaseManifest({
