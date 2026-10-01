@@ -91,7 +91,7 @@ raw-query files, unsafe APIs, or `Prisma.raw` fragments.
 
 | Location | API | Purpose | Review status |
 | --- | --- | --- | --- |
-| `lib/rates/latestRateRepository.ts` | `Prisma.sql` + `$queryRaw` | Latest rate observation per anchor/corridor | Values are bound parameters; identifiers are constant SQL |
+| `lib/rates/latestRateRepository.ts` | `Prisma.sql` + `$queryRaw` | Latest rate observation per anchor/corridor | Values are bound parameters; identifiers are constant SQL |\n| `lib/rates/rateHistoryRepository.ts` | `Prisma.sql` + `$queryRaw` | Bounded rate history for one corridor and time range | Corridor/timestamp values are bound parameters; identifiers are constant SQL |
 | `lib/reputation/repository.ts` | `Prisma.sql` + `$queryRaw` | Latest rate evidence per corridor for reputation | Values are bound parameters; identifiers are constant SQL |
 | `lib/reputation/snapshot.ts` | `Prisma.sql` + `$queryRaw`; reviewed `$executeRawUnsafe` exception | Read-only repeatable-read snapshot setup and identity | The unsafe exception is exactly the constant statement `SET TRANSACTION READ ONLY`; no input or identifier is interpolated |
 | `lib/stellar/anchorSync.ts` | tagged `$executeRaw` / `$queryRaw` | Monotonic anchor persistence and sync-order allocation | Interpolated values are Prisma-bound parameters; table/column names are constants |
