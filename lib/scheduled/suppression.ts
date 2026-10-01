@@ -29,3 +29,42 @@ export function classifyPermanentScheduledFailure(
     ? "PERMANENT_CONFIGURATION"
     : "PERMANENT_PROTOCOL";
 }
+
+
+export type SuppressionCounterState = Readonly<{
+  state: "ACTIVE" | "SUPPRESSED";
+  consecutiveFailures: number;
+  suppressedAt: Date | null;
+}>;
+
+export function advancePermanentSuppression(
+  previous: SuppressionCounterState | null,
+  observedAt: Date,
+): SuppressionCounterState {
+  if (previous?.state === "SUPPRESSED") {
+    return Object.freeze({
+      state: "SUPPRESSED",
+      consecutiveFailures: previous.consecutiveFailures,
+      suppressedAt: previous.suppressedAt,
+    });
+  }
+
+  const consecutiveFailures = (previous?.consecutiveFailures ?? 0) + 1;
+  const shouldSuppress =
+    consecutiveFailures >= PERMANENT_FAILURE_SUPPRESSION_THRESHOLD;
+
+  return Object.freeze({
+    state: shouldSuppress ? "SUPPRESSED" : "ACTIVE",
+    consecutiveFailures,
+    suppressedAt:
+      shouldSuppress ? previous?.suppressedAt ?? new Date(observedAt) : null,
+  });
+}
+
+export function reactivatePermanentSuppression(): SuppressionCounterState {
+  return Object.freeze({
+    state: "ACTIVE",
+    consecutiveFailures: 0,
+    suppressedAt: null,
+  });
+}
