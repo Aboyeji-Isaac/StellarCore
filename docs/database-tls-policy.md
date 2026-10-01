@@ -86,8 +86,8 @@ posture; monitoring should alert on its activation.
 
 ## Exceptions and their limits
 
-Development and test runtimes (`NODE_ENV` not `production`, or
-`STELLARCORE_DEPLOYMENT` not `production`) keep permissive behavior: local
+Development and test runtimes use the validated `STELLARCORE_ENVIRONMENT`
+identity from the shared runtime configuration boundary and keep permissive behavior: local
 Postgres without TLS keeps working, and explicitly requested TLS modes are
 honored. The exception cannot silently activate in production: the decision
 branches exclusively on `NODE_ENV`/`STELLARCORE_DEPLOYMENT` values, and the
@@ -102,7 +102,6 @@ hard rejection in production (covered by tests).
 | `STELLARCORE_DB_CA_PATH` | File path to the provider CA PEM when the server does not chain to public roots. | Path only; the certificate is loaded into the ssl config at runtime and never logged. |
 | `STELLARCORE_DB_CA` | Inline provider CA PEM (fallback when no path is configured). | Certificate material; never committed, never logged. |
 | `STELLARCORE_DB_TLS_EMERGENCY_BYPASS` | Gated verification bypass; must equal exactly `allow-unverified` to activate. | Inert by default; activation prints a process warning; never enables plaintext. |
-| `STELLARCORE_DEPLOYMENT` | Optional explicit production flag for runtimes without `NODE_ENV=production`. | Read-only signal; not a secret. |
 
 Mirror these names (without values) in `.env.example` when provisioning a new
 environment; CA values and the bypass belong in the platform's secret store,
