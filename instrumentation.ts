@@ -19,6 +19,21 @@ export async function register(): Promise<void> {
   const { assertRuntimeConfig } = await import("@/lib/config/runtimeConfig");
   const config = assertRuntimeConfig();
 
+  const { resolveDatabaseTlsPolicyForEnvironment } =
+    await import("@/lib/database/tlsPolicyRuntime");
+  const tls = resolveDatabaseTlsPolicyForEnvironment({
+    databaseUrl: config.databaseUrl,
+    environmentId: config.environment,
+    environment: process.env,
+  });
+  if (!tls.resolution.accepted) {
+    const { code, message } = tls.resolution.rejection;
+    throw new Error(`Database TLS policy failure (${code}): ${message}`);
+  }
+  if (tls.emergencyBypassActive) {
+    console.warn("[stellarcore:database] emergency TLS verification bypass active");
+  }
+
   const {
     resolveDeploymentRevision,
     resolveRuntimeConfigFingerprintPolicy,
