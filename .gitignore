@@ -48,3 +48,6 @@ issues-to-create*.json
 
 # Release artifacts (#142)
 /dist-release/
+
+# Destructive migration rehearsal artifacts
+/scripts/migration-rehearsal/reports/
