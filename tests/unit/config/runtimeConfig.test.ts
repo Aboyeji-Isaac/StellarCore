@@ -414,7 +414,7 @@ test("lib/config/runtimeConfig - RuntimeConfigValidationError", async () => {
       () => assertRuntimeConfig({ ...baseEnv, RATE_FRESHNESS_THRESHOLD_MS: "invalid" }),
       (error: Error) => {
         const e = error as RuntimeConfigValidationError;
-        assert.equal(e.reason, "not a valid integer");
+        assert.equal(e.reason, "must be a positive integer");
         return true;
       },
     );
