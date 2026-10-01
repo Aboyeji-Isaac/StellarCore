@@ -32,6 +32,7 @@
     "verify:release": "tsx scripts/release-cli.ts verify",
     "export:evidence": "tsx scripts/export-evidence.ts",
     "verify:export": "tsx scripts/verify-export.ts",
+    "verify:install-reproducibility": "tsx scripts/verify-install-reproducibility.ts",
     "test:export": "node --import tsx --test tests/integration/export/evidence-package.test.ts",
     "test:csp": "node --import tsx --test tests/unit/security/browserHeaders.test.ts tests/unit/middleware/cspMiddleware.test.ts"
   },
