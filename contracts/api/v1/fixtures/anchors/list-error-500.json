@@ -1,0 +1,14 @@
+{
+  "name": "anchors.list.error_500",
+  "domain": "anchors",
+  "endpoint": "GET /api/anchors",
+  "method": "GET",
+  "expectedStatus": 500,
+  "description": "Safe internal error response on anchor directory failure",
+  "body": {
+    "error": {
+      "code": "internal_error",
+      "message": "Unable to load anchors."
+    }
+  }
+}

@@ -1,4 +1,6 @@
 import { getRatesApiResult } from "@/lib/api/rates";
+import { publicApiJsonResponse } from "@/lib/api/http";
+import { staleEvidenceHeaders } from "@/lib/api/staleEvidence";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +11,8 @@ export async function GET(request: Request): Promise<Response> {
     now: () => evaluatedAt,
   });
 
-  return Response.json(result.body, {
-    status: result.status,
-    headers: { "Cache-Control": "no-store" },
-  });
+  return publicApiJsonResponse(
+    result,
+    staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
+  );
 }

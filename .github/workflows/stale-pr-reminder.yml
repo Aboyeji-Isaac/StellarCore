@@ -1,0 +1,75 @@
+name: Remind on stale pull requests
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List reminders without posting comments"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  remind:
+    name: remind on inactive pull requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find and remind on stale pull requests
+        uses: actions/github-script@v7
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const staleDays = 14;
+            const now = Date.now();
+            const dryRun = process.env.DRY_RUN === 'true';
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+              sort: 'updated',
+              direction: 'asc',
+            });
+
+            for (const pull of pulls) {
+              const updatedAt = Date.parse(pull.updated_at);
+              if (!Number.isFinite(updatedAt) || now - updatedAt < staleDays * 24 * 60 * 60 * 1000) continue;
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pull.number,
+                per_page: 100,
+              });
+              if (comments.some((comment) => comment.body?.includes('<!-- stellarcore-stale-pr-reminder -->'))) continue;
+
+              const reviewers = (pull.requested_reviewers ?? [])
+                .map((reviewer) => reviewer.login)
+                .filter(Boolean)
+                .map((login) => `@${login}`);
+              const mentions = [`@${pull.user.login}`, ...reviewers, `@${context.repo.owner}`]
+                .filter((value, index, values) => values.indexOf(value) === index)
+                .join(' ');
+              const body = `<!-- stellarcore-stale-pr-reminder -->\n${mentions}\nThis pull request has had no activity for at least ${staleDays} days. Please review, update, or close it when convenient.`;
+
+              if (dryRun) {
+                core.info(`Would comment on #${pull.number}: ${body}`);
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pull.number,
+                  body,
+                });
+                core.info(`Commented on stale PR #${pull.number}`);
+              }
+            }
