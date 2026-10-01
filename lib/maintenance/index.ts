@@ -1,5 +1,4 @@
 import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
-import { db, ensureDatabaseEnvironment } from "@/lib/dbClient";
 import type {
   MaintenanceRecord,
   MaintenanceRepository,
@@ -24,6 +23,7 @@ function toRecord(row: {
 export const PRISMA_MAINTENANCE_REPOSITORY: MaintenanceRepository =
   Object.freeze({
     async getActive() {
+      const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
       await ensureDatabaseEnvironment();
       const row = await db.maintenanceState.findFirst({
         where: { active: true },
@@ -33,6 +33,7 @@ export const PRISMA_MAINTENANCE_REPOSITORY: MaintenanceRepository =
     },
 
     async activate({ reason, operator, at }) {
+      const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
       await ensureDatabaseEnvironment();
       return db.$transaction(async (tx) => {
         const existing = await tx.maintenanceState.findFirst({
@@ -54,6 +55,7 @@ export const PRISMA_MAINTENANCE_REPOSITORY: MaintenanceRepository =
     },
 
     async deactivate({ operator, at }) {
+      const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
       await ensureDatabaseEnvironment();
       return db.$transaction(async (tx) => {
         const active = await tx.maintenanceState.findFirst({
