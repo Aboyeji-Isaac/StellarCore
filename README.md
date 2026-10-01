@@ -316,22 +316,41 @@ stellarcore/
 ```bash
 # .env.example
 
+# Explicit runtime environment identity.
+# One of: production, preview, development, test, ci.
+STELLARCORE_ENVIRONMENT="development"
+
 # Server-only application/runtime PostgreSQL connection for this environment.
+# Required outside tests. Must use postgres:// or postgresql://.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# Required in production when Vercel Cron is enabled; never expose to the client.
+# Required in production; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional rate-engine settings.
+RATE_FRESHNESS_THRESHOLD_MS="120000"
+MIN_FRESH_SOURCES="2"
 
 # Optional writable directory for bounded last-known-good public evidence snapshots.
 STALE_EVIDENCE_DIRECTORY="/path/to/writable/stale-evidence"
 ```
+
+`STELLARCORE_ENVIRONMENT` declares the runtime identity explicitly. Valid
+values are `production`, `preview`, `development`, `test`, and `ci`.
+When it is absent on Vercel, `VERCEL_ENV` is used; test runs may fall back to
+`NODE_ENV=test`. Runtime identity is never inferred from hostnames or database
+URL contents.
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
 appropriate to its deployment environment; local development may use a
 compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
-repository files, or logs.
+repository files, or logs. The URL must use `postgres://` or `postgresql://`.
+
+`CRON_SECRET` is required in production and optional in non-production
+environments. `RATE_FRESHNESS_THRESHOLD_MS` and `MIN_FRESH_SOURCES` are
+optional positive integers with defaults of 120000 and 2 respectively.
 
 `STALE_EVIDENCE_DIRECTORY` is optional. By default, the Node.js runtime stores
 verified public read snapshots in its temporary directory under
