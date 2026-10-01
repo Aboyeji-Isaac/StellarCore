@@ -20,7 +20,7 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   buildCandidates: (
     sources?: readonly ReviewedLiveRateSource[],
   ) => Promise<readonly PreparedLiveRateCandidate[]>;
-  listSuppressed: () => Promise<readonly ScheduledSourceIdentity[]>;
+  listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
@@ -35,7 +35,10 @@ export async function snapshotReviewedLiveRates(
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
 
-  const suppressed = await dependencies.listSuppressed();
+  const suppressed = await (
+    dependencies.listSuppressed ??
+    (async () => Object.freeze([] as ScheduledSourceIdentity[]))
+  )();
   const suppressedKeys = new Set(
     suppressed.map(({ anchorSlug, corridorSlug }) =>
       `${anchorSlug}\0${corridorSlug}`),
