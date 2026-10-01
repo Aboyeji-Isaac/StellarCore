@@ -31,6 +31,7 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
+  runtime: "nodejs",
   matcher: [
     {
       source:
