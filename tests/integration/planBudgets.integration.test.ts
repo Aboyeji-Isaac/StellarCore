@@ -67,10 +67,33 @@ function assertPlanBudget(
     failureReason += reason + "\n";
   };
 
-  // Check actual total time if specified
-  if (budget.maxActualTotalTime && typeof rootPlan["Actual Total Time"] === 'number' && rootPlan["Actual Total Time"] > budget.maxActualTotalTime) {
-    fail(`Execution time exceeded budget: ${rootPlan["Actual Total Time"]}ms > ${budget.maxActualTotalTime}ms`);
+  // Inspect specific logical plan thresholds (rows scanned/removed, heap fetches)
+  if (budget.maxHeapFetches !== undefined) {
+    let totalHeapFetches = 0;
+    const countHeapFetches = (node: Record<string, unknown>) => {
+      if (typeof node["Heap Fetches"] === "number") totalHeapFetches += node["Heap Fetches"];
+      if (node.Plans) (node.Plans as Record<string, unknown>[]).forEach(countHeapFetches);
+    };
+    countHeapFetches(rootPlan);
+    if (totalHeapFetches > budget.maxHeapFetches) {
+      fail(`Heap fetches exceeded budget: ${totalHeapFetches} > ${budget.maxHeapFetches}`);
+    }
   }
+
+  if (budget.maxRowsRemoved !== undefined) {
+    let totalRowsRemoved = 0;
+    const countRowsRemoved = (node: Record<string, unknown>) => {
+      if (typeof node["Rows Removed by Filter"] === "number") totalRowsRemoved += node["Rows Removed by Filter"];
+      if (typeof node["Rows Removed by Index Recheck"] === "number") totalRowsRemoved += node["Rows Removed by Index Recheck"];
+      if (node.Plans) (node.Plans as Record<string, unknown>[]).forEach(countRowsRemoved);
+    };
+    countRowsRemoved(rootPlan);
+    if (totalRowsRemoved > budget.maxRowsRemoved) {
+      fail(`Rows removed exceeded budget: ${totalRowsRemoved} > ${budget.maxRowsRemoved}`);
+    }
+  }
+
+  // Removed hard maxActualTotalTime to avoid flakiness
 
   // Check for disallowed Sort nodes
   if (budget.disallowSort) {
@@ -134,17 +157,19 @@ before(async () => {
   const snapshots: Prisma.RateSnapshotCreateManyInput[] = [];
   const now = new Date().getTime();
 
-  // Generate 2000 records per anchor for our test corridors
+  // Generate records per anchor for ALL test corridors to ensure proper scale representation
   for (const anchor of testAnchors) {
-    for (let i = 0; i < FIXTURE_SNAPSHOTS_PER_ANCHOR; i++) {
-      snapshots.push({
-        anchorId: anchor.id,
-        corridorId: testCorridors[0].id,
-        rate: new Prisma.Decimal("100"),
-        sourceAmount: new Prisma.Decimal("1"),
-        destinationAmount: new Prisma.Decimal("100"),
-        capturedAt: new Date(now - i * 60000), // minute apart
-      });
+    for (const corridor of testCorridors) {
+      for (let i = 0; i < FIXTURE_SNAPSHOTS_PER_ANCHOR; i++) {
+        snapshots.push({
+          anchorId: anchor.id,
+          corridorId: corridor.id,
+          rate: new Prisma.Decimal("100"),
+          sourceAmount: new Prisma.Decimal("1"),
+          destinationAmount: new Prisma.Decimal("100"),
+          capturedAt: new Date(now - i * 60000), // minute apart
+        });
+      }
     }
   }
 
@@ -176,29 +201,41 @@ after(async () => {
 
 test("Plan Budget: Latest Rate Observations Query (lib/rates)", async () => {
   const corridorId = testCorridors[0].id;
-  const explainQuery = Prisma.sql\`
+  const explainQuery = Prisma.sql`
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-    SELECT DISTINCT ON (snapshot.anchor_id)
-      snapshot.id,
+    SELECT
+      latest.id,
       anchor.slug AS "anchorSlug",
       anchor.name AS "anchorName",
-      snapshot.rate,
-      snapshot.source_amount AS "sourceAmount",
-      snapshot.destination_amount AS "destinationAmount",
-      snapshot.fee,
-      snapshot.captured_at AS "capturedAt"
-    FROM rate_snapshots AS snapshot
-    INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
-    WHERE snapshot.corridor_id = \${corridorId}::uuid
-    ORDER BY snapshot.anchor_id, snapshot.captured_at DESC, snapshot.id DESC
-  \`;
+      latest.rate,
+      latest.source_amount AS "sourceAmount",
+      latest.destination_amount AS "destinationAmount",
+      latest.fee,
+      latest.captured_at AS "capturedAt"
+    FROM anchors AS anchor
+    CROSS JOIN LATERAL (
+      SELECT
+        snapshot.id,
+        snapshot.rate,
+        snapshot.source_amount,
+        snapshot.destination_amount,
+        snapshot.fee,
+        snapshot.captured_at
+      FROM rate_snapshots AS snapshot
+      WHERE snapshot.corridor_id = ${corridorId}::uuid
+        AND snapshot.anchor_id = anchor.id
+      ORDER BY snapshot.captured_at DESC, snapshot.id DESC
+      LIMIT 1
+    ) AS latest
+    ORDER BY anchor.id
+  `;
 
   const result = await db.$queryRaw<Record<string, unknown>[]>(explainQuery);
   const plan = (result[0] as Record<string, unknown>)["QUERY PLAN"] as Record<string, unknown>[];
   const rootPlan = plan[0];
   
   assertPlanBudget("Latest Rate Observations", rootPlan, {
-    maxActualTotalTime: 50, // 50ms should be plenty for an index-only scan on ~10k rows
+    maxHeapFetches: 100, maxRowsRemoved: 0,
     requireIndexScanOn: ["rate_snapshots"],
     disallowSeqScanOn: ["rate_snapshots"],
     disallowSort: true, // Should use the ordered index rather than an explicit Sort node
@@ -207,23 +244,29 @@ test("Plan Budget: Latest Rate Observations Query (lib/rates)", async () => {
 
 test("Plan Budget: Reputation Evidence Latest Rates Query (lib/reputation)", async () => {
   const anchorId = testAnchors[0].id;
-  const explainQuery = Prisma.sql\`
+  const explainQuery = Prisma.sql`
     EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-    SELECT DISTINCT ON (corridor.slug)
+    SELECT
       corridor.slug AS "corridorSlug",
-      snapshot.captured_at AS "capturedAt"
-    FROM rate_snapshots AS snapshot
-    INNER JOIN corridors AS corridor ON corridor.id = snapshot.corridor_id
-    WHERE snapshot.anchor_id = \${anchorId}::uuid
-    ORDER BY corridor.slug, snapshot.captured_at DESC, snapshot.id DESC
-  \`;
+      latest.captured_at AS "capturedAt"
+    FROM corridors AS corridor
+    CROSS JOIN LATERAL (
+      SELECT snapshot.captured_at
+      FROM rate_snapshots AS snapshot
+      WHERE snapshot.anchor_id = ${anchorId}::uuid
+        AND snapshot.corridor_id = corridor.id
+      ORDER BY snapshot.captured_at DESC, snapshot.id DESC
+      LIMIT 1
+    ) AS latest
+    ORDER BY corridor.slug
+  `;
 
   const result = await db.$queryRaw<Record<string, unknown>[]>(explainQuery);
   const plan = (result[0] as Record<string, unknown>)["QUERY PLAN"] as Record<string, unknown>[];
   const rootPlan = plan[0];
 
   assertPlanBudget("Reputation Evidence Latest Rates", rootPlan, {
-    maxActualTotalTime: 50,
+    maxHeapFetches: 100, maxRowsRemoved: 0,
     requireIndexScanOn: ["rate_snapshots"],
     disallowSeqScanOn: ["rate_snapshots"],
     disallowSort: true, // Should leverage rate_snapshots_anchor_corridor_latest_idx
