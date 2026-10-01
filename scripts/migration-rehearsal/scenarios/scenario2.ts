@@ -1,10 +1,10 @@
-import { CORE_UTILS } from "@/scripts/migration-rehearsal/lib/core.ts";
+import { CORE_UTILS } from "@/scripts/migration-rehearsal/lib/core";
 import type {
   RehearsalResult,
   RecoveryDecision,
   CompatibilityCheckResult,
   MigrationRecord,
-} from "@/scripts/migration-rehearsal/lib/types.ts";
+} from "@/scripts/migration-rehearsal/lib/types";
 
 const { assertNotProduction, getMigrationHistory, runCommand, runSql, getTimestamp, getDurationMs, readMigrationSql, splitSqlStatements } =
   CORE_UTILS;
