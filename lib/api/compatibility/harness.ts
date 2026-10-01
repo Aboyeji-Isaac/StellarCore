@@ -351,6 +351,11 @@ export async function executeEndpointScenario(
             freshnessState: "fresh" as const,
             ageMs: 10000,
             included: true,
+            anomaly: Object.freeze({
+              status: "consistent" as const,
+              reason: null,
+              origin: "persisted" as const,
+            }),
           }),
           Object.freeze({
             snapshotId: "zeam-snapshot",
@@ -364,6 +369,11 @@ export async function executeEndpointScenario(
             freshnessState: "fresh" as const,
             ageMs: 15000,
             included: true,
+            anomaly: Object.freeze({
+              status: "consistent" as const,
+              reason: null,
+              origin: "persisted" as const,
+            }),
           }),
         ]),
         exclusions: Object.freeze([]),
@@ -403,6 +413,11 @@ export async function executeEndpointScenario(
             freshnessState: "fresh" as const,
             ageMs: 10000,
             included: true,
+            anomaly: Object.freeze({
+              status: "consistent" as const,
+              reason: null,
+              origin: "persisted" as const,
+            }),
           }),
           Object.freeze({
             snapshotId: "zeam-snapshot",
@@ -417,6 +432,11 @@ export async function executeEndpointScenario(
             ageMs: 300000,
             included: false,
             exclusionReason: "stale" as const,
+            anomaly: Object.freeze({
+              status: "insufficient_peers" as const,
+              reason: null,
+              origin: "persisted" as const,
+            }),
           }),
         ]),
         exclusions: Object.freeze([]),

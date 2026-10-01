@@ -147,6 +147,11 @@ function latestRate(rate: string, evaluatedAt: Date): LatestCorridorRate {
       freshnessState: "fresh",
       ageMs: Math.max(0, evaluatedAt.getTime() - SOURCE.getTime()),
       included: true,
+      anomaly: Object.freeze({
+        status: "consistent" as const,
+        reason: null,
+        origin: "persisted" as const,
+      }),
     })]),
     exclusions: Object.freeze([]),
   });

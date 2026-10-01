@@ -131,11 +131,17 @@ function toRepositoryObservation(
     destinationAmount: row.destinationAmount.toString(),
     fee: row.fee.toString(),
     capturedAt: new Date(row.capturedAt.getTime()),
-    anomaly: row.anomalyStatus === null
-      ? null
-      : Object.freeze({
-        status: row.anomalyStatus,
-        reason: row.anomalyReason as RateAnomalyReason | null,
+    // Absent when no assessment row exists, so the observation shape stays
+    // identical to the pre-#186 mapping the differential tests compare
+    // against. The read model treats absent and null the same way: it
+    // evaluates the deterministic criterion at read time.
+    ...(row.anomalyStatus == null
+      ? {}
+      : {
+        anomaly: Object.freeze({
+          status: row.anomalyStatus,
+          reason: row.anomalyReason as RateAnomalyReason | null,
+        }),
       }),
   });
 }

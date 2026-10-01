@@ -36,3 +36,29 @@ for (const [name, query, groupTable] of queries) {
     assert.doesNotMatch(query.text, /now\(\)|interval/i);
   });
 }
+
+// The anomaly-assessment variant (#186) must not change the latest-per-anchor
+// selection: the same bounded lateral lookup decides the row, and the newest
+// verdict arrives through one extra bounded probe per selected snapshot, never
+// a scan of assessment or snapshot history.
+const anomalyQuery = latestObservationsQuery(ID, { withAnomalyAssessment: true });
+
+test("latestObservationsQuery anomaly variant keeps the bounded latest-per-anchor selection", () => {
+  assert.match(anomalyQuery.text, /CROSS JOIN LATERAL/i);
+  assert.match(anomalyQuery.text, /ORDER BY snapshot\.captured_at DESC, snapshot\.id DESC\s+LIMIT 1/i);
+  assert.doesNotMatch(anomalyQuery.text, /DISTINCT ON/i);
+});
+
+test("latestObservationsQuery anomaly variant probes assessments per selected row only", () => {
+  const outer = anomalyQuery.text.split(/CROSS JOIN LATERAL/i)[0]!;
+  assert.match(outer, /FROM anchors AS/i);
+  assert.doesNotMatch(outer, /rate_snapshots/i);
+  assert.match(anomalyQuery.text, /FROM rate_anomaly_assessments AS candidate/i);
+  assert.match(anomalyQuery.text, /WHERE candidate\.snapshot_id = latest\.id/i);
+  assert.match(anomalyQuery.text, /LIMIT 1/i);
+  assert.doesNotMatch(anomalyQuery.text, /rate_anomaly_assessments[\s\S]*rate_anomaly_assessments/i);
+});
+
+test("latestObservationsQuery anomaly variant binds its id as the only parameter", () => {
+  assert.deepEqual(anomalyQuery.values, [ID]);
+});
