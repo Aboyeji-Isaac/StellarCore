@@ -3,6 +3,7 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
+import { checkMaintenanceMode } from "@/lib/maintenance";
 import { classifyPermanentScheduledFailure } from "@/lib/scheduled/suppression";
 import {
   PRISMA_SUPPRESSION_REPOSITORY,
@@ -15,6 +16,7 @@ export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
   evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
   suppressions?: SuppressionRepository;
+  checkMaintenance?: typeof checkMaintenanceMode;
   now: () => Date;
 }>;
 
@@ -28,6 +30,41 @@ export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
   const startedAt = dependencies.now();
+  const maintenance = await (
+    dependencies.checkMaintenance ?? checkMaintenanceMode
+  )();
+  if (!maintenance.ok) {
+    const completedAt = dependencies.now();
+    return Object.freeze({
+      ok: false,
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAt.toISOString(),
+      rates: Object.freeze({
+        attempted: 0,
+        succeeded: 0,
+        failed: 1,
+        skipped: 0,
+        failures: Object.freeze([
+          Object.freeze({
+            phase: "MAINTENANCE" as const,
+            code: maintenance.error.code,
+          }),
+        ]),
+      }),
+      reputation: Object.freeze({
+        attempted: 0,
+        succeeded: 0,
+        failed: 1,
+        failures: Object.freeze([
+          Object.freeze({
+            anchorSlug: "",
+            code: maintenance.error.code,
+          }),
+        ]),
+      }),
+    });
+  }
+
   let rates: ScheduledRefreshResult["rates"];
 
   try {
