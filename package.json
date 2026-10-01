@@ -27,6 +27,7 @@
     "verify:reputation": "tsx scripts/verify-reputation.ts",
     "benchmark:latest-observations": "tsx scripts/benchmark-latest-observations.ts",
     "bootstrap:registry": "tsx scripts/bootstrap-registry.ts",
+    "rehearse:migrations": "tsx scripts/migration-rehearsal/run.ts",
     "stamp:environment": "tsx scripts/stamp-database-environment.ts",
     "suppression:reactivate": "tsx scripts/reactivate-scheduled-source.ts",
     "release:manifest": "tsx scripts/release-cli.ts generate",
