@@ -13,6 +13,14 @@ with your pull request.
 
 - GitHub issue template for proposing a new corridor to the StellarCore registry (#4).
 - Exact asset identity enforcement and exact decimal arithmetic validation for normalized SEP-38 rate observations (#164).
+- Hardened PostgreSQL pool management with bounded connection acquisition, TCP keepalive, connection lifetime recycling, and failover-aware stale-connection handling (#209).
+- Database deadline and transaction-safety helpers for failover windows, including explicit ambiguous-commit reporting (#209).
+- Isolated PostgreSQL wire-level failover tests covering outage, recovery, interrupted transactions, deadlines, and pool storm bounds (#209).
+- Operational failover behavior and tuning guidance in `docs/database-failover.md` (#209).
+
+### Fixed
+
+- Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
 
 ## [Prior work] — 2026-09-25
 
