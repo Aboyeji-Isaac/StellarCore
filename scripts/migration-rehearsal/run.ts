@@ -4,16 +4,16 @@ import { exit } from "node:process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { CORE_UTILS } from "./lib/core.ts";
-import { runScenario1 } from "./scenarios/scenario1.ts";
-import { runScenario2 } from "./scenarios/scenario2.ts";
-import { runScenario3 } from "./scenarios/scenario3.ts";
-import type { RehearsalReport, RehearsalResult, RecoveryDecision } from "./lib/types.ts";
+import { CORE_UTILS } from "./lib/core";
+import { runScenario1 } from "./scenarios/scenario1";
+import { runScenario2 } from "./scenarios/scenario2";
+import { runScenario3 } from "./scenarios/scenario3";
+import type { RehearsalReport, RehearsalResult, RecoveryDecision, RehearsalScenarioId } from "./lib/types";
 
 const { REPO_ROOT } = CORE_UTILS;
 
 interface ScenarioRunner {
-  id: string;
+  id: RehearsalScenarioId;
   name: string;
   run: (dbUrl: string) => Promise<{
     results: RehearsalResult[];
@@ -24,7 +24,7 @@ interface ScenarioRunner {
   }>;
 }
 
-import type { MigrationRecord, CompatibilityCheckResult } from "./lib/types.ts";
+import type { MigrationRecord, CompatibilityCheckResult } from "./lib/types";
 
 const SCENARIOS: ScenarioRunner[] = [
   { id: "pre-schema-failure", name: "Migration fails before schema changes (idempotent)", run: runScenario1 },
