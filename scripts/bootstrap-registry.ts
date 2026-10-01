@@ -3,6 +3,7 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 
 import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
+import { checkMaintenanceMode } from "@/lib/maintenance";
 import { syncAnchorRegistry } from "@/lib/stellar/anchorSync";
 import { syncCorridorRegistry } from "@/lib/stellar/corridorSync";
 
@@ -15,6 +16,16 @@ async function main(): Promise<void> {
     // so it refuses to run unless the runtime and database identities match.
     // The check runs before any synchronization work.
     await ensureDatabaseEnvironment();
+    const maintenance = await checkMaintenanceMode();
+    if (!maintenance.ok) {
+      console.error(JSON.stringify({
+        ok: false,
+        code: maintenance.error.code,
+        message: maintenance.error.message,
+      }));
+      process.exitCode = 1;
+      return;
+    }
     const anchors = await syncAnchorRegistry();
     const corridors = await syncCorridorRegistry();
 
