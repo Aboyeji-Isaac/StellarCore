@@ -15,6 +15,30 @@ type PrismaRateHistoryRow = Readonly<{
   capturedAt: Date;
 }>;
 
+export function rateHistoryQuery(
+  corridorId: string,
+  fromDate: Date,
+  toDate: Date,
+): Prisma.Sql {
+  return Prisma.sql`
+      SELECT
+        snapshot.id,
+        anchor.slug AS "anchorSlug",
+        anchor.name AS "anchorName",
+        snapshot.rate,
+        snapshot.source_amount AS "sourceAmount",
+        snapshot.destination_amount AS "destinationAmount",
+        snapshot.fee,
+        snapshot.captured_at AS "capturedAt"
+      FROM rate_snapshots AS snapshot
+      INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
+      WHERE snapshot.corridor_id = ${corridorId}::uuid
+        AND snapshot.captured_at >= ${fromDate}
+        AND snapshot.captured_at <= ${toDate}
+      ORDER BY snapshot.captured_at ASC, snapshot.id ASC
+    `;
+}
+
 export const PRISMA_RATE_HISTORY_REPOSITORY: RateHistoryRepository = Object.freeze({
   async findCorridorBySlug(slug) {
     const { db } = await import("@/lib/dbClient");
@@ -33,23 +57,9 @@ export const PRISMA_RATE_HISTORY_REPOSITORY: RateHistoryRepository = Object.free
 
   async findHistoryObservations(corridorId, fromDate, toDate) {
     const { db } = await import("@/lib/dbClient");
-    const rows = await db.$queryRaw<PrismaRateHistoryRow[]>(Prisma.sql`
-      SELECT
-        snapshot.id,
-        anchor.slug AS "anchorSlug",
-        anchor.name AS "anchorName",
-        snapshot.rate,
-        snapshot.source_amount AS "sourceAmount",
-        snapshot.destination_amount AS "destinationAmount",
-        snapshot.fee,
-        snapshot.captured_at AS "capturedAt"
-      FROM rate_snapshots AS snapshot
-      INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
-      WHERE snapshot.corridor_id = ${corridorId}::uuid
-        AND snapshot.captured_at >= ${fromDate}
-        AND snapshot.captured_at <= ${toDate}
-      ORDER BY snapshot.captured_at ASC, snapshot.id ASC
-    `);
+    const rows = await db.$queryRaw<PrismaRateHistoryRow[]>(
+      rateHistoryQuery(corridorId, fromDate, toDate),
+    );
 
     return Object.freeze(rows.map(toRepositoryObservation));
   },

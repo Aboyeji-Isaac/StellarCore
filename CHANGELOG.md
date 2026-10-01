@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Repository-wide raw SQL boundary auditing with reviewed allowlists, CI enforcement, and adversarial parameterization tests (#217).
 - Canonical IDNA hostname identity for anchor registry, SEP-1, and outbound DNS trust decisions (#233).
 - Read-only bounded integrity auditing for persisted evidence relationships and semantic invariants (#190).
 - Versioned public API compatibility fixtures and CI breaking-change gates for anchors, corridors, rates, and reputation (#208).
