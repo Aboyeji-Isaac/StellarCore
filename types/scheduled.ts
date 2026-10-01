@@ -1,9 +1,15 @@
 import type { RateEngineFailure } from "@/types/rates";
 
-export type ScheduledRateFailure = RateEngineFailure | Readonly<{
-  phase: "PREPARATION";
-  code: "LIVE_RATE_PREPARATION_FAILURE";
-}>;
+export type ScheduledRateFailure =
+  | RateEngineFailure
+  | Readonly<{
+      phase: "PREPARATION";
+      code: "LIVE_RATE_PREPARATION_FAILURE";
+    }>
+  | Readonly<{
+      phase: "MAINTENANCE";
+      code: "MAINTENANCE_MODE_ACTIVE" | "MAINTENANCE_STATE_UNAVAILABLE";
+    }>;
 
 export type ScheduledReputationFailure = Readonly<{
   anchorSlug: string;
