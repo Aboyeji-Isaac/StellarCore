@@ -60,6 +60,15 @@ test("modified and missing members fail verification", async () => {
     assert.equal(tampered.ok, false);
     assert.equal(!tampered.ok && tampered.code, "CORRUPTED_DATA");
 
+    const restored = await exportEvidence(
+      dependencies(),
+      SELECTION,
+      dir,
+      "auditor",
+      () => FIXED_NOW,
+    );
+    assert.equal(restored.ok, true);
+
     await unlink(join(dir, "transfer-outcomes.ndjson"));
     const missing = await verifyExportPackage(dir);
     assert.equal(missing.ok, false);
