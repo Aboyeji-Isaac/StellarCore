@@ -28,6 +28,7 @@ export type ReleaseManifestInput = Readonly<{
   buildInvocationId: string;
   sourceWorkflowRef: string;
   environmentId: string;
+  runtimeConfigFingerprint: string;
 }>;
 
 export type ReleaseManifest = Readonly<{
@@ -75,6 +76,10 @@ export type BuildProvenance = Readonly<{
   toolchain: Readonly<{
     node: string;
     npm: string;
+  }>;
+  runtimeConfiguration: Readonly<{
+    fingerprint: string;
+    fingerprintVersion: "stellarcore-runtime-config-v1";
   }>;
   artifact: Readonly<{
     name: "stellarcore-release-manifest";
@@ -161,6 +166,10 @@ export function generateReleaseManifest(input: ReleaseManifestInput): ReleaseMan
     toolchain: Object.freeze({
       node: process.version,
       npm: process.env.STELLARCORE_NPM_VERSION ?? "bundled",
+    }),
+    runtimeConfiguration: Object.freeze({
+      fingerprint: input.runtimeConfigFingerprint,
+      fingerprintVersion: "stellarcore-runtime-config-v1" as const,
     }),
     artifact: Object.freeze({
       name: "stellarcore-release-manifest",
