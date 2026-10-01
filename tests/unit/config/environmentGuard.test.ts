@@ -120,8 +120,8 @@ test("guard failures are bounded and secret-free even when URLs leak into inputs
 
 test("stamp verification fails closed without a database stamp and never falls back", async () => {
   resetEnvironmentGuardCacheForTests();
-  // Declare a CI runtime identity for the guard (NODE_ENV=test resolves to "test").
-  TEST_ENV.NODE_ENV = "test";
+  const previous = TEST_ENV.STELLARCORE_ENVIRONMENT;
+  TEST_ENV.STELLARCORE_ENVIRONMENT = "test";
   const failingClient = {
     $queryRaw: async () => {
       const error = new Error("relation does not exist") as Error & { code?: string };
@@ -141,11 +141,14 @@ test("stamp verification fails closed without a database stamp and never falls b
       return true;
     },
   );
+  if (previous === undefined) delete TEST_ENV.STELLARCORE_ENVIRONMENT;
+  else TEST_ENV.STELLARCORE_ENVIRONMENT = previous;
 });
 
 test("stamp verification passes once and caches the verified pairing", async () => {
   resetEnvironmentGuardCacheForTests();
-  TEST_ENV.NODE_ENV = "test";
+  const previous = TEST_ENV.STELLARCORE_ENVIRONMENT;
+  TEST_ENV.STELLARCORE_ENVIRONMENT = "test";
   let reads = 0;
   const client = {
     $queryRaw: async () => {
@@ -160,15 +163,17 @@ test("stamp verification passes once and caches the verified pairing", async () 
   assert.equal(second.databaseEnvironment, "test");
   assert.equal(reads, 1, "verification must be cached after the first pass");
   resetEnvironmentGuardCacheForTests();
+  if (previous === undefined) delete TEST_ENV.STELLARCORE_ENVIRONMENT;
+  else TEST_ENV.STELLARCORE_ENVIRONMENT = previous;
 });
 
 test("mismatched stamps throw a typed isolation error", async () => {
   resetEnvironmentGuardCacheForTests();
+  const previous = TEST_ENV.STELLARCORE_ENVIRONMENT;
+  TEST_ENV.STELLARCORE_ENVIRONMENT = "test";
   const client = {
     $queryRaw: async () => [{ environment: "production" }],
   };
-  // A CI runtime (NODE_ENV=test) may not verify against a production stamp.
-  TEST_ENV.NODE_ENV = "test";
 
   await assert.rejects(
     () => assertDatabaseEnvironmentMatchesRuntime(client as never),
@@ -180,4 +185,6 @@ test("mismatched stamps throw a typed isolation error", async () => {
     },
   );
   resetEnvironmentGuardCacheForTests();
+  if (previous === undefined) delete TEST_ENV.STELLARCORE_ENVIRONMENT;
+  else TEST_ENV.STELLARCORE_ENVIRONMENT = previous;
 });
