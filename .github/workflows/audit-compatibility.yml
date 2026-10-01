@@ -34,6 +34,8 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
         run: npx prisma generate
 
       - name: Audit public API compatibility
