@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Anchor detail UI, median property tests, transfer-outcome webhook schema RFC, and SEP-38 USDC→BRL source research (#5, #7, #18, #21).
 - Public API reference and reputation methodology docs, verified public-route rate limiting, and reputation property coverage recovered from PR #83 (#22, #24, #25, #26).
 - Anchor detail UI, median-engine property coverage, transfer-outcome webhook schema RFC, and SEP-38 source research from PR #84 (#5, #7, #18, #21).
 - Isolated dependency-install reproducibility verification with bounded drift reports and toolchain capture (#237).
