@@ -54,9 +54,9 @@ export default async function AnchorPage({ params }: Props) {
       <main id="main-content" className="min-h-screen bg-[var(--black)] px-4 py-8 text-[var(--white)] sm:px-8 sm:py-10 lg:px-12">
         <div className="mx-auto max-w-6xl">
           <nav aria-label="Breadcrumb" className="text-xs text-[var(--muted)]">
-            <Link href="/dashboard" className="underline underline-offset-4">Dashboard</Link>
+            <Link href="/dashboard" className="underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]">Dashboard</Link>
             <span aria-hidden="true" className="px-2">/</span>
-            <span>{anchor.slug}</span>
+            <span aria-current="page">{anchor.slug}</span>
           </nav>
 
           <header className="mt-8 max-w-3xl">
@@ -139,7 +139,7 @@ export default async function AnchorPage({ params }: Props) {
                   <Link
                     key={corridor.slug}
                     href={`/corridors/${corridor.slug}`}
-                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)]"
+                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]"
                   >
                     <h3 className="text-lg text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
                       {corridor.sourceAsset} → {corridor.destinationAsset}
