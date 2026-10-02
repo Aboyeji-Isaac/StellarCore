@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
+
 import {
   snapshotReviewedLiveRates,
   type SnapshotReviewedLiveRatesDependencies,
@@ -117,3 +119,38 @@ function summary(): SafeLiveRateRunSummary {
     clockIntegrity: null,
   });
 }
+
+
+test("durably suppressed sources are removed before candidate preparation", async () => {
+  const first = REVIEWED_LIVE_RATE_SOURCES[0];
+  assert.ok(first);
+
+  let preparedSourceKeys: string[] = [];
+  let executed = -1;
+
+  const result = await snapshotReviewedLiveRates({
+    assertConfiguration: () => {},
+    listSuppressed: async () => [{
+      anchorSlug: first.anchorSlug,
+      corridorSlug: first.corridorSlug,
+    }],
+    buildCandidates: async (sources = []) => {
+      preparedSourceKeys = sources.map(
+        ({ anchorSlug, corridorSlug }) => `${anchorSlug}:${corridorSlug}`,
+      );
+      return [];
+    },
+    executeCandidates: async (candidates) => {
+      executed = candidates.length;
+      return summary();
+    },
+  });
+
+  assert.equal(
+    preparedSourceKeys.includes(`${first.anchorSlug}:${first.corridorSlug}`),
+    false,
+  );
+  assert.equal(executed, 0);
+  assert.equal(result.suppressed, 1);
+  assert.equal(result.succeeded, 0);
+});

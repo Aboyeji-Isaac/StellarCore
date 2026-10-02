@@ -4,12 +4,18 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
+import { classifyPermanentScheduledFailure } from "@/lib/scheduled/suppression";
+import {
+  PRISMA_SUPPRESSION_REPOSITORY,
+  type SuppressionRepository,
+} from "@/lib/scheduled/suppressionRepository";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/scheduled";
 
 export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
   evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
+  suppressions?: SuppressionRepository;
   now: () => Date;
 }>;
 
@@ -26,7 +32,13 @@ export async function runScheduledRefresh(
   let rates: ScheduledRefreshResult["rates"];
 
   try {
-    rates = toScheduledRates(await dependencies.snapshotRates());
+    const summary = await dependencies.snapshotRates();
+    await recordPermanentFailures(
+      summary,
+      dependencies.suppressions ?? PRISMA_SUPPRESSION_REPOSITORY,
+      startedAt,
+    );
+    rates = toScheduledRates(summary);
   } catch {
     rates = preparationFailure();
   }
@@ -63,8 +75,31 @@ function toScheduledRates(summary: SafeLiveRateRunSummary): ScheduledRefreshResu
     succeeded: summary.succeeded,
     failed: summary.failed,
     skipped: summary.skipped,
+    ...(summary.suppressed && summary.suppressed > 0
+      ? { suppressed: summary.suppressed }
+      : {}),
     failures: Object.freeze(summary.failures.map((failure) => Object.freeze({ ...failure }))),
   });
+}
+
+async function recordPermanentFailures(
+  summary: SafeLiveRateRunSummary,
+  repository: SuppressionRepository,
+  observedAt: Date,
+): Promise<void> {
+  for (const failure of summary.failures) {
+    const reason = classifyPermanentScheduledFailure(failure);
+    if (!reason) continue;
+
+    await repository.recordDeterministicFailure({
+      anchorSlug: failure.anchorSlug,
+      corridorSlug: failure.corridorSlug,
+      reason,
+      failureCode: failure.code,
+      failurePhase: failure.phase,
+      observedAt,
+    });
+  }
 }
 
 function preparationFailure(): ScheduledRefreshResult["rates"] {

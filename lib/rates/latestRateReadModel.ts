@@ -2,7 +2,9 @@ import { SYSTEM_CLOCK } from "@/lib/clock/clock";
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
-import type { ServerClock } from "@/types/clock";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
+import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
+import type { ScheduledSourceIdentity } from "@/types/suppression";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
@@ -15,7 +17,7 @@ export async function readLatestCorridorRate(
   options: Readonly<{
     repository?: LatestRateRepository;
     evaluatedAt?: Date;
-    clock?: ServerClock;
+    listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
   }> = {},
 ): Promise<LatestCorridorRateReadResult> {
   const evaluatedAt = options.evaluatedAt
@@ -29,8 +31,22 @@ export async function readLatestCorridorRate(
     const corridor = await repository.findCorridorBySlug(corridorSlug);
     if (!corridor) return failure(corridorSlug, "CORRIDOR_NOT_FOUND");
 
+    const suppressed = await (
+      options.listSuppressed ??
+      (options.repository
+        ? async () => Object.freeze([] as ScheduledSourceIdentity[])
+        : PRISMA_SUPPRESSION_REPOSITORY.listSuppressed)
+    )();
+    const suppressedKeys = new Set(
+      suppressed.map(({ anchorSlug, corridorSlug }) =>
+        `${anchorSlug}\0${corridorSlug}`),
+    );
+
     const latest = selectLatestPerAnchor(
       await repository.findLatestObservations(corridor.id),
+    ).filter(
+      ({ anchorSlug }) =>
+        !suppressedKeys.has(`${anchorSlug}\0${corridor.slug}`),
     );
     const median = computeFreshMedian(latest.map((observation) => ({
       anchorSlug: observation.anchorSlug,
@@ -77,8 +93,8 @@ export async function readLatestCorridorRate(
       observations,
       exclusions: Object.freeze(observations.filter(({ included }) => !included)),
     });
-  } catch {
-    return failure(corridorSlug, "READ_FAILURE");
+  } catch (error) {
+    return failure(corridorSlug, isTransientDatabaseFailure(error) ? "DATABASE_UNAVAILABLE" : "READ_FAILURE");
   }
 }
 
@@ -125,7 +141,7 @@ function formatTimestamp(value: Date | string): string {
 
 function failure(
   corridorSlug: string,
-  code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "READ_FAILURE",
+  code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "READ_FAILURE" | "DATABASE_UNAVAILABLE",
 ): LatestCorridorRateReadResult {
   return Object.freeze({ ok: false, corridorSlug, code });
 }

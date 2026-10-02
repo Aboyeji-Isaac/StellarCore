@@ -9,32 +9,11 @@ import type { ClockIntegrityVerdict } from "@/types/clock";
 
 const EVALUATED_AT = new Date("2026-08-31T15:00:00.000Z");
 
-function passedVerdict(): ClockIntegrityVerdict {
-  return Object.freeze({
-    boundary: "REPUTATION_EVALUATION",
-    outcome: "PASSED",
-    code: null,
-    direction: "NONE",
-    skewMs: 0,
-    toleranceMs: 5_000,
-    applicationTime: EVALUATED_AT.toISOString(),
-    databaseTime: EVALUATED_AT.toISOString(),
-    runId: null,
-  });
-}
-
-function baseDependencies(): ReputationEvaluationRunDependencies {
-  return Object.freeze({
-    listAnchorSlugs: async () => [],
-    checkClockIntegrity: async () => passedVerdict(),
-    now: () => EVALUATED_AT,
-    evaluate: async () => Object.freeze({
-      ok: true as const,
-      calculation: {} as never,
-      persisted: null,
-    }),
-  });
-}
+const TEST_SNAPSHOT = Object.freeze({
+  snapshotId: "100:5:",
+  readAt: EVALUATED_AT,
+  isolationLevel: "REPEATABLE READ" as const,
+});
 
 test("persisted reputation evaluation is deterministic, deduplicated, and isolates engine failures", async () => {
   const calls: string[] = [];
@@ -49,6 +28,7 @@ test("persisted reputation evaluation is deterministic, deduplicated, and isolat
           ok: true as const,
           calculation: {} as never,
           persisted: null,
+          snapshot: TEST_SNAPSHOT,
         });
     },
   });
@@ -85,6 +65,12 @@ test("explicit anchor slugs preserve the shared evaluation path without listing 
         listed = true;
         return [];
       },
+      evaluate: async () => Object.freeze({
+        ok: true as const,
+        calculation: {} as never,
+        persisted: null,
+        snapshot: TEST_SNAPSHOT,
+      }),
     }),
   });
 
