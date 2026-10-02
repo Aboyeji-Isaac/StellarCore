@@ -46,17 +46,85 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+/// Reviewed lifecycle state of a persisted anchor. Retirement removes an
+/// anchor from reviewed configuration; it is not an observation of external
+/// downtime or anchor health.
+enum RegistryLifecycleState {
+  ACTIVE
+  RETIRED
+
+  @@map("registry_lifecycle_state")
+}
+
+/// Truthful origin of an operator action: a system process (no identity) or a
+/// verified human operator identity supplied by a trusted boundary.
+enum OperatorActorType {
+  SYSTEM
+  HUMAN
+
+  @@map("operator_actor_type")
+}
+
+/// A ledger row always describes an applied action. Dry runs are previewed and
+/// are never persisted as applied records.
+enum OperatorActionMode {
+  DRY_RUN
+  APPLIED
+
+  @@map("operator_action_mode")
+}
+
+enum OperatorTargetType {
+  RATE_SNAPSHOT
+  ANCHOR
+
+  @@map("operator_target_type")
+}
+
+/// Stable vocabulary of supported privileged administrative actions.
+enum OperatorActionType {
+  RATE_SNAPSHOT_INVALIDATED
+  RATE_SNAPSHOT_SUPERSEDED
+  RATE_DISPOSITION_RECOVERED
+  ANCHOR_RETIRED
+  ANCHOR_REACTIVATED
+
+  @@map("operator_action_type")
+}
+
+/// Stable vocabulary of reviewed reasons for a privileged action.
+enum OperatorReasonCode {
+  SOURCE_ERROR
+  DUPLICATE_OBSERVATION
+  STALE_ARTIFACT
+  DATA_CORRECTION
+  REVIEWED_CONFIGURATION_REMOVAL
+  OPERATOR_RECOVERY
+  OTHER_REVIEWED
+
+  @@map("operator_reason_code")
+}
+
+enum RateSnapshotDispositionType {
+  INVALIDATED
+  SUPERSEDED
+
+  @@map("rate_snapshot_disposition_type")
+}
+
 model Anchor {
-  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  slug              String       @unique
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug              String                 @unique
   name              String
-  homeDomain        String       @map("home_domain")
-  tomlUrl           String       @map("toml_url")
-  seps              Int[]        @default([])
-  isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
-  status            AnchorStatus @default(UNKNOWN)
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  homeDomain        String                 @map("home_domain")
+  tomlUrl           String                 @map("toml_url")
+  seps              Int[]                  @default([])
+  isTransferCapable Boolean                @default(false) @map("is_transfer_capable")
+  status            AnchorStatus           @default(UNKNOWN)
+  lifecycleState    RegistryLifecycleState @default(ACTIVE) @map("lifecycle_state")
+  retiredAt         DateTime?              @map("retired_at") @db.Timestamptz(6)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   corridors        AnchorCorridor[]
   rateSnapshots    RateSnapshot[]
@@ -105,8 +173,9 @@ model RateSnapshot {
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
 
-  anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  anchor      Anchor                   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  corridor    Corridor                 @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  disposition RateSnapshotDisposition?
 
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
@@ -162,4 +231,55 @@ model ReputationScore {
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+/// Append-only ledger of privileged administrative actions that change evidence
+/// usability or reviewed lifecycle state. Rows are immutable at the database
+/// level (see the append-only trigger in the migration) and are written in the
+/// same transaction as the state change they describe. This records StellarCore
+/// governance and is never evidence about an anchor's behavior.
+model OperatorAction {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actionId    String             @unique @map("action_id")
+  actionType  OperatorActionType @map("action_type")
+  mode        OperatorActionMode @default(APPLIED)
+  targetType  OperatorTargetType @map("target_type")
+  targetId    String             @map("target_id")
+  targetLabel String?            @map("target_label")
+  reasonCode  OperatorReasonCode @map("reason_code")
+  rationale   String?
+  actorType   OperatorActorType  @map("actor_type")
+  actorId     String?            @map("actor_id")
+  runId       String?            @map("run_id")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rateSnapshotDispositions RateSnapshotDisposition[]
+
+  @@index([targetType, targetId, createdAt(sort: Desc)], map: "operator_actions_target_idx")
+  @@index([runId], map: "operator_actions_run_id_idx")
+  @@index([actionType, createdAt(sort: Desc)], map: "operator_actions_action_type_idx")
+  @@index([actorType, createdAt(sort: Desc)], map: "operator_actions_actor_type_idx")
+  @@map("operator_actions")
+}
+
+/// Current administrative disposition for a persisted rate snapshot. It never
+/// rewrites the immutable historical RateSnapshot row; it only makes that
+/// snapshot ineligible for the latest-rate read model until recovered.
+model RateSnapshotDisposition {
+  id             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshotId     String                      @unique @map("snapshot_id") @db.Uuid
+  disposition    RateSnapshotDispositionType
+  reasonCode     OperatorReasonCode          @map("reason_code")
+  rationale      String?
+  actorType      OperatorActorType           @map("actor_type")
+  actorId        String?                     @map("actor_id")
+  runId          String?                     @map("run_id")
+  actionRecordId String                      @map("action_record_id") @db.Uuid
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  snapshot     RateSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actionRecord OperatorAction @relation(fields: [actionRecordId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([disposition], map: "rate_snapshot_dispositions_type_idx")
+  @@map("rate_snapshot_dispositions")
 }

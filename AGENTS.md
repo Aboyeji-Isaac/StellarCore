@@ -13,7 +13,10 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm install` installs locked dependencies.
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
-- `npm test` runs Vitest unit and integration tests.
+- `npm test` runs the Node test suite; database integration tests skip unless their opt-in flag is set.
+- `RUN_OPERATOR_AUDIT_DATABASE_INTEGRATION=1 DATABASE_URL=... npx tsx --test tests/integration/audit/operatorAuditLedger.database.integration.test.ts` runs the isolated PostgreSQL operator-audit tests; never point this at production.
+- `npm run audit:operators` prints a read-only, bounded summary of the operator audit ledger.
+- `npm run operator:action -- <command> ...` runs a reviewed administrative action; it is a dry run unless `--apply` is passed.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
@@ -39,3 +42,5 @@ No commit convention is established yet. Use concise, imperative subjects, optio
 ## Security & Configuration
 
 Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.
+
+Privileged administrative actions are recorded in an append-only `operator_actions` ledger. Never store tokens, authorization headers, raw payloads, or stack traces in an audit entry; the write path rejects control characters and bounds every text field, and the database adds CHECK constraints and an append-only trigger. Applied actions and their ledger rows must commit in one transaction, dry runs must write nothing, actor identity must be truthful (system or a verified human id, never invented), and historical evidence rows must never be rewritten to encode administrative state. See [docs/operator-audit.md](docs/operator-audit.md).

@@ -58,6 +58,7 @@ export async function evaluatePersistedAnchorReputations(
 async function listPersistedAnchorSlugs(): Promise<readonly string[]> {
   const { db } = await import("@/lib/dbClient");
   const anchors = await db.anchor.findMany({
+    where: { lifecycleState: "ACTIVE" },
     orderBy: { slug: "asc" },
     select: { slug: true },
   });

@@ -63,6 +63,7 @@ export type PersistedRateSnapshot = Readonly<{
 
 export type RateSnapshotPersistenceCode =
   | "ANCHOR_NOT_FOUND"
+  | "ANCHOR_RETIRED"
   | "CORRIDOR_NOT_FOUND"
   | "ASSOCIATION_NOT_FOUND"
   | "PERSISTENCE_FAILURE";
@@ -72,7 +73,9 @@ export type RateSnapshotPersistenceResult =
   | Readonly<{ ok: false; code: RateSnapshotPersistenceCode }>;
 
 export type RateSnapshotRepository = Readonly<{
-  findAnchorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
+  findAnchorBySlug: (
+    slug: string,
+  ) => Promise<Readonly<{ id: string; lifecycleState?: "ACTIVE" | "RETIRED" }> | null>;
   findCorridorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
   hasAssociation: (anchorId: string, corridorId: string) => Promise<boolean>;
   createSnapshot: (input: Readonly<{

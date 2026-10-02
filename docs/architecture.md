@@ -98,5 +98,23 @@ safe summary while reputation evaluation still runs; a fatal reputation
 failure produces a safe server error. The production cron invokes this route
 daily, while registry bootstrap remains a separate manual GitHub Actions job.
 
+## Administrative actions and the audit ledger
+
+Privileged actions that change evidence usability or reviewed lifecycle state
+are separate from evidence about anchors. Reviewed administrative operations
+(rate snapshot invalidation, supersession, and recovery; anchor retirement and
+reactivation) require an explicit dry-run or apply mode. A dry run validates,
+resolves the target, checks the same preconditions as apply, and returns a
+deterministic bounded preview without writing.
+
+Each applied operation commits its state change and exactly one immutable
+`OperatorAction` ledger row in a single transaction. The repository interface
+exposes only append and bounded reads, database CHECK constraints enforce bounded
+fields and truthful actor identity, and an append-only trigger rejects update,
+delete, and truncate. Retirement removes an anchor from the reviewed read
+models; it is not an observation of external downtime. Dispositions never
+rewrite historical rate snapshots. See [operator-audit.md](operator-audit.md)
+for the vocabulary and tooling.
+
 See the [README](../README.md) for setup, API details, and operational
 invariants, and [DEPLOYMENT.md](DEPLOYMENT.md) for production procedures.

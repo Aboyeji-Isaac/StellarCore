@@ -43,7 +43,9 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
         countryFrom: true,
         assetCodeTo: true,
         countryTo: true,
-        _count: { select: { anchors: true } },
+        _count: {
+          select: { anchors: { where: { anchor: { lifecycleState: "ACTIVE" } } } },
+        },
       },
     });
 
@@ -68,6 +70,7 @@ export const PRISMA_CORRIDOR_DIRECTORY_REPOSITORY = Object.freeze({
         assetCodeTo: true,
         countryTo: true,
         anchors: {
+          where: { anchor: { lifecycleState: "ACTIVE" } },
           orderBy: { anchor: { slug: "asc" } },
           select: {
             anchor: {

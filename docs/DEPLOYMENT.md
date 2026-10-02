@@ -27,6 +27,17 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 
 Do not run `prisma migrate dev`, `prisma db push`, reset commands, or `migrate deploy` from ordinary Vercel builds. Keeping migrations outside the build prevents preview deployments from mutating a shared production database.
 
+## Operator audit ledger
+
+The committed migration creates the append-only `operator_actions` ledger, its
+CHECK constraints, and its immutability trigger. No new environment variable is
+required. Reviewed administrative actions are run manually with
+`npm run operator:action` (dry run unless `--apply` is passed) and inspected
+read-only with `npm run audit:operators`. These are operator tools, not public
+endpoints: do not expose them through the app runtime or preview deployments.
+Each applied action commits its state change and exactly one immutable ledger
+row atomically. See [operator-audit.md](operator-audit.md).
+
 ## Production migration workflow (GitHub Actions)
 
 The protected step above is implemented as a manual GitHub Actions workflow:

@@ -46,6 +46,12 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
       FROM rate_snapshots AS snapshot
       INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
       WHERE snapshot.corridor_id = ${corridorId}::uuid
+        AND anchor.lifecycle_state = 'ACTIVE'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM rate_snapshot_dispositions AS disposition
+          WHERE disposition.snapshot_id = snapshot.id
+        )
       ORDER BY snapshot.anchor_id, snapshot.captured_at DESC, snapshot.id DESC
     `);
 

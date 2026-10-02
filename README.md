@@ -274,6 +274,23 @@ established reputation evidence.
 
 ---
 
+## Operator audit ledger
+
+Privileged administrative actions that change evidence usability or reviewed
+lifecycle state are recorded in one append-only ledger: rate snapshot
+invalidation, supersession, and recovery, plus anchor retirement and
+reactivation. Dry runs never write; an applied change commits atomically with
+exactly one immutable audit row. Actor identity is truthful (`SYSTEM` with no
+identity, or a verified `HUMAN` identity), rationale is bounded and sanitized,
+and historical evidence rows are never rewritten to encode administrative
+state. An operator action describes StellarCore governance, not anchor
+behavior: invalidation is not proof of malicious behavior, and retirement is
+removal from reviewed configuration, not external downtime. See
+[docs/operator-audit.md](docs/operator-audit.md) for the vocabulary, atomicity
+rules, and commands.
+
+---
+
 ## Project Structure
 
 ```
@@ -382,13 +399,24 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Inspect the operator audit ledger (read-only, bounded, sanitized)
+npm run audit:operators
+
+# Run a reviewed administrative action; dry run unless --apply is passed
+npm run operator:action -- retire-anchor <anchorSlug> --reason=REVIEWED_CONFIGURATION_REMOVAL
 ```
 
 ### Running Tests
 
 ```bash
-# Unit and integration tests
+# Unit and integration tests (operator-audit database tests are skipped by default)
 npm test
+
+# Opt-in isolated PostgreSQL operator-audit integration tests
+RUN_OPERATOR_AUDIT_DATABASE_INTEGRATION=1 \
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
+npx tsx --test tests/integration/audit/operatorAuditLedger.database.integration.test.ts
 
 # Pure offline audit of reviewed registry relationships
 npm run audit:config

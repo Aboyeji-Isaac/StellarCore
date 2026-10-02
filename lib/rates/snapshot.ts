@@ -12,6 +12,9 @@ export async function persistRateSnapshot(
   try {
     const anchor = await repository.findAnchorBySlug(observation.anchorSlug);
     if (!anchor) return failure("ANCHOR_NOT_FOUND");
+    // Retirement removes an anchor from reviewed configuration, so new evidence
+    // is not appended for it. Historical snapshots remain immutable.
+    if (anchor.lifecycleState === "RETIRED") return failure("ANCHOR_RETIRED");
     const corridor = await repository.findCorridorBySlug(observation.corridorSlug);
     if (!corridor) return failure("CORRIDOR_NOT_FOUND");
     if (!(await repository.hasAssociation(anchor.id, corridor.id))) {
@@ -47,7 +50,10 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
   Object.freeze({
   async findAnchorBySlug(slug) {
     const { db } = await import("@/lib/dbClient");
-    return db.anchor.findUnique({ where: { slug }, select: { id: true } });
+    return db.anchor.findUnique({
+      where: { slug },
+      select: { id: true, lifecycleState: true },
+    });
   },
   async findCorridorBySlug(slug) {
     const { db } = await import("@/lib/dbClient");

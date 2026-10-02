@@ -33,6 +33,7 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
   async findAll(): Promise<readonly AnchorDirectoryRecord[]> {
     const { db } = await import("@/lib/dbClient");
     const anchors = await db.anchor.findMany({
+      where: { lifecycleState: "ACTIVE" },
       orderBy: { slug: "asc" },
       select: {
         slug: true,
@@ -56,8 +57,8 @@ export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
 
   async findBySlug(slug: string): Promise<AnchorDetailRecord | null> {
     const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug },
+    const anchor = await db.anchor.findFirst({
+      where: { slug, lifecycleState: "ACTIVE" },
       select: {
         slug: true,
         name: true,

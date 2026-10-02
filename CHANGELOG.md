@@ -9,8 +9,25 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Added an append-only operator audit ledger for privileged
+  evidence-management actions, with typed action/reason vocabularies, truthful
+  system/human actor identity, and bounded, sanitized rationale.
+- Added reviewed administrative operations with an explicit dry-run/apply
+  distinction: rate snapshot invalidation, supersession, and recovery, plus
+  anchor retirement and reactivation. Each applied change commits atomically
+  with exactly one immutable ledger row.
+- Added read-only operator audit inspection (`npm run audit:operators`) and a
+  dry-run-first operator action CLI (`npm run operator:action`).
+- Added isolated PostgreSQL tests proving audit atomicity, database-enforced
+  immutability, rollback on failure, and read-model integration.
+
+### Changed
+
+- Retired anchors are excluded from the public anchor/corridor and latest-rate
+  read models, and rate-snapshot persistence is rejected for them. Historical
+  evidence rows are never rewritten to encode administrative state.
 
 ## [Prior work] — 2026-09-25
 

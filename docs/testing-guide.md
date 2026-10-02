@@ -32,6 +32,22 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Database integration tests
+
+The database-backed integration tests are opt-in and skipped by default. Run the
+operator-audit tests against an isolated PostgreSQL (never production
+credentials or production load):
+
+```bash
+RUN_OPERATOR_AUDIT_DATABASE_INTEGRATION=1 \
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
+npx tsx --test tests/integration/audit/operatorAuditLedger.database.integration.test.ts
+```
+
+The ledger is append-only at the database level, so those tests never delete
+audit rows; they use unique identifiers and scope every assertion to them. See
+[operator-audit.md](operator-audit.md) for the guarantees each test proves.
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The
