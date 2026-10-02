@@ -148,8 +148,8 @@ export function isPublicAddress(address: string): boolean {
       const ipv6 = parsed as ipaddr.IPv6;
       if (ipv6.isIPv4MappedAddress()) parsed = ipv6.toIPv4Address();
       else if (
-        DISALLOWED_IPV6_PREFIXES.some(([network, prefix]) =>
-          ipv6.match(network as ipaddr.IPv6, prefix),
+        DISALLOWED_IPV6_PREFIXES.some(([network, prefix]: unknown[]) =>
+          ipv6.match(network as ipaddr.IPv6, prefix as number),
         )
       ) {
         return false;
