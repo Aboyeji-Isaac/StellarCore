@@ -5,6 +5,7 @@ import {
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
+import { isRequestCancellationError } from "@/lib/api/requestContext";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   CorridorApiResult,
@@ -14,16 +15,19 @@ import type {
   PublicCorridorDetail,
   PublicCorridorsResponse,
 } from "@/types/api/corridors";
+import type { RequestContext } from "@/types/api/requestContext";
 
 const CORRIDOR_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_CORRIDOR_SLUG_LENGTH = 100;
 
 export type CorridorsApiDependencies = Readonly<{
   repository?: CorridorDirectoryRepository;
+  context?: RequestContext;
 }>;
 
 export type CorridorApiDependencies = Readonly<{
   repository?: CorridorDetailRepository;
+  context?: RequestContext;
 }>;
 
 export function isValidCorridorSlug(slug: string): boolean {
@@ -35,14 +39,20 @@ export function isValidCorridorSlug(slug: string): boolean {
 export async function getCorridorsApiResult(
   dependencies: CorridorsApiDependencies = {},
 ): Promise<CorridorsApiResult> {
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
+    const records = await repository.findAll(context);
+    context?.assertActive();
     return Object.freeze({
       status: 200,
-      body: serializeCorridors(await repository.findAll()),
+      body: serializeCorridors(records),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return Object.freeze({
       status: 500,
       body: Object.freeze({
@@ -67,10 +77,14 @@ export async function getCorridorApiResult(
     );
   }
 
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const corridor = await repository.findBySlug(slug);
+    const corridor = await repository.findBySlug(slug, context);
+    context?.assertActive();
 
     if (!corridor) {
       return errorResult(404, "corridor_not_found", "Corridor not found.");
@@ -80,7 +94,8 @@ export async function getCorridorApiResult(
       status: 200,
       body: Object.freeze({ corridor: serializeCorridorDetail(corridor) }),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return errorResult(500, "internal_error", "Unable to load corridor.");
   }
 }

@@ -1,6 +1,8 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
+import { isRequestCancellationError } from "@/lib/api/requestContext";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
+import type { RequestContext } from "@/types/api/requestContext";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
 import type {
   PublicRateObservation,
@@ -15,9 +17,10 @@ const CORRIDOR_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export type RatesApiDependencies = Readonly<{
   readLatestRate?: (
     corridorSlug: string,
-    options: Readonly<{ evaluatedAt: Date }>,
+    options: Readonly<{ evaluatedAt: Date; context?: RequestContext }>,
   ) => Promise<LatestCorridorRateReadResult>;
   now?: () => Date;
+  context?: RequestContext;
 }>;
 
 export async function getRatesApiResult(
@@ -27,13 +30,16 @@ export async function getRatesApiResult(
   const validation = validateCorridorParameter(corridorParameter);
   if (!validation.ok) return validation.result;
 
+  const { context } = dependencies;
   const evaluatedAt = dependencies.now?.() ?? new Date();
   const read = dependencies.readLatestRate ?? readLatestCorridorRate;
   let result: LatestCorridorRateReadResult;
 
   try {
-    result = await read(validation.corridorSlug, { evaluatedAt });
-  } catch {
+    context?.assertActive();
+    result = await read(validation.corridorSlug, { evaluatedAt, context });
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 
@@ -45,8 +51,10 @@ export async function getRatesApiResult(
   }
 
   try {
+    context?.assertActive();
     return Object.freeze({ status: 200, body: serializeRates(result) });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return errorResult(500, "internal_error", "Unable to read rates.");
   }
 }

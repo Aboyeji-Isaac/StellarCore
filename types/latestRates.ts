@@ -1,3 +1,4 @@
+import type { RequestContext } from "@/types/api/requestContext";
 import type { MedianExclusionReason, RateFreshnessState } from "@/types/rates";
 
 export type LatestRateRepositoryCorridor = Readonly<{
@@ -23,9 +24,11 @@ export type LatestRateRepositoryObservation = Readonly<{
 export type LatestRateRepository = Readonly<{
   findCorridorBySlug: (
     slug: string,
+    context?: RequestContext,
   ) => Promise<LatestRateRepositoryCorridor | null>;
   findLatestObservations: (
     corridorId: string,
+    context?: RequestContext,
   ) => Promise<readonly LatestRateRepositoryObservation[]>;
 }>;
 

@@ -4,6 +4,7 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
+import { isRequestCancellationError } from "@/lib/api/requestContext";
 import { transferCapable } from "@/lib/stellar/anchors";
 import type {
   AnchorApiResult,
@@ -13,12 +14,14 @@ import type {
   PublicAnchorSummary,
   PublicAnchorsResponse,
 } from "@/types/api/anchors";
+import type { RequestContext } from "@/types/api/requestContext";
 
 const ANCHOR_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_ANCHOR_SLUG_LENGTH = 100;
 
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
+  context?: RequestContext;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -30,14 +33,20 @@ export function isValidAnchorSlug(slug: string): boolean {
 export async function getAnchorsApiResult(
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorsApiResult> {
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
+    const records = await repository.findAll(context);
+    context?.assertActive();
     return Object.freeze({
       status: 200,
-      body: serializeAnchors(await repository.findAll()),
+      body: serializeAnchors(records),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return internalError();
   }
 }
@@ -58,10 +67,14 @@ export async function getAnchorApiResult(
     });
   }
 
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
-    const anchor = await repository.findBySlug(slug);
+    const anchor = await repository.findBySlug(slug, context);
+    context?.assertActive();
     if (!anchor) {
       return Object.freeze({
         status: 404,
@@ -78,7 +91,8 @@ export async function getAnchorApiResult(
       status: 200,
       body: Object.freeze({ anchor: serializeAnchorDetail(anchor) }),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return internalError();
   }
 }

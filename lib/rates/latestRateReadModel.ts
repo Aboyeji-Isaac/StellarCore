@@ -1,6 +1,8 @@
+import { isRequestCancellationError } from "@/lib/api/requestContext";
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
+import type { RequestContext } from "@/types/api/requestContext";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
@@ -13,6 +15,7 @@ export async function readLatestCorridorRate(
   options: Readonly<{
     repository?: LatestRateRepository;
     evaluatedAt?: Date;
+    context?: RequestContext;
   }> = {},
 ): Promise<LatestCorridorRateReadResult> {
   const evaluatedAt = options.evaluatedAt ?? new Date();
@@ -21,13 +24,16 @@ export async function readLatestCorridorRate(
   }
 
   try {
+    options.context?.assertActive();
     const repository = options.repository ?? PRISMA_LATEST_RATE_REPOSITORY;
-    const corridor = await repository.findCorridorBySlug(corridorSlug);
+    const corridor = await repository.findCorridorBySlug(corridorSlug, options.context);
     if (!corridor) return failure(corridorSlug, "CORRIDOR_NOT_FOUND");
 
+    options.context?.assertActive();
     const latest = selectLatestPerAnchor(
-      await repository.findLatestObservations(corridor.id),
+      await repository.findLatestObservations(corridor.id, options.context),
     );
+    options.context?.assertActive();
     const median = computeFreshMedian(latest.map((observation) => ({
       anchorSlug: observation.anchorSlug,
       corridorSlug: corridor.slug,
@@ -73,7 +79,8 @@ export async function readLatestCorridorRate(
       observations,
       exclusions: Object.freeze(observations.filter(({ included }) => !included)),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return failure(corridorSlug, "READ_FAILURE");
   }
 }

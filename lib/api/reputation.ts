@@ -4,6 +4,7 @@ import {
   type ReputationApiAnchorRecord,
   type ReputationApiRepository,
 } from "@/lib/api/reputationRepository";
+import { isRequestCancellationError } from "@/lib/api/requestContext";
 import type {
   PublicReputation,
   PublicReputationListResponse,
@@ -13,18 +14,26 @@ import type {
   ReputationApiErrorResponse,
   ReputationApiListResult,
 } from "@/types/api/reputation";
+import type { RequestContext } from "@/types/api/requestContext";
 
 export type ReputationApiDependencies = Readonly<{
   repository?: ReputationApiRepository;
+  context?: RequestContext;
 }>;
 
 export async function getReputationApiResult(
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiListResult> {
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    return Object.freeze({ status: 200, body: serializeReputationList(await repository.findAll()) });
-  } catch {
+    const records = await repository.findAll(context);
+    context?.assertActive();
+    return Object.freeze({ status: 200, body: serializeReputationList(records) });
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return listInternalError();
   }
 }
@@ -40,9 +49,13 @@ export async function getAnchorReputationApiResult(
     });
   }
 
+  const { context } = dependencies;
+
   try {
+    context?.assertActive();
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    const record = await repository.findBySlug(slug);
+    const record = await repository.findBySlug(slug, context);
+    context?.assertActive();
     if (!record) {
       return Object.freeze({
         status: 404,
@@ -53,7 +66,8 @@ export async function getAnchorReputationApiResult(
       status: 200,
       body: Object.freeze({ reputation: serializeReputation(record) }),
     });
-  } catch {
+  } catch (error) {
+    if (isRequestCancellationError(error)) throw error;
     return detailInternalError();
   }
 }

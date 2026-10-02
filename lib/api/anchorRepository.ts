@@ -1,4 +1,6 @@
+import { runWithinContext } from "@/lib/api/requestContext";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
+import type { RequestContext } from "@/types/api/requestContext";
 
 export type AnchorDirectoryRecord = Readonly<{
   slug: string;
@@ -25,72 +27,88 @@ export type AnchorDetailRecord = Readonly<{
 }>;
 
 export type AnchorDirectoryRepository = Readonly<{
-  findAll: () => Promise<readonly AnchorDirectoryRecord[]>;
-  findBySlug: (slug: string) => Promise<AnchorDetailRecord | null>;
+  findAll: (context?: RequestContext) => Promise<readonly AnchorDirectoryRecord[]>;
+  findBySlug: (
+    slug: string,
+    context?: RequestContext,
+  ) => Promise<AnchorDetailRecord | null>;
 }>;
 
 export const PRISMA_ANCHOR_DIRECTORY_REPOSITORY = Object.freeze({
-  async findAll(): Promise<readonly AnchorDirectoryRecord[]> {
+  async findAll(
+    context?: RequestContext,
+  ): Promise<readonly AnchorDirectoryRecord[]> {
+    context?.assertActive();
     const { db } = await import("@/lib/dbClient");
-    const anchors = await db.anchor.findMany({
-      orderBy: { slug: "asc" },
-      select: {
-        slug: true,
-        name: true,
-        homeDomain: true,
-        status: true,
-        seps: true,
-        _count: { select: { corridors: true } },
-      },
-    });
 
-    return Object.freeze(anchors.map((anchor) => Object.freeze({
-      slug: anchor.slug,
-      name: anchor.name,
-      homeDomain: anchor.homeDomain,
-      status: anchor.status,
-      seps: Object.freeze([...anchor.seps]),
-      corridorCount: anchor._count.corridors,
-    })));
+    return runWithinContext(context, async () => {
+      const anchors = await db.anchor.findMany({
+        orderBy: { slug: "asc" },
+        select: {
+          slug: true,
+          name: true,
+          homeDomain: true,
+          status: true,
+          seps: true,
+          _count: { select: { corridors: true } },
+        },
+      });
+
+      return Object.freeze(anchors.map((anchor) => Object.freeze({
+        slug: anchor.slug,
+        name: anchor.name,
+        homeDomain: anchor.homeDomain,
+        status: anchor.status,
+        seps: Object.freeze([...anchor.seps]),
+        corridorCount: anchor._count.corridors,
+      })));
+    });
   },
 
-  async findBySlug(slug: string): Promise<AnchorDetailRecord | null> {
+  async findBySlug(
+    slug: string,
+    context?: RequestContext,
+  ): Promise<AnchorDetailRecord | null> {
+    context?.assertActive();
     const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug },
-      select: {
-        slug: true,
-        name: true,
-        homeDomain: true,
-        status: true,
-        seps: true,
-        corridors: {
-          orderBy: { corridor: { slug: "asc" } },
-          select: {
-            corridor: {
-              select: {
-                slug: true,
-                assetCodeFrom: true,
-                countryFrom: true,
-                assetCodeTo: true,
-                countryTo: true,
+
+    return runWithinContext(context, async () => {
+      const anchor = await db.anchor.findUnique({
+        where: { slug },
+        select: {
+          slug: true,
+          name: true,
+          homeDomain: true,
+          status: true,
+          seps: true,
+          corridors: {
+            orderBy: { corridor: { slug: "asc" } },
+            select: {
+              corridor: {
+                select: {
+                  slug: true,
+                  assetCodeFrom: true,
+                  countryFrom: true,
+                  assetCodeTo: true,
+                  countryTo: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!anchor) return null;
+      if (!anchor) return null;
 
-    return Object.freeze({
-      slug: anchor.slug,
-      name: anchor.name,
-      homeDomain: anchor.homeDomain,
-      status: anchor.status,
-      seps: Object.freeze([...anchor.seps]),
-      corridors: Object.freeze(anchor.corridors.map(({ corridor }) =>
-        Object.freeze({ ...corridor }))),
+      return Object.freeze({
+        slug: anchor.slug,
+        name: anchor.name,
+        homeDomain: anchor.homeDomain,
+        status: anchor.status,
+        seps: Object.freeze([...anchor.seps]),
+        corridors: Object.freeze(anchor.corridors.map(({ corridor }) =>
+          Object.freeze({ ...corridor }))),
+      });
     });
   },
 }) satisfies AnchorDirectoryRepository;

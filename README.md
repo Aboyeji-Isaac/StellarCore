@@ -457,6 +457,19 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+Every public read route also enforces one end-to-end request budget, defined
+per route in `constants/apiRequestBudgets.ts`, that bounds the whole admitted
+request from handler entry to response. The budget composes with — never
+replaces or bypasses — the independently configurable PostgreSQL pool,
+acquisition, and statement budgets. When the budget expires before the
+response is produced, the route returns HTTP 503 with
+`{"error":{"code":"request_deadline_exceeded","message":"The request could not be completed within its time budget."}}`,
+`Cache-Control: no-store`, and `Retry-After: 1`; no partial or stale payload is
+substituted. When the caller disconnects first, follow-up reads and response
+serialization are skipped and the request ends as a bodyless HTTP 499 so
+client hangups stay out of 5xx signals. Successful responses are byte-for-byte
+unchanged by this policy.
+
 ### `GET /api/anchors`
 
 Returns the public directory of anchors currently persisted by StellarCore,

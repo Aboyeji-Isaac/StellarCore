@@ -1,3 +1,5 @@
+import { runWithinContext } from "@/lib/api/requestContext";
+import type { RequestContext } from "@/types/api/requestContext";
 import type { ReputationState, ReputationScoreBand } from "@/app/generated/prisma/enums";
 
 export type ReputationApiScoreRecord = Readonly<{
@@ -22,8 +24,11 @@ export type ReputationApiAnchorRecord = Readonly<{
 }>;
 
 export type ReputationApiRepository = Readonly<{
-  findAll: () => Promise<readonly ReputationApiAnchorRecord[]>;
-  findBySlug: (slug: string) => Promise<ReputationApiAnchorRecord | null>;
+  findAll: (context?: RequestContext) => Promise<readonly ReputationApiAnchorRecord[]>;
+  findBySlug: (
+    slug: string,
+    context?: RequestContext,
+  ) => Promise<ReputationApiAnchorRecord | null>;
 }>;
 
 const REPUTATION_SCORE_SELECT = {
@@ -42,24 +47,37 @@ const REPUTATION_SCORE_SELECT = {
 } as const;
 
 export const PRISMA_REPUTATION_API_REPOSITORY = Object.freeze({
-  async findAll(): Promise<readonly ReputationApiAnchorRecord[]> {
+  async findAll(
+    context?: RequestContext,
+  ): Promise<readonly ReputationApiAnchorRecord[]> {
+    context?.assertActive();
     const { db } = await import("@/lib/dbClient");
-    const anchors = await db.anchor.findMany({
-      orderBy: { slug: "asc" },
-      select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },
-    });
 
-    return Object.freeze(anchors.map(toRecord));
+    return runWithinContext(context, async () => {
+      const anchors = await db.anchor.findMany({
+        orderBy: { slug: "asc" },
+        select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },
+      });
+
+      return Object.freeze(anchors.map(toRecord));
+    });
   },
 
-  async findBySlug(slug: string): Promise<ReputationApiAnchorRecord | null> {
+  async findBySlug(
+    slug: string,
+    context?: RequestContext,
+  ): Promise<ReputationApiAnchorRecord | null> {
+    context?.assertActive();
     const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug },
-      select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },
-    });
 
-    return anchor ? toRecord(anchor) : null;
+    return runWithinContext(context, async () => {
+      const anchor = await db.anchor.findUnique({
+        where: { slug },
+        select: { slug: true, name: true, reputationScore: { select: REPUTATION_SCORE_SELECT } },
+      });
+
+      return anchor ? toRecord(anchor) : null;
+    });
   },
 }) satisfies ReputationApiRepository;
 
