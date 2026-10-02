@@ -32,7 +32,7 @@ by copying README examples.
 { "error": { "code": "snake_case_code", "message": "Human-readable message." } }
 ```
 
-- **Rate limiting:** all seven public routes are rate limited per client IP
+- **Rate limiting:** all eight public routes are rate limited per client IP
   (see [Rate limiting](#rate-limiting) at the end). The single internal cron
   route is **not** rate limited.
 
@@ -47,6 +47,7 @@ by copying README examples.
 | GET | `/api/corridors` | `app/api/corridors/route.ts` | yes |
 | GET | `/api/corridors/{slug}` | `app/api/corridors/[slug]/route.ts` | yes |
 | GET | `/api/rates?corridor={slug}` | `app/api/rates/route.ts` | yes |
+| GET | `/api/rates/history?corridor={slug}&days={1..365}` | `app/api/rates/history/route.ts` | yes |
 | GET | `/api/reputation` | `app/api/reputation/route.ts` | yes |
 | GET | `/api/reputation/{slug}` | `app/api/reputation/[slug]/route.ts` | yes |
 | GET | `/api/internal/cron/refresh` | `app/api/internal/cron/refresh/route.ts` | **no** |
@@ -393,6 +394,80 @@ A syntactically valid but unknown corridor slug.
 
 ---
 
+## GET /api/rates/history?corridor={slug}&days={1..365}
+
+Read-only historical corridor-rate points. `corridor` is required; `days`
+defaults to 30 and must be an integer from 1 through 365.
+
+### 200 OK
+
+The response preserves exact decimal strings and may contain points whose
+`medianRate` is `null` with `state: "insufficient_fresh_sources"`.
+
+```json
+{
+  "corridor": {
+    "slug": "usdc-us-brl-br",
+    "sourceAsset": "USDC",
+    "sourceCountry": "US",
+    "destinationAsset": "BRL",
+    "destinationCountry": "BR"
+  },
+  "evaluatedAt": "2026-09-30T12:00:00.000Z",
+  "windowDays": 30,
+  "points": [
+    {
+      "timestamp": "2026-09-30T11:00:00.000Z",
+      "medianRate": null,
+      "state": "insufficient_fresh_sources",
+      "sourceCount": 1,
+      "freshSourceCount": 1,
+      "observations": [
+        {
+          "anchor": { "slug": "zeam", "name": "Zeam" },
+          "rate": "0.17",
+          "sourceAmount": "100",
+          "destinationAmount": "17",
+          "fee": "1",
+          "capturedAt": "2026-09-30T11:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+On a verified last-known-good fallback, the response retains the same body shape
+and includes stale-evidence response headers.
+
+### 400 Bad Request
+
+Missing/malformed corridor uses `missing_corridor` / `invalid_corridor`.
+An invalid `days` value uses:
+
+```json
+{
+  "error": {
+    "code": "invalid_days",
+    "message": "The days parameter must be an integer between 1 and 365."
+  }
+}
+```
+
+### 404 Not Found
+
+```json
+{ "error": { "code": "corridor_not_found", "message": "Corridor not found." } }
+```
+
+### 500 Internal Server Error
+
+```json
+{ "error": { "code": "internal_error", "message": "Unable to read rate history." } }
+```
+
+---
+
 ## GET /api/reputation
 
 List reputation results for every anchor in the persisted directory, sorted
@@ -590,9 +665,9 @@ lists.
 
 ## Rate limiting
 
-Introduced in this change set. All **seven** public GET routes
+Introduced in this change set. All **eight** public GET routes
 (`/api/anchors`, `/api/anchors/{slug}`, `/api/corridors`,
-`/api/corridors/{slug}`, `/api/rates`, `/api/reputation`,
+`/api/corridors/{slug}`, `/api/rates`, `/api/rates/history`, `/api/reputation`,
 `/api/reputation/{slug}`) are limited to **100 requests per minute per client
 IP** (`lib/api/rateLimiter.ts`).
 
