@@ -8,6 +8,12 @@ import {
 
 const EVALUATED_AT = new Date("2026-08-31T15:00:00.000Z");
 
+const TEST_SNAPSHOT = Object.freeze({
+  snapshotId: "100:5:",
+  readAt: EVALUATED_AT,
+  isolationLevel: "REPEATABLE READ" as const,
+});
+
 test("persisted reputation evaluation is deterministic, deduplicated, and isolates engine failures", async () => {
   const calls: string[] = [];
   const dependencies: ReputationEvaluationRunDependencies = Object.freeze({
@@ -20,6 +26,7 @@ test("persisted reputation evaluation is deterministic, deduplicated, and isolat
           ok: true as const,
           calculation: {} as never,
           persisted: null,
+          snapshot: TEST_SNAPSHOT,
         });
     },
   });
@@ -58,6 +65,7 @@ test("explicit anchor slugs preserve the shared evaluation path without listing 
         ok: true as const,
         calculation: {} as never,
         persisted: null,
+        snapshot: TEST_SNAPSHOT,
       }),
     }),
   });
