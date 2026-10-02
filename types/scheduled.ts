@@ -19,6 +19,7 @@ export type ScheduledRefreshResult = Readonly<{
     succeeded: number;
     failed: number;
     skipped: number;
+    suppressed?: number;
     failures: readonly ScheduledRateFailure[];
     /** Issue #167: breaker transitions and suppressions, audit-only evidence. */
     breakerEvents: readonly RateEngineBreakerEvent[];

@@ -20,7 +20,8 @@ test("the sanitized connection string produces no TLS fields in the driver's par
   const dirtyUrl = `${PROD_URL}?sslmode=require&ssl=no-verify&connection_limit=5&application_name=stellarcore`;
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: dirtyUrl,
-    environment: { NODE_ENV: "production", DATABASE_URL: dirtyUrl },
+    environmentId: "production",
+    environment: { DATABASE_URL: dirtyUrl },
   });
 
   // Policy rejected the bypass, but the sanitized string is still produced
@@ -37,8 +38,8 @@ test("the sanitized connection string produces no TLS fields in the driver's par
 test("the policy-owned ssl object reaches the driver without URL override", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: `${PROD_URL}?sslmode=no-verify`,
+    environmentId: "production",
     environment: {
-      NODE_ENV: "production",
       STELLARCORE_DB_TLS_EMERGENCY_BYPASS: "allow-unverified",
     },
   });
@@ -61,7 +62,8 @@ test("the policy-owned ssl object reaches the driver without URL override", () =
 test("verified-TLS policy object passes rejectUnauthorized=true to the driver shape", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: PROD_URL,
-    environment: { NODE_ENV: "production", DATABASE_URL: PROD_URL },
+    environmentId: "production",
+    environment: { DATABASE_URL: PROD_URL },
   });
 
   assert.equal(result.resolution.accepted, true);
@@ -73,7 +75,8 @@ test("verified-TLS policy object passes rejectUnauthorized=true to the driver sh
 test("the full dbClient composition shape is accepted by the pg Pool config surface", () => {
   const result = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: `${PROD_URL}?connection_limit=5`,
-    environment: { NODE_ENV: "production", DATABASE_URL: `${PROD_URL}?connection_limit=5` },
+    environmentId: "production",
+    environment: { DATABASE_URL: `${PROD_URL}?connection_limit=5` },
   });
 
   assert.ok(result.resolution.accepted);

@@ -1,7 +1,12 @@
 import { Prisma } from "@/app/generated/prisma/client";
+import {
+  readInReputationSnapshot,
+  type ReputationSnapshotFailure,
+} from "@/lib/reputation/snapshot";
 import type {
   PersistedReputationScore,
   ReputationEvidence,
+  ReputationEvidenceReadFailure,
   ReputationPersistenceInput,
   ReputationRepository,
 } from "@/types/reputation";
@@ -12,20 +17,8 @@ type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
  * The newest snapshot time per corridor for one anchor, as a bounded set of
  * index probes instead of a walk over the anchor's history.
  *
- * Where the group set comes from: `corridors`, one row per corridor and
- * independent of how many snapshots exist. `rate_snapshots.corridor_id` is a
- * foreign key, so every corridor this anchor has ever quoted is in that table,
- * including one it is no longer a member of. Nothing is filtered on membership
- * or age, so stale and historically associated corridors stay visible.
- *
- * For each corridor the lateral subquery takes the single newest row for
- * (anchor, corridor) in `captured_at DESC, id DESC` order, the tie-break the
- * previous DISTINCT ON used, from rate_snapshots_anchor_corridor_latest_idx. A
- * corridor the anchor never quoted yields no row, as before. Slugs are unique,
- * so ordering by slug is the order DISTINCT ON (corridor.slug) produced.
- *
- * Exported so the differential tests and the benchmark run the exact text that
- * production runs.
+ * Exported so differential tests and the benchmark run the exact SQL that
+ * production uses.
  */
 export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
   return Prisma.sql`
@@ -47,55 +40,21 @@ export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
 
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
-    const { db } = await import("@/lib/dbClient");
-    const anchor = await db.anchor.findUnique({
-      where: { slug: anchorSlug },
-      select: {
-        id: true,
-        slug: true,
-        status: true,
-        corridors: { select: { corridor: { select: { slug: true } } } },
-      },
-    });
-    if (!anchor) return null;
+    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    await ensureDatabaseEnvironment();
 
-    const [latestRates, transferOutcomes] = await Promise.all([
-      db.$queryRaw<LatestRateRow[]>(latestCorridorRatesQuery(anchor.id)),
-      db.transferOutcome.findMany({
-        where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
-        orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
-        select: {
-          status: true,
-          settlementMs: true,
-          slippage: true,
-          recordedAt: true,
-        },
-      }),
-    ]);
+    const snapshotResult = await readInReputationSnapshot(db, (tx, identity) =>
+      readEvidenceInSnapshot(tx, identity, anchorSlug, outcomeWindowStart),
+    );
 
-    return Object.freeze({
-      anchorId: anchor.id,
-      anchorSlug: anchor.slug,
-      status: anchor.status,
-      corridorSlugs: Object.freeze(anchor.corridors
-        .map(({ corridor }) => corridor.slug)
-        .sort((left, right) => left.localeCompare(right))),
-      latestRates: Object.freeze(latestRates.map((rate) => Object.freeze({
-        corridorSlug: rate.corridorSlug,
-        capturedAt: new Date(rate.capturedAt.getTime()),
-      }))),
-      transferOutcomes: Object.freeze(transferOutcomes.map((outcome) =>
-        Object.freeze({
-          status: outcome.status,
-          settlementMs: outcome.settlementMs,
-          slippage: outcome.slippage,
-          recordedAt: new Date(outcome.recordedAt.getTime()),
-        }))),
-    }) satisfies ReputationEvidence;
+    if (!snapshotResult.ok) return toEvidenceReadFailure(snapshotResult.failure);
+    return snapshotResult.value;
   },
 
   async upsertScore(input: ReputationPersistenceInput): Promise<PersistedReputationScore> {
-    const { db } = await import("@/lib/dbClient");
+    const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
+    await ensureDatabaseEnvironment();
+
     const { calculation } = input;
     const data = {
       compositeScore: calculation.score,
@@ -111,6 +70,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       state: calculation.state === "established" ? "OK" : "INSUFFICIENT_DATA",
       computedAt: new Date(calculation.computedAt),
     } as const;
+
     const persisted = await db.reputationScore.upsert({
       where: { anchorId: input.anchorId },
       create: { anchorId: input.anchorId, ...data },
@@ -125,3 +85,80 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
     });
   },
 });
+
+async function readEvidenceInSnapshot(
+  tx: Prisma.TransactionClient,
+  identity: Readonly<{ snapshotId: string; readAt: Date }>,
+  anchorSlug: string,
+  outcomeWindowStart: Date,
+): Promise<ReputationEvidence | null> {
+  const anchor = await tx.anchor.findUnique({
+    where: { slug: anchorSlug },
+    select: {
+      id: true,
+      slug: true,
+      status: true,
+      corridors: { select: { corridor: { select: { slug: true } } } },
+    },
+  });
+
+  if (!anchor) return null;
+
+  const [latestRates, transferOutcomes] = await Promise.all([
+    tx.$queryRaw<LatestRateRow[]>(latestCorridorRatesQuery(anchor.id)),
+    tx.transferOutcome.findMany({
+      where: { anchorId: anchor.id, recordedAt: { gte: outcomeWindowStart } },
+      orderBy: [{ recordedAt: "asc" }, { id: "asc" }],
+      select: {
+        status: true,
+        settlementMs: true,
+        slippage: true,
+        recordedAt: true,
+      },
+    }),
+  ]);
+
+  return Object.freeze({
+    anchorId: anchor.id,
+    anchorSlug: anchor.slug,
+    status: anchor.status,
+    corridorSlugs: Object.freeze(
+      anchor.corridors
+        .map(({ corridor }) => corridor.slug)
+        .sort((left, right) => left.localeCompare(right)),
+    ),
+    latestRates: Object.freeze(
+      latestRates.map((rate) =>
+        Object.freeze({
+          corridorSlug: rate.corridorSlug,
+          capturedAt: new Date(rate.capturedAt.getTime()),
+        }),
+      ),
+    ),
+    transferOutcomes: Object.freeze(
+      transferOutcomes.map((outcome) =>
+        Object.freeze({
+          status: outcome.status,
+          settlementMs: outcome.settlementMs,
+          slippage: outcome.slippage,
+          recordedAt: new Date(outcome.recordedAt.getTime()),
+        }),
+      ),
+    ),
+    snapshot: Object.freeze({
+      snapshotId: identity.snapshotId,
+      readAt: new Date(identity.readAt.getTime()),
+      isolationLevel: "REPEATABLE READ",
+    }),
+  });
+}
+
+function toEvidenceReadFailure(
+  failure: ReputationSnapshotFailure,
+): ReputationEvidenceReadFailure {
+  return Object.freeze({
+    code: failure.code,
+    retryable: failure.retryable,
+    attempts: failure.attempts,
+  });
+}

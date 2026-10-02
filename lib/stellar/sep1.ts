@@ -1,6 +1,7 @@
 import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostnameCanonicalization";
 import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   AnchorRegistryEntry,
@@ -59,7 +60,7 @@ export function buildSep1TomlUrl(homeDomain: string): string {
     );
   }
 
-  return `https://${homeDomain}/.well-known/stellar.toml`;
+  return `https://${canonicalizeHostname(homeDomain)}/.well-known/stellar.toml`;
 }
 
 export function normalizeSeps(seps: Iterable<number>): readonly StellarSep[] {
@@ -434,6 +435,7 @@ function optionalHttpsUrl(
     const url = new URL(value);
 
     if (url.protocol !== "https:") throw new Error("URL must use HTTPS");
+    url.hostname = canonicalizeHostname(url.hostname);
 
     return url.toString();
   } catch {

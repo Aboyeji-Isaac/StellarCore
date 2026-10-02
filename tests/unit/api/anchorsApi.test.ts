@@ -178,6 +178,37 @@ test("both routes export GET only and explicitly disable caching", async () => {
   assert.equal(malformed.headers.get("cache-control"), "no-store");
 });
 
+
+test("list pagination returns the full registry by default and slices only when asked", async () => {
+  const directory = repository([
+    summary("zeam", [38], 1),
+    summary("cowrie", [31, 1], 2),
+    summary("moneygram", [24, 1], 3),
+  ]);
+  const unpaginated = await getAnchorsApiResult({ repository: directory });
+  const limitOnly = await getAnchorsApiResult({ repository: directory }, { limit: "2", offset: null });
+  const offsetOnly = await getAnchorsApiResult({ repository: directory }, { limit: null, offset: "1" });
+  const windowed = await getAnchorsApiResult({ repository: directory }, { limit: "1", offset: "1" });
+  const beyond = await getAnchorsApiResult({ repository: directory }, { limit: "2", offset: "9" });
+  if (unpaginated.status !== 200 || limitOnly.status !== 200 || offsetOnly.status !== 200 || windowed.status !== 200 || beyond.status !== 200) assert.fail("expected pagination requests to succeed");
+  assert.deepEqual(unpaginated.body.anchors.map(({ slug }) => slug), ["cowrie", "moneygram", "zeam"]);
+  assert.deepEqual(limitOnly.body.anchors.map(({ slug }) => slug), ["cowrie", "moneygram"]);
+  assert.deepEqual(offsetOnly.body.anchors.map(({ slug }) => slug), ["moneygram", "zeam"]);
+  assert.deepEqual(windowed.body.anchors.map(({ slug }) => slug), ["moneygram"]);
+  assert.deepEqual(beyond.body, { anchors: [], count: 0 });
+});
+
+test("invalid pagination returns 400 before repository access", async () => {
+  let accessed = false;
+  const repoWithSpy: AnchorDirectoryRepository = Object.freeze({ findAll: async () => { accessed = true; return []; }, findBySlug: async () => null });
+  for (const query of [{ limit: "0", offset: null }, { limit: "-1", offset: null }, { limit: "101", offset: null }, { limit: null, offset: "-1" }, { limit: null, offset: "x" }] as const) {
+    const result = await getAnchorsApiResult({ repository: repoWithSpy }, query);
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error.code, "invalid_pagination");
+  }
+  assert.equal(accessed, false);
+});
+
 function summary(
   slug: string,
   seps: readonly number[],

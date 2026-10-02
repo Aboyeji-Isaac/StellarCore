@@ -238,22 +238,10 @@ test("protocol/configuration failures are classified separately and escalate fas
     recordFailure,
   });
 
-  const first = await syncAnchorRegistry([MONEYGRAM], dependencies);
-  assert.equal(first.failures[0]?.statusUpdate, "PUBLISHED_DEGRADED");
+      if (!existing) return "NOT_FOUND";
 
-  const second = await syncAnchorRegistry([MONEYGRAM], dependencies);
-  assert.equal(second.failures[0]?.statusUpdate, "PUBLISHED_DOWN");
-  assert.equal(rows.get(MONEYGRAM.slug)?.status, AnchorStatus.DOWN);
-});
-
-test("unexpected errors follow the transient path and never escalate faster", async () => {
-  const rows = new Map<string, PersistedAnchor>([
-    [MONEYGRAM.slug, toPersisted(makeDiscovered(MONEYGRAM))],
-  ]);
-  const { recordFailure } = createLedgeredRecorders(rows);
-  const dependencies = createDependencies({
-    discover: async () => {
-      throw new Error("DATABASE_URL=do-not-expose");
+      rows.set(slug, Object.freeze({ ...existing, status: AnchorStatus.DOWN }));
+      return "MARKED_DOWN";
     },
     recordFailure,
   });
@@ -280,12 +268,13 @@ test("egress-policy rejection is not recorded as anchor downtime", async () => {
         "https://anchor.example/.well-known/stellar.toml",
       );
     },
+    allocateOrder: async () => BigInt(1),
     persist: async () => {
       throw new Error("must not persist");
     },
     markDown: async () => {
       markDownCalls += 1;
-      return true;
+      return "MARKED_DOWN";
     },
   });
 
@@ -305,6 +294,72 @@ test("structured failures omit unsafe error details", async () => {
 
   assert.equal(result.failures[0]?.code, "UNEXPECTED_ERROR");
   assert.equal(JSON.stringify(result).includes("do-not-expose"), false);
+});
+
+test("late older discovery is rejected after a newer synchronization commits", async () => {
+  let nextOrder = BigInt(0);
+  let discoveryCalls = 0;
+  let releaseOld!: () => void;
+  const oldReady = new Promise<void>((resolve) => { releaseOld = resolve; });
+  let row: { order: bigint; anchor: DiscoveredAnchor } | undefined;
+  const dependencies = createDependencies({
+    allocateOrder: async () => ++nextOrder,
+    discover: async (entry) => {
+      const call = ++discoveryCalls;
+      if (call === 1) await oldReady;
+      return Object.freeze({ ...makeDiscovered(entry), name: call === 1 ? "Old discovery" : "New discovery" });
+    },
+    persist: async (anchor, order) => {
+      if (row && row.order >= order) return null;
+      row = { order, anchor };
+      return toPersisted(anchor);
+    },
+  });
+
+  const older = syncAnchorRegistry([MONEYGRAM], dependencies);
+  await Promise.resolve();
+  const newer = await syncAnchorRegistry([MONEYGRAM], dependencies);
+  releaseOld();
+  const olderResult = await older;
+
+  assert.equal(row?.anchor.name, "New discovery");
+  assert.equal(newer.succeeded, 1);
+  assert.equal(olderResult.failures[0]?.code, "STALE_WRITE_REJECTED");
+});
+
+test("late older discovery failure cannot downgrade a newer successful synchronization", async () => {
+  let nextOrder = BigInt(0);
+  let releaseOld!: () => void;
+  const oldReady = new Promise<void>((resolve) => { releaseOld = resolve; });
+  let row: { order: bigint; status: AnchorStatus } = { order: BigInt(0), status: AnchorStatus.DOWN };
+  const dependencies = createDependencies({
+    allocateOrder: async () => ++nextOrder,
+    discover: async (entry) => {
+      if (nextOrder === BigInt(1)) {
+        await oldReady;
+        throw new Sep1DiscoveryError("TIMEOUT", "safe timeout", "https://example.com/stellar.toml");
+      }
+      return makeDiscovered(entry);
+    },
+    persist: async (anchor, order) => {
+      if (order > row.order) row = { order, status: AnchorStatus.LIVE };
+      return order === row.order ? toPersisted(anchor) : null;
+    },
+    markDown: async (_slug, order) => {
+      if (order <= row.order) return "STALE";
+      row = { order, status: AnchorStatus.DOWN };
+      return "MARKED_DOWN";
+    },
+  });
+
+  const older = syncAnchorRegistry([MONEYGRAM], dependencies);
+  await Promise.resolve();
+  await syncAnchorRegistry([MONEYGRAM], dependencies);
+  releaseOld();
+  const olderResult = await older;
+
+  assert.equal(row.status, AnchorStatus.LIVE);
+  assert.equal(olderResult.failures[0]?.statusUpdate, "STALE");
 });
 
 test("unexpected persistence errors are isolated from later anchors", async () => {
@@ -392,16 +447,10 @@ function createDependencies(
   const failures = new Map<string, number>();
 
   return {
+    allocateOrder: async () => BigInt(1),
     discover: async (entry) => makeDiscovered(entry),
     persist: async (anchor) => toPersisted(anchor),
-    recordSuccess: async (slug) => {
-      successes.set(slug, (successes.get(slug) ?? 0) + 1);
-      return { kind: "RECORDED", status: AnchorStatus.LIVE, statusChanged: false };
-    },
-    recordFailure: async (slug) => {
-      failures.set(slug, (failures.get(slug) ?? 0) + 1);
-      return { kind: "RECORDED", status: AnchorStatus.LIVE, statusChanged: false };
-    },
+    markDown: async () => "NOT_FOUND",
     ...overrides,
   };
 }

@@ -65,7 +65,8 @@ export type RateSnapshotPersistenceCode =
   | "ANCHOR_NOT_FOUND"
   | "CORRIDOR_NOT_FOUND"
   | "ASSOCIATION_NOT_FOUND"
-  | "PERSISTENCE_FAILURE";
+  | "PERSISTENCE_FAILURE"
+  | "ENVIRONMENT_MISMATCH";
 
 export type RateSnapshotPersistenceResult =
   | Readonly<{ ok: true; snapshot: PersistedRateSnapshot }>

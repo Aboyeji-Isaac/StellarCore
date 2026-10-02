@@ -93,13 +93,13 @@ test("legacy and lateral queries agree on every shape of history", {
     const window = new Date(NOW.getTime() - 90 * DAY);
     for (const anchor of Object.values(anchors)) {
       assert.deepEqual(
-        await PRISMA_REPUTATION_REPOSITORY.readEvidence(anchor.slug, window),
-        await LEGACY_REPUTATION_REPOSITORY.readEvidence(anchor.slug, window),
+        withoutSnapshot(await PRISMA_REPUTATION_REPOSITORY.readEvidence(anchor.slug, window)),
+        withoutSnapshot(await LEGACY_REPUTATION_REPOSITORY.readEvidence(anchor.slug, window)),
         `evidence for ${anchor.slug}`,
       );
       assert.deepEqual(
-        await evaluateAnchorReputation(anchor.slug, { repository: PRISMA_REPUTATION_REPOSITORY, evaluatedAt: NOW, persist: false }),
-        await evaluateAnchorReputation(anchor.slug, { repository: LEGACY_REPUTATION_REPOSITORY, evaluatedAt: NOW, persist: false }),
+        withoutSnapshot(await evaluateAnchorReputation(anchor.slug, { repository: PRISMA_REPUTATION_REPOSITORY, evaluatedAt: NOW, persist: false })),
+        withoutSnapshot(await evaluateAnchorReputation(anchor.slug, { repository: LEGACY_REPUTATION_REPOSITORY, evaluatedAt: NOW, persist: false })),
         `public reputation for ${anchor.slug}`,
       );
     }
@@ -107,12 +107,16 @@ test("legacy and lateral queries agree on every shape of history", {
     // Historically associated corridor stays visible in the evidence: the
     // anchor quoted the main corridor without being a member of it.
     const historical = await PRISMA_REPUTATION_REPOSITORY.readEvidence(anchors.historical.slug, window);
-    assert.ok(!historical?.corridorSlugs.includes(corridors.main.slug));
-    assert.ok(historical?.latestRates.some(({ corridorSlug }) => corridorSlug === corridors.main.slug));
+    assert.ok(historical && !("code" in historical), "historical evidence read should succeed");
+    if (!historical || "code" in historical) throw new Error("historical evidence read failed");
+    assert.ok(!historical.corridorSlugs.includes(corridors.main.slug));
+    assert.ok(historical.latestRates.some(({ corridorSlug }) => corridorSlug === corridors.main.slug));
 
     // An anchor with no snapshots at all has no latest rates, as before.
     const silent = await PRISMA_REPUTATION_REPOSITORY.readEvidence(anchors.silent.slug, window);
-    assert.equal(silent?.latestRates.length, 0);
+    assert.ok(silent && !("code" in silent), "silent evidence read should succeed");
+    if (!silent || "code" in silent) throw new Error("silent evidence read failed");
+    assert.equal(silent.latestRates.length, 0);
 
     // Stale observations are not dropped before the latest is chosen.
     const stale = await readLatestCorridorRate(corridors.main.slug, { repository: PRISMA_LATEST_RATE_REPOSITORY, evaluatedAt: NOW });
@@ -313,4 +317,16 @@ async function cleanup(fixture: Fixture): Promise<void> {
 /** Decimals and dates as text, so deepEqual compares exact values. */
 function serialise(rows: unknown): unknown {
   return JSON.parse(JSON.stringify(rows));
+}
+
+function withoutSnapshot<T>(value: T): unknown {
+  if (Array.isArray(value)) return value.map(withoutSnapshot);
+  if (value === null || typeof value !== "object") return value;
+
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([key]) => key !== "snapshot")
+      .map(([key, entry]) => [key, withoutSnapshot(entry)]),
+  );
 }
