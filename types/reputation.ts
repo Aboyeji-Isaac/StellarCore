@@ -22,6 +22,22 @@ export type ReputationEvidence = Readonly<{
     slippage: string;
     recordedAt: Date | string;
   }>[];
+  /**
+   * Identity of the single PostgreSQL snapshot the whole evidence set was read
+   * from. See lib/reputation/snapshot.ts. Transactional coherence proves only
+   * that the rows were observed at one database point in time; it is not
+   * evidence about quote correctness, anchor availability, or transfer success.
+   */
+  snapshot: ReputationSnapshotContext;
+}>;
+
+export type ReputationSnapshotContext = Readonly<{
+  /** PostgreSQL snapshot identifier from `pg_current_snapshot()` (txid:xip). */
+  snapshotId: string;
+  /** Server-side transaction start time of the snapshot read. */
+  readAt: Date | string;
+  /** Isolation level the evidence was read under. */
+  isolationLevel: "REPEATABLE READ" | "SERIALIZABLE";
 }>;
 
 export type ReputationComponentName =
@@ -73,11 +89,23 @@ export type ReputationPersistenceInput = Readonly<{
   calculation: ReputationCalculation;
 }>;
 
+export type ReputationEvidenceReadErrorCode =
+  | "EVIDENCE_READ_FAILURE"
+  | "EVIDENCE_READ_SERIALIZATION_FAILURE";
+
+export type ReputationEvidenceReadFailure = Readonly<{
+  code: ReputationEvidenceReadErrorCode;
+  /** Bounded, secret-free retry classification for callers. */
+  retryable: boolean;
+  /** Number of read attempts made, bounded by REPUTATION_EVIDENCE_MAX_READ_ATTEMPTS. */
+  attempts: number;
+}>;
+
 export type ReputationRepository = Readonly<{
   readEvidence: (
     anchorSlug: string,
     outcomeWindowStart: Date,
-  ) => Promise<ReputationEvidence | null>;
+  ) => Promise<ReputationEvidence | ReputationEvidenceReadFailure | null>;
   upsertScore: (
     input: ReputationPersistenceInput,
   ) => Promise<PersistedReputationScore>;
@@ -88,6 +116,8 @@ export type ReputationEvaluationResult =
       ok: true;
       calculation: ReputationCalculation;
       persisted: PersistedReputationScore | null;
+      /** Snapshot identity the winning evidence set was read from. */
+      snapshot: ReputationSnapshotContext;
     }>
   | Readonly<{
       ok: false;
@@ -96,5 +126,9 @@ export type ReputationEvaluationResult =
         | "ANCHOR_NOT_FOUND"
         | "INVALID_EVALUATION_TIME"
         | "EVIDENCE_READ_FAILURE"
+        | "EVIDENCE_READ_SERIALIZATION_FAILURE"
         | "PERSISTENCE_FAILURE";
     }>;
+
+/** Bounded retry ceiling; exceeded attempts surface as a typed failure. */
+export const REPUTATION_EVIDENCE_MAX_READ_ATTEMPTS = 3;

@@ -1,11 +1,24 @@
 import { isValidAnchorSlug } from "@/lib/api/anchors";
 import {
+  FILE_STALE_EVIDENCE_STORE,
+  restoreStaleEvidence,
+  saveLastKnownGoodEvidence,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
+import {
+  consolePublicApiErrorReporter,
+  publicApiErrorResult,
+  type PublicApiErrorReporter,
+} from "@/lib/api/errors";
+import {
   PRISMA_REPUTATION_API_REPOSITORY,
   type ReputationApiAnchorRecord,
   type ReputationApiRepository,
 } from "@/lib/api/reputationRepository";
 import type {
   PublicReputation,
+  PublicReputationDetailResponse,
   PublicReputationListResponse,
   PublicReputationScoreBand,
   PublicReputationState,
@@ -16,16 +29,35 @@ import type {
 
 export type ReputationApiDependencies = Readonly<{
   repository?: ReputationApiRepository;
+  staleEvidenceStore?: StaleEvidenceStore;
+  now?: () => Date;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export async function getReputationApiResult(
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiListResult> {
+  const now = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const key = "reputation-list:v1";
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    return Object.freeze({ status: 200, body: serializeReputationList(await repository.findAll()) });
-  } catch {
-    return listInternalError();
+    const body = serializeReputationList(await repository.findAll());
+    await saveLastKnownGoodEvidence(store, key, body, reputationSourceTimes(body.reputation), now);
+    return Object.freeze({ status: 200, body });
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, key, now);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicReputationListResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    reportError(dependencies, error, "reputation.list");
+    return publicApiErrorResult("internal_error", "Unable to load reputation.");
   }
 }
 
@@ -34,28 +66,52 @@ export async function getAnchorReputationApiResult(
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiDetailResult> {
   if (!isValidAnchorSlug(slug)) {
-    return Object.freeze({
-      status: 400,
-      body: errorBody("invalid_anchor_slug", "A valid anchor slug is required."),
-    });
+    return publicApiErrorResult(
+      "invalid_anchor_slug",
+      "A valid anchor slug is required.",
+    );
   }
 
+  const now = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const key = `reputation-detail:v1:${slug}`;
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
     const record = await repository.findBySlug(slug);
     if (!record) {
-      return Object.freeze({
-        status: 404,
-        body: errorBody("anchor_not_found", "Anchor not found."),
-      });
+      return publicApiErrorResult("anchor_not_found", "Anchor not found.");
     }
+    const body = Object.freeze({ reputation: serializeReputation(record) });
+    await saveLastKnownGoodEvidence(store, key, body, reputationSourceTimes([body.reputation]), now);
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ reputation: serializeReputation(record) }),
+      body,
     });
-  } catch {
-    return detailInternalError();
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, key, now);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicReputationDetailResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    reportError(dependencies, error, "reputation.detail");
+    return publicApiErrorResult("internal_error", "Unable to load reputation.");
   }
+}
+
+function reputationSourceTimes(records: readonly PublicReputation[]): readonly string[] {
+  return records
+    .map(({ computedAt }) => computedAt)
+    .filter((value): value is string => value !== null && isValidTimestamp(value));
+}
+
+function isValidTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 export function serializeReputationList(
@@ -123,23 +179,13 @@ function safeNumber(value: number | string | null): number | null {
   return Number.isFinite(numericValue) ? numericValue : null;
 }
 
-function errorBody(
-  code: ReputationApiErrorResponse["error"]["code"],
-  message: string,
-): ReputationApiErrorResponse {
-  return Object.freeze({ error: Object.freeze({ code, message }) });
-}
-
-function listInternalError(): ReputationApiListResult {
-  return Object.freeze({
-    status: 500,
-    body: errorBody("internal_error", "Unable to load reputation."),
-  });
-}
-
-function detailInternalError(): ReputationApiDetailResult {
-  return Object.freeze({
-    status: 500,
-    body: errorBody("internal_error", "Unable to load reputation."),
+function reportError(
+  dependencies: ReputationApiDependencies,
+  error: unknown,
+  operation: string,
+): void {
+  (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
+    operation,
+    code: "internal_error",
   });
 }
