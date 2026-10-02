@@ -1,0 +1,49 @@
+name: Cache policy
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "constants/**"
+      - "next.config.ts"
+      - "scripts/**"
+      - "tests/**"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/cache-policy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cache-policy:
+    name: inventory and production cache headers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Placeholder required only so `prisma generate` can resolve its config;
+      # no database is contacted during generation, tests, or build.
+      DATABASE_URL: postgresql://USER:PASSWORD@HOST:PORT/DATABASE
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (includes the cache-policy inventory)
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Verify production cache headers
+        run: npm run verify:cache
