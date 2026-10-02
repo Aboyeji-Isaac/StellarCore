@@ -13,7 +13,8 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm install` installs locked dependencies.
 - `npm run dev` starts the local Next.js server.
 - `npm run build` creates a production build and catches route/type failures.
-- `npm test` runs Vitest unit and integration tests.
+- `npm test` runs the Node test suite; PostgreSQL integration tests skip unless their opt-in flag is set.
+- `RUN_DATABASE_BUDGET_INTEGRATION=1 TEST_DATABASE_URL=... npx tsx --test tests/integration/db/databaseBudget.integration.test.ts` runs the isolated PostgreSQL database-budget tests; never point this at production.
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
@@ -39,3 +40,5 @@ No commit convention is established yet. Use concise, imperative subjects, optio
 ## Security & Configuration
 
 Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.
+
+Runtime database resource use is bounded by a typed, validated configuration with `read`/`write` profiles (`DB_POOL_MAX`, `DB_CONNECTION_TIMEOUT_MS`, `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`, and related variables). Zero/unlimited overrides and conflicting connection-string parameters are rejected. See [docs/database-resource-budget.md](docs/database-resource-budget.md) for units, ranges, defaults, per-instance sizing, and which layer enforces each bound.

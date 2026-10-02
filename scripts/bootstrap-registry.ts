@@ -8,7 +8,7 @@ import { syncCorridorRegistry } from "@/lib/stellar/corridorSync";
 
 async function main(): Promise<void> {
   assertCurrentStellarCoreConfiguration();
-  const { db } = await import("@/lib/dbClient");
+  const { disconnectRuntimeDatabaseClients } = await import("@/lib/db/runtime");
 
   try {
     const anchors = await syncAnchorRegistry();
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
       process.exitCode = 1;
     }
   } finally {
-    await db.$disconnect();
+    await disconnectRuntimeDatabaseClients();
   }
 }
 

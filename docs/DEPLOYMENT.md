@@ -14,9 +14,26 @@ StellarCore is prepared for a Vercel deployment backed by managed PostgreSQL and
 | Name | Production | Secret | Purpose |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Required | Yes | Server-only PostgreSQL connection appropriate to the running environment. The protected migration workflow separately configures its direct Prisma Postgres credential under this secret name. |
+| `DATABASE_READ_URL` | Optional | Yes | Overrides the connection URL for the read-role pool only; falls back to `DATABASE_URL`. |
+| `DATABASE_WRITE_URL` | Optional | Yes | Overrides the connection URL for the write-role pool only; falls back to `DATABASE_URL`. |
+| `DB_*` / `DB_READ_*` / `DB_WRITE_*` | Optional | No | Runtime database resource budget. All bounds are finite; zero/unlimited overrides are rejected. See [database-resource-budget.md](database-resource-budget.md). |
 | `CRON_SECRET` | Required when cron is enabled | Yes | Bearer secret Vercel sends to the refresh route. |
 
 `DATABASE_URL` must be a `postgres://` or `postgresql://` URL. The application runtime uses the credential configured for its deployment environment. The protected GitHub Actions production environment separately stores the direct Prisma Postgres credential used by `prisma migrate deploy` under the same `DATABASE_URL` secret name. Do not expose either credential through `NEXT_PUBLIC_*`, repository files, or logs.
+
+## Runtime database budget
+
+The application bounds its own database resource use per process: pool size,
+acquisition/connection waits, and server-side statement, lock, and
+idle-in-transaction limits. Bounds are per instance, so worst-case application
+connections are `instance count x (read.POOL_MAX + write.POOL_MAX)`; set the
+provider's global limit above that sum and reserve capacity for migrations and
+operators. Defaults are finite and the policy cannot be disabled with a zero or
+unlimited value; conflicting connection-string parameters are rejected. Timeout
+ordering is nested inside the request/cron deadline:
+pool acquisition/connection < lock wait <= statement <= interactive transaction.
+Full units, ranges, defaults, layer ownership, and a sizing example are in
+[database-resource-budget.md](database-resource-budget.md).
 
 ## Migration strategy
 

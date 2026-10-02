@@ -7,6 +7,7 @@ import { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 export { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 
 async function main(): Promise<void> {
+  const { disconnectRuntimeDatabaseClients } = await import("@/lib/db/runtime");
   try {
     const summary = await snapshotReviewedLiveRates();
     process.stdout.write(`${JSON.stringify(summary)}\n`);
@@ -24,6 +25,8 @@ async function main(): Promise<void> {
       skippedSources: [],
     })}\n`);
     process.exitCode = 1;
+  } finally {
+    await disconnectRuntimeDatabaseClients();
   }
 }
 

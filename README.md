@@ -274,6 +274,19 @@ established reputation evidence.
 
 ---
 
+## Runtime database budget
+
+Runtime database resource use is explicit and bounded per process. One typed,
+validated configuration defines `read` and `write` profiles for pool size,
+acquisition/connection waits, server-side `statement_timeout` and
+`lock_timeout`, idle-in-transaction limits, and interactive-transaction limits.
+Bounds cannot be set to zero or unlimited, conflicting connection-string
+parameters are rejected, and resource-exhaustion failures are translated into
+secret-free errors without changing the public API envelope. The per-instance
+versus total sizing example, timeout ordering, layer ownership, and
+installed-version evidence are in
+[docs/database-resource-budget.md](docs/database-resource-budget.md).
+
 ## Project Structure
 
 ```
@@ -319,6 +332,17 @@ stellarcore/
 # Server-only application/runtime PostgreSQL connection for this environment.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
+# Optional per-role runtime connections; both fall back to DATABASE_URL.
+# DATABASE_READ_URL="postgresql://READER:PASSWORD@HOST:PORT/DATABASE"
+# DATABASE_WRITE_URL="postgresql://WRITER:PASSWORD@HOST:PORT/DATABASE"
+
+# Optional runtime database resource budget (all bounds are finite integers).
+# Profile variables DB_READ_* / DB_WRITE_* override the DB_* globals.
+# DB_POOL_MAX="4"
+# DB_STATEMENT_TIMEOUT_MS="3000"
+# DB_LOCK_TIMEOUT_MS="1000"
+# DB_CONNECTION_TIMEOUT_MS="2000"
+
 # Required in production when Vercel Cron is enabled; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
 ```
@@ -329,6 +353,11 @@ compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
 repository files, or logs.
+
+The optional runtime database budget bounds pool size, acquisition/connection
+waits, and server-side statement, lock, and idle-transaction limits. It defaults
+to safe finite values, rejects zero/unlimited overrides, and is documented in
+[docs/database-resource-budget.md](docs/database-resource-budget.md).
 
 ---
 
@@ -387,8 +416,13 @@ npm run registry:print
 ### Running Tests
 
 ```bash
-# Unit and integration tests
+# Unit and integration tests (database integration tests are skipped by default)
 npm test
+
+# Opt-in isolated PostgreSQL budget tests (requires an isolated database)
+RUN_DATABASE_BUDGET_INTEGRATION=1 \
+TEST_DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
+npx tsx --test tests/integration/db/databaseBudget.integration.test.ts
 
 # Pure offline audit of reviewed registry relationships
 npm run audit:config

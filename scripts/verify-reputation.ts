@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { db } from "@/lib/dbClient";
+import { db, disconnectRuntimeDatabaseClients } from "@/lib/dbClient";
 import { evaluatePersistedAnchorReputations } from "@/lib/reputation/run";
 
 const ANCHOR_SLUGS = Object.freeze(["cowrie", "moneygram", "zeam"]);
@@ -27,5 +27,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await db.$disconnect();
+    await disconnectRuntimeDatabaseClients();
   });

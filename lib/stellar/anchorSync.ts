@@ -46,6 +46,11 @@ export type AnchorSyncDependencies = Readonly<{
   markDown: (slug: string) => Promise<boolean>;
 }>;
 
+async function writeClient() {
+  const { getWriteDatabaseClient } = await import("@/lib/db/runtime");
+  return getWriteDatabaseClient();
+}
+
 const ANCHOR_SELECT = {
   slug: true,
   name: true,
@@ -59,7 +64,7 @@ const ANCHOR_SELECT = {
 export async function persistDiscoveredAnchor(
   anchor: DiscoveredAnchor,
 ): Promise<PersistedAnchor> {
-  const { db } = await import("@/lib/dbClient");
+  const db = await writeClient();
   const data = {
     name: anchor.name,
     homeDomain: anchor.homeDomain,
@@ -80,7 +85,7 @@ export async function persistDiscoveredAnchor(
 }
 
 export async function markAnchorDownIfExists(slug: string): Promise<boolean> {
-  const { db } = await import("@/lib/dbClient");
+  const db = await writeClient();
   const result = await db.anchor.updateMany({
     where: { slug },
     data: { status: AnchorStatus.DOWN },

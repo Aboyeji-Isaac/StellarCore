@@ -8,9 +8,14 @@ import type {
 
 type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
+async function writeClient() {
+  const { getWriteDatabaseClient } = await import("@/lib/db/runtime");
+  return getWriteDatabaseClient();
+}
+
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
-    const { db } = await import("@/lib/dbClient");
+    const db = await writeClient();
     const anchor = await db.anchor.findUnique({
       where: { slug: anchorSlug },
       select: {
@@ -66,7 +71,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
   },
 
   async upsertScore(input: ReputationPersistenceInput): Promise<PersistedReputationScore> {
-    const { db } = await import("@/lib/dbClient");
+    const db = await writeClient();
     const { calculation } = input;
     const data = {
       compositeScore: calculation.score,

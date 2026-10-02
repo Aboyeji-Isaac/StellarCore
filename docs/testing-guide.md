@@ -32,6 +32,22 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
+## Database integration tests
+
+The database-backed integration tests are opt-in and skipped by default. Run the
+runtime database-budget tests against an isolated PostgreSQL (never production
+credentials or production load):
+
+```bash
+RUN_DATABASE_BUDGET_INTEGRATION=1 \
+TEST_DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
+npx tsx --test tests/integration/db/databaseBudget.integration.test.ts
+```
+
+The tests create only synthetic fixtures in a unique table and drop it during
+cleanup. See [database-resource-budget.md](database-resource-budget.md) for the
+bounds each test proves.
+
 ## Mocking network calls
 
 Unit tests must inject a fetch implementation rather than call an anchor. The

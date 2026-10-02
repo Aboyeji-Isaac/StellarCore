@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { db } from "@/lib/dbClient";
+import { db, disconnectRuntimeDatabaseClients } from "@/lib/dbClient";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 
 const CORRIDOR_SLUG = "usdc-us-brl-br";
@@ -26,5 +26,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await db.$disconnect();
+    await disconnectRuntimeDatabaseClients();
   });
