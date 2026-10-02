@@ -1,0 +1,53 @@
+name: Audit public API error contract
+
+on:
+  pull_request:
+    paths:
+      - "app/api/anchors/**"
+      - "app/api/corridors/**"
+      - "app/api/rates/**"
+      - "app/api/reputation/**"
+      - "lib/api/anchors.ts"
+      - "lib/api/corridors.ts"
+      - "lib/api/errors.ts"
+      - "lib/api/http.ts"
+      - "lib/api/rates.ts"
+      - "lib/api/rateHistory.ts"
+      - "lib/api/reputation.ts"
+      - "types/api/**"
+      - "tests/unit/api/**"
+      - ".github/workflows/audit-api-error-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit public API error contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Run API contract tests
+        run: node --import tsx --test tests/unit/api/*.test.ts
+      - name: Lint
+        run: npm run lint
+      - name: Run full test suite
+        run: npm test
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build

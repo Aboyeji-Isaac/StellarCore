@@ -8,11 +8,13 @@ import type {
 
 const MAX_TOKEN_BYTES = 16_384;
 const CLOCK_SKEW_MS = 5 * 60 * 1_000;
+const MAX_CLIENT_DOMAIN_LENGTH = 253;
 const TOKEN_WHITESPACE_OR_CONTROL = /[\u0000-\u0020\u007f]/;
 
 export type StellarAuthErrorCode =
   | "INVALID_TOKEN"
   | "TOKEN_EXPIRED"
+  | "INVALID_CLIENT_DOMAIN"
   | "PROVIDER_FAILURE";
 
 export class StellarAuthError extends Error {
@@ -46,7 +48,7 @@ export async function acquireStellarAuthToken(
 export function parseStellarAuthToken(
   value: string,
   metadata: StellarAuthTokenMetadata,
-  options: Readonly<{ now?: Date }> = {},
+  options: Readonly<{ now?: Date; expectedClientDomain?: string }> = {},
 ): StellarAuthToken {
   validateTokenValue(value);
   validateMetadata(metadata);
@@ -75,6 +77,7 @@ export function parseStellarAuthToken(
 
   if (subject !== metadata.expectedSubject) throw invalidToken();
   validateIssuer(issuer);
+  validateClientDomainClaim(payload.client_domain, options.expectedClientDomain);
 
   const issuedAt = numericDateToIso(issuedAtSeconds);
   const expiresAt = numericDateToIso(expiresAtSeconds);
@@ -202,6 +205,32 @@ function validateIssuer(value: string): void {
     }
   } catch {
     throw invalidToken();
+  }
+}
+
+/**
+ * Claim-shape check only. Decoding a JWT payload is NOT signature
+ * verification; the token is trusted because it came from the configured
+ * HTTPS endpoint, and the SEP-10 signing key is not assumed to be the JWT key.
+ * When no client domain was requested, the claim is intentionally not inspected.
+ */
+function validateClientDomainClaim(
+  claim: unknown,
+  expected: string | undefined,
+): void {
+  if (expected === undefined) return;
+  if (
+    !isValidHomeDomain(expected) ||
+    typeof claim !== "string" ||
+    !claim ||
+    claim.length > MAX_CLIENT_DOMAIN_LENGTH ||
+    !isValidHomeDomain(claim) ||
+    claim !== expected
+  ) {
+    throw new StellarAuthError(
+      "INVALID_CLIENT_DOMAIN",
+      "Stellar authentication token client_domain claim is missing or does not match",
+    );
   }
 }
 
