@@ -1,3 +1,4 @@
+import { EVIDENCE_API_HEADERS } from "@/lib/api/cachePolicy";
 import { getCorridorsApiResult } from "@/lib/api/corridors";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export async function GET(): Promise<Response> {
 
   return Response.json(result.body, {
     status: result.status,
-    headers: { "Cache-Control": "no-store" },
+    headers: EVIDENCE_API_HEADERS,
   });
 }
 

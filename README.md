@@ -457,6 +457,49 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+### Intermediary caching policy
+
+Every public response classifies its intermediary-cache behavior in
+`constants/apiCachePolicy.ts`. The classes and their exact directives are:
+
+| Class | `Cache-Control` | `Vary` | Applies to |
+|---|---|---|---|
+| `evidence_api` | `no-store` | `Accept-Encoding` | All 7 public read APIs |
+| `internal_api` | `no-store` | `Accept-Encoding` | Scheduled refresh endpoint |
+| `evidence_page` | `no-store` | `Accept-Encoding` | `/dashboard`, `/corridors/[slug]` |
+| `static_page` | `public, max-age=0, must-revalidate` | — | Build-time landing page `/` |
+| `framework_not_found` | `private, no-cache, no-store, max-age=0, must-revalidate` | `Accept-Encoding` | Framework 404s on unmatched paths |
+| `hashed_build_asset` | `public, max-age=31536000, immutable` | — | `/_next/static` build chunks |
+| `public_asset` | `public, max-age=0` | — | Files served from `public/` |
+
+Evidence classes apply to **every** status a route can return — successes,
+4xx validation failures, future 429 rate-limit responses, 5xx failures, and
+degraded payloads — so a negative or degraded response can never be retained
+by a CDN or proxy in a way that masks recovery. This is what prevents
+accidental intermediary caching from masquerading as the explicit last-known-
+good degraded evidence that #203 owns.
+
+Policy is enforced in three cooperating layers so framework defaults cannot
+silently override it:
+
+1. Route handlers set the shared headers from `lib/api/cachePolicy.ts` on
+   every response.
+2. `next.config.ts` applies the same values as a safety net for `/api/:path*`
+   (including future routes) and for the classified pages — this also
+   replaces Next.js's default `s-maxage=31536000` on the prerendered landing
+   page, which would otherwise let an intermediary serve stale HTML for a
+   year after a redeploy.
+3. `tests/unit/api/cachePolicy.test.ts` inventories every `route.ts` and
+   `page.tsx` under `app/` and fails until each is classified, and
+   `npm run verify:cache` (run by the Cache policy CI workflow after
+   `npm run build`) asserts the headers above over real HTTP against
+   `next start`, including error responses.
+
+Intentionally cacheable static resources (`/_next/static` chunks and
+`public/` files) are documented separately in `STATIC_RESOURCE_CACHE_POLICY`;
+no config header rule rewrites them, and their framework-served values are
+pinned by `npm run verify:cache`.
+
 ### `GET /api/anchors`
 
 Returns the public directory of anchors currently persisted by StellarCore,

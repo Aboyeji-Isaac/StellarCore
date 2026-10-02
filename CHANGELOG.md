@@ -9,8 +9,13 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- Intermediary cache policy for public responses: a route/page inventory that
+  fails until every new endpoint is classified, explicit shared
+  `Cache-Control`/`Vary` headers with a `next.config.ts` safety net, pinned
+  framework 404 and static-asset caching, production-server verification
+  (`npm run verify:cache`), and cache-policy CI (#238).
 
 ## [Prior work] — 2026-09-25
 

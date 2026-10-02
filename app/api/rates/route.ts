@@ -1,3 +1,4 @@
+import { EVIDENCE_API_HEADERS } from "@/lib/api/cachePolicy";
 import { getRatesApiResult } from "@/lib/api/rates";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,6 @@ export async function GET(request: Request): Promise<Response> {
 
   return Response.json(result.body, {
     status: result.status,
-    headers: { "Cache-Control": "no-store" },
+    headers: EVIDENCE_API_HEADERS,
   });
 }

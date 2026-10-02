@@ -1,3 +1,4 @@
+import { INTERNAL_API_HEADERS } from "@/lib/api/cachePolicy";
 import { hasValidCronAuthorization } from "@/lib/scheduled/cronAuth";
 import { runScheduledRefresh } from "@/lib/scheduled/refresh";
 import type { ScheduledRefreshResult } from "@/types/scheduled";
@@ -29,6 +30,6 @@ export async function getScheduledRefreshResponse(
 function json(body: object, status: 200 | 401 | 500): Response {
   return Response.json(body, {
     status,
-    headers: { "Cache-Control": "no-store" },
+    headers: INTERNAL_API_HEADERS,
   });
 }
