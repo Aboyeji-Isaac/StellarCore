@@ -15,6 +15,56 @@ type PrismaLatestRateRow = Readonly<{
   capturedAt: Date;
 }>;
 
+/**
+ * The newest snapshot per anchor for one corridor, as a bounded set of index
+ * probes instead of a walk over the corridor's history.
+ *
+ * Where the group set comes from: `anchors`, one row per anchor and independent
+ * of how many snapshots exist. `rate_snapshots.anchor_id` is a foreign key, so
+ * every anchor that has ever quoted this corridor is in that table, including
+ * one whose `anchor_corridors` membership has since been removed. Nothing is
+ * filtered on membership, status, or age here, which is what keeps stale and
+ * historically associated observations visible exactly as before.
+ *
+ * For each anchor the lateral subquery takes the single newest row for
+ * (corridor, anchor) in `captured_at DESC, id DESC` order, the same tie-break
+ * the previous DISTINCT ON used, from rate_snapshots_latest_observation_idx.
+ * An anchor with no snapshot in this corridor yields no row, as before. The
+ * result stays ordered by anchor id, which is what DISTINCT ON produced.
+ *
+ * Exported so the differential tests and the benchmark run the exact text that
+ * production runs.
+ */
+export function latestObservationsQuery(corridorId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      latest.id,
+      anchor.slug AS "anchorSlug",
+      anchor.name AS "anchorName",
+      latest.rate,
+      latest.source_amount AS "sourceAmount",
+      latest.destination_amount AS "destinationAmount",
+      latest.fee,
+      latest.captured_at AS "capturedAt"
+    FROM anchors AS anchor
+    CROSS JOIN LATERAL (
+      SELECT
+        snapshot.id,
+        snapshot.rate,
+        snapshot.source_amount,
+        snapshot.destination_amount,
+        snapshot.fee,
+        snapshot.captured_at
+      FROM rate_snapshots AS snapshot
+      WHERE snapshot.corridor_id = ${corridorId}::uuid
+        AND snapshot.anchor_id = anchor.id
+      ORDER BY snapshot.captured_at DESC, snapshot.id DESC
+      LIMIT 1
+    ) AS latest
+    ORDER BY anchor.id
+  `;
+}
+
 export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze({
   async findCorridorBySlug(slug) {
     const { db } = await import("@/lib/dbClient");
@@ -33,27 +83,7 @@ export const PRISMA_LATEST_RATE_REPOSITORY: LatestRateRepository = Object.freeze
 
   async findLatestObservations(corridorId) {
     const { db } = await import("@/lib/dbClient");
-    const rows = await db.$queryRaw<PrismaLatestRateRow[]>(Prisma.sql`
-      SELECT DISTINCT ON (snapshot.anchor_id)
-        snapshot.id,
-        anchor.slug AS "anchorSlug",
-        anchor.name AS "anchorName",
-        snapshot.rate,
-        snapshot.source_amount AS "sourceAmount",
-        snapshot.destination_amount AS "destinationAmount",
-        snapshot.fee,
-        snapshot.captured_at AS "capturedAt"
-      FROM rate_snapshots AS snapshot
-      INNER JOIN anchors AS anchor ON anchor.id = snapshot.anchor_id
-      WHERE snapshot.corridor_id = ${corridorId}::uuid
-        AND anchor.lifecycle_state = 'ACTIVE'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM rate_snapshot_dispositions AS disposition
-          WHERE disposition.snapshot_id = snapshot.id
-        )
-      ORDER BY snapshot.anchor_id, snapshot.captured_at DESC, snapshot.id DESC
-    `);
+    const rows = await db.$queryRaw<PrismaLatestRateRow[]>(latestObservationsQuery(corridorId));
 
     return Object.freeze(rows.map(toRepositoryObservation));
   },

@@ -1,6 +1,8 @@
 import { SEPS, type StellarSep } from "@/constants/seps";
 import { transferCapable } from "@/lib/stellar/anchors";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { canonicalizeHostname } from "@/lib/stellar/hostnameCanonicalization";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   AnchorRegistryEntry,
   DiscoveredAnchor,
@@ -18,6 +20,7 @@ export type Sep1ErrorCode =
   | "INVALID_HOME_DOMAIN"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
   | "INVALID_TOML"
@@ -57,7 +60,7 @@ export function buildSep1TomlUrl(homeDomain: string): string {
     );
   }
 
-  return `https://${homeDomain}/.well-known/stellar.toml`;
+  return `https://${canonicalizeHostname(homeDomain)}/.well-known/stellar.toml`;
 }
 
 export function normalizeSeps(seps: Iterable<number>): readonly StellarSep[] {
@@ -148,7 +151,7 @@ export async function fetchSep1Toml(
 ): Promise<Readonly<{ tomlUrl: string; data: Sep1Data }>> {
   const tomlUrl = buildSep1TomlUrl(homeDomain);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? createEgressFetch();
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Sep1DiscoveryError(
@@ -188,6 +191,14 @@ export async function fetchSep1Toml(
     return Object.freeze({ tomlUrl, data: parseSep1Toml(source, tomlUrl) });
   } catch (cause) {
     if (cause instanceof Sep1DiscoveryError) throw cause;
+    if (cause instanceof EgressPolicyError) {
+      throw new Sep1DiscoveryError(
+        "EGRESS_POLICY",
+        "SEP-1 request blocked by outbound network policy",
+        tomlUrl,
+        { cause },
+      );
+    }
 
     if (controller.signal.aborted) {
       throw new Sep1DiscoveryError(
@@ -424,6 +435,7 @@ function optionalHttpsUrl(
     const url = new URL(value);
 
     if (url.protocol !== "https:") throw new Error("URL must use HTTPS");
+    url.hostname = canonicalizeHostname(url.hostname);
 
     return url.toString();
   } catch {
