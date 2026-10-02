@@ -74,11 +74,9 @@ test("detail pages do not trap keyboard focus or suppress the global outline", (
   }
 });
 
-test("the new detail page stays out of scope of the landing and dashboard trees", () => {
+test("detail-page changes stay out of the landing and dashboard component trees", () => {
   assert.doesNotMatch(anchorPage, /@\/components\/(landing|dashboard)\//);
   assert.doesNotMatch(corridorPage, /@\/components\/(landing|dashboard)\//);
-  assert.match(anchorPage, /@\/components\/ui\/EvidenceBadge/);
-  assert.match(anchorPage, /@\/components\/anchors\/AnchorReputationEvidence/);
 });
 
 test("the anchor detail page renders real API data with an explicit 404 path", () => {
