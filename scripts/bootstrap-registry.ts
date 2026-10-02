@@ -8,9 +8,13 @@ import { syncCorridorRegistry } from "@/lib/stellar/corridorSync";
 
 async function main(): Promise<void> {
   assertCurrentStellarCoreConfiguration();
-  const { disconnectRuntimeDatabaseClients } = await import("@/lib/db/runtime");
+  const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
 
   try {
+    // Environment isolation (#143): bootstrap mutates registry/evidence data,
+    // so it refuses to run unless the runtime and database identities match.
+    // The check runs before any synchronization work.
+    await ensureDatabaseEnvironment();
     const anchors = await syncAnchorRegistry();
     const corridors = await syncCorridorRegistry();
 

@@ -6,6 +6,11 @@ import {
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
 import { transferCapable } from "@/lib/stellar/anchors";
+import {
+  consolePublicApiErrorReporter,
+  publicApiErrorResult,
+  type PublicApiErrorReporter,
+} from "@/lib/api/errors";
 import type {
   CorridorApiResult,
   CorridorsApiResult,
@@ -20,10 +25,12 @@ const MAX_CORRIDOR_SLUG_LENGTH = 100;
 
 export type CorridorsApiDependencies = Readonly<{
   repository?: CorridorDirectoryRepository;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export type CorridorApiDependencies = Readonly<{
   repository?: CorridorDetailRepository;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export function isValidCorridorSlug(slug: string): boolean {
@@ -42,16 +49,9 @@ export async function getCorridorsApiResult(
       status: 200,
       body: serializeCorridors(await repository.findAll()),
     });
-  } catch {
-    return Object.freeze({
-      status: 500,
-      body: Object.freeze({
-        error: Object.freeze({
-          code: "internal_error",
-          message: "Unable to load corridors.",
-        }),
-      }),
-    });
+  } catch (error) {
+    reportError(dependencies, error, "corridors.list");
+    return publicApiErrorResult("internal_error", "Unable to load corridors.");
   }
 }
 
@@ -60,8 +60,7 @@ export async function getCorridorApiResult(
   dependencies: CorridorApiDependencies = {},
 ): Promise<CorridorApiResult> {
   if (!isValidCorridorSlug(slug)) {
-    return errorResult(
-      400,
+    return publicApiErrorResult(
       "invalid_corridor_slug",
       "A valid corridor slug is required.",
     );
@@ -73,15 +72,16 @@ export async function getCorridorApiResult(
     const corridor = await repository.findBySlug(slug);
 
     if (!corridor) {
-      return errorResult(404, "corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
     }
 
     return Object.freeze({
       status: 200,
       body: Object.freeze({ corridor: serializeCorridorDetail(corridor) }),
     });
-  } catch {
-    return errorResult(500, "internal_error", "Unable to load corridor.");
+  } catch (error) {
+    reportError(dependencies, error, "corridors.detail");
+    return publicApiErrorResult("internal_error", "Unable to load corridor.");
   }
 }
 
@@ -130,15 +130,13 @@ export function serializeCorridorDetail(
   });
 }
 
-function errorResult(
-  status: 400 | 404 | 500,
-  code: "invalid_corridor_slug" | "corridor_not_found" | "internal_error",
-  message: string,
-): CorridorApiResult {
-  return Object.freeze({
-    status,
-    body: Object.freeze({
-      error: Object.freeze({ code, message }),
-    }),
+function reportError(
+  dependencies: CorridorsApiDependencies | CorridorApiDependencies,
+  error: unknown,
+  operation: string,
+): void {
+  (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
+    operation,
+    code: "internal_error",
   });
 }

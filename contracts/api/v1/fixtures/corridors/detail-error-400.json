@@ -1,0 +1,14 @@
+{
+  "name": "corridors.detail.error_400",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors/:slug",
+  "method": "GET",
+  "expectedStatus": 400,
+  "description": "Bad request error for malformed corridor slug",
+  "body": {
+    "error": {
+      "code": "invalid_corridor_slug",
+      "message": "A valid corridor slug is required."
+    }
+  }
+}

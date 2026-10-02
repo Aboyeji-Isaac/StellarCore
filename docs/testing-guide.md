@@ -32,21 +32,52 @@ npx tsx --test --test-name-pattern="timeout" tests/unit/stellar/sep38.test.ts
 `npm run lint` checks the repository, and `npx tsc --noEmit` performs the
 TypeScript check without emitting files.
 
-## Database integration tests
+## Property/fuzz tests for untrusted SEP parsing (#141)
 
-The database-backed integration tests are opt-in and skipped by default. Run the
-runtime database-budget tests against an isolated PostgreSQL (never production
-credentials or production load):
+`tests/property/` holds deterministic property suites for the SEP-1 TOML and
+SEP-38 JSON parsers. Inputs are generated from a seeded xorshift PRNG
+(`tests/property/seededGenerator.ts`) and are bounded, so runs are fast,
+offline, and fully reproducible.
+
+Run the suites with the default seed:
 
 ```bash
-RUN_DATABASE_BUDGET_INTEGRATION=1 \
-TEST_DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
-npx tsx --test tests/integration/db/databaseBudget.integration.test.ts
+npx tsx --test tests/property/sep1Property.test.ts tests/property/sep38Property.test.ts
 ```
 
-The tests create only synthetic fixtures in a unique table and drop it during
-cleanup. See [database-resource-budget.md](database-resource-budget.md) for the
-bounds each test proves.
+Reproduce (or widen) a run with an explicit seed and iteration count:
+
+```bash
+SEED=12345 PROPERTY_ITERATIONS=5000 npx tsx --test tests/property/sep1Property.test.ts
+```
+
+A failure prints the seed that produced it; rerun with that exact `SEED` to
+replay the same corpus locally. When a generated input exposes a real parser
+defect, minimize the input and persist it under
+`tests/property/regressions/sep1/` or `tests/property/regressions/sep38/`, then
+pin its typed outcome in `tests/property/regressionCorpus.test.ts`. The corpus
+suite asserts every pinned fixture forever, so a fixed parser bug cannot
+silently regress. Every fixture must have a pinned expectation; the suite
+fails on orphan files.
+
+CI runs these suites on every pull request that touches `lib/stellar/**` or
+`tests/property/**` (`.github/workflows/property-tests.yml`) with a fixed seed,
+plus a daily scheduled sweep with a rotating seed and deeper iteration count.
+All property tests are offline: they never call anchors or public networks.
+
+## Database-backed integration tests
+
+Tests that require PostgreSQL are gated behind explicit environment flags and
+use isolated synthetic fixtures (randomized slugs, cleaned up in `finally`):
+
+- `RUN_DATABASE_INTEGRATION=1` enables the API/registry database tests.
+- `RUN_REPUTATION_DATABASE_INTEGRATION=1` enables the reputation engine and
+  snapshot-coherence tests.
+
+Database-backed tests additionally exercise the environment isolation guard
+(#143): the runtime identity (e.g. `NODE_ENV=test` resolving to `test`) must
+match the database's durable `database_environment` stamp before any evidence
+access, and forbidden pairings fail closed.
 
 ## Mocking network calls
 

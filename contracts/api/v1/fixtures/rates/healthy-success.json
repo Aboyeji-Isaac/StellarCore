@@ -1,0 +1,63 @@
+{
+  "name": "rates.healthy.success",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Healthy rate response with median rate, independent sources, and observations",
+  "body": {
+    "corridor": {
+      "slug": "usdc-us-brl-br",
+      "sourceAsset": "USDC",
+      "sourceCountry": "US",
+      "destinationAsset": "BRL",
+      "destinationCountry": "BR"
+    },
+    "evaluatedAt": "2026-08-28T12:00:00.000Z",
+    "state": "healthy",
+    "medianRate": "5.250000000000000000",
+    "sourceCount": 2,
+    "freshSourceCount": 2,
+    "reviewedCandidateConfiguration": {
+      "candidateCount": 1,
+      "uniqueAnchorCount": 1
+    },
+    "medianRequirement": {
+      "minimumFreshIndependentSources": 2
+    },
+    "observations": [
+      {
+        "anchor": {
+          "slug": "cowrie",
+          "name": "Cowrie"
+        },
+        "rate": "5.240000000000000000",
+        "sourceAmount": "100.000000000000000000",
+        "destinationAmount": "524.000000000000000000",
+        "fee": "1.000000000000000000",
+        "capturedAt": "2026-08-28T11:59:50.000Z",
+        "freshness": {
+          "state": "fresh",
+          "ageMs": 10000
+        },
+        "eligibleForMedian": true
+      },
+      {
+        "anchor": {
+          "slug": "zeam",
+          "name": "Zeam"
+        },
+        "rate": "5.260000000000000000",
+        "sourceAmount": "100.000000000000000000",
+        "destinationAmount": "526.000000000000000000",
+        "fee": "1.500000000000000000",
+        "capturedAt": "2026-08-28T11:59:45.000Z",
+        "freshness": {
+          "state": "fresh",
+          "ageMs": 15000
+        },
+        "eligibleForMedian": true
+      }
+    ]
+  }
+}

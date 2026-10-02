@@ -63,6 +63,44 @@ export function isZeroDecimal(value: ExactDecimal): boolean {
   return value.coefficient === ZERO;
 }
 
+export function addDecimals(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  const scale = Math.max(left.scale, right.scale);
+  const sum =
+    left.coefficient * powerOfTen(scale - left.scale) +
+    right.coefficient * powerOfTen(scale - right.scale);
+  return normalizeDecimal({ coefficient: sum, scale });
+}
+
+export function subtractDecimals(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  const scale = Math.max(left.scale, right.scale);
+  const diff =
+    left.coefficient * powerOfTen(scale - left.scale) -
+    right.coefficient * powerOfTen(scale - right.scale);
+  return normalizeDecimal({ coefficient: diff, scale });
+}
+
+export function multiplyDecimals(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  const coefficient = left.coefficient * right.coefficient;
+  const scale = left.scale + right.scale;
+  return normalizeDecimal({ coefficient, scale });
+}
+
+export function absDecimalDiff(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  const scale = Math.max(left.scale, right.scale);
+  const leftScaled = left.coefficient * powerOfTen(scale - left.scale);
+  const rightScaled = right.coefficient * powerOfTen(scale - right.scale);
+  const diff = leftScaled >= rightScaled ? leftScaled - rightScaled : rightScaled - leftScaled;
+  return normalizeDecimal({ coefficient: diff, scale });
+}
+
+export function oneUlp(scale: number): ExactDecimal {
+  return normalizeDecimal({ coefficient: ONE, scale: Math.max(0, scale) });
+}
+
+export function maxDecimal(left: ExactDecimal, right: ExactDecimal): ExactDecimal {
+  return compareDecimals(left, right) >= 0 ? left : right;
+}
+
 function normalizeDecimal(value: ExactDecimal): ExactDecimal {
   let { coefficient, scale } = value;
   while (scale > 0 && coefficient % TEN === ZERO) {
