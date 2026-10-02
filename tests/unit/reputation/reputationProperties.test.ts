@@ -22,6 +22,11 @@ import type {
  */
 
 const NOW = new Date("2026-09-01T00:00:00.000Z");
+const SNAPSHOT = Object.freeze({
+  snapshotId: "1:2:",
+  readAt: NOW,
+  isolationLevel: "REPEATABLE READ" as const,
+});
 const SCORE_STATUSES: readonly ReputationAnchorStatus[] =
   ["LIVE", "DEGRADED", "DOWN", "UNKNOWN"];
 const TRANSFER_STATUSES: readonly ReputationTransferStatus[] =
@@ -214,6 +219,7 @@ function validRandomEvidence(random: SeededRandom): ReputationEvidence {
     corridorSlugs: Object.freeze(corridorSlugs),
     latestRates: Object.freeze(latestRates),
     transferOutcomes: Object.freeze(transferOutcomes),
+    snapshot: SNAPSHOT,
   });
 }
 
@@ -237,6 +243,7 @@ function establishedEvidence(
       ...Array.from({ length: failedCount }, (_, index) =>
         outcome("ERROR", completedCount + index)),
     ]),
+    snapshot: SNAPSHOT,
   });
 }
 
