@@ -127,9 +127,8 @@ export async function checkClockIntegrity(
 
   if (
     dependencies.recorder
-    && !readFailure
-    && applicationTime !== null
-    && databaseTime !== null
+    && verdict.applicationTime !== null
+    && verdict.databaseTime !== null
   ) {
     try {
       await dependencies.recorder.record(toPersistenceRecord(verdict));

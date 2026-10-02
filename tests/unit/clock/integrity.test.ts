@@ -135,6 +135,19 @@ test("a skewed gate is recorded as a rejected provenance row", async () => {
   assert.equal(recorded[0]?.code, "CLOCK_SKEW_EXCEEDED");
 });
 
+test("an invalid application instant is not recorded rather than violating the time-pair constraint", async () => {
+  let recorded = false;
+  const verdict = await checkClockIntegrity("RATE_CAPTURE", {
+    clock: { now: () => new Date(Number.NaN) },
+    reader: { readDatabaseTime: async () => DATABASE_TIME },
+    recorder: { record: async () => { recorded = true; } },
+  });
+
+  assert.equal(verdict.outcome, "REJECTED");
+  assert.equal(verdict.code, "INVALID_CLOCK_VALUE");
+  assert.equal(recorded, false);
+});
+
 test("a failed database clock read is rejected without attempting to record", async () => {
   let recorded = false;
   const reader: DatabaseClockReader = {
