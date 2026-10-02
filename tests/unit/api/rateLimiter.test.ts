@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -100,4 +101,29 @@ test("first entry of x-forwarded-for is used; fallbacks are real-ip then anonymo
   assert.equal((await limiter.check(realIp, now)).allowed, false, "same ip");
   assert.deepEqual(await limiter.check(bare, now), { allowed: true });
   assert.equal((await limiter.check(bare, now)).allowed, false, "anonymous");
+});
+
+test("every current public GET route enforces the shared limiter", () => {
+  const routeFiles = [
+    "../../../app/api/anchors/route.ts",
+    "../../../app/api/anchors/[slug]/route.ts",
+    "../../../app/api/corridors/route.ts",
+    "../../../app/api/corridors/[slug]/route.ts",
+    "../../../app/api/rates/route.ts",
+    "../../../app/api/rates/history/route.ts",
+    "../../../app/api/reputation/route.ts",
+    "../../../app/api/reputation/[slug]/route.ts",
+  ];
+
+  for (const relative of routeFiles) {
+    const source = readFileSync(new URL(relative, import.meta.url), "utf8");
+    assert.match(source, /@\/lib\/api\/rateLimiter/);
+    assert.match(source, /getRateLimiter\(\)\.check\(request, Date\.now\(\)\)/);
+  }
+
+  const internalCron = readFileSync(
+    new URL("../../../app/api/internal/cron/refresh/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(internalCron, /@\/lib\/api\/rateLimiter/);
 });
