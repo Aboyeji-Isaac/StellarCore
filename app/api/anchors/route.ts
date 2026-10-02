@@ -1,5 +1,6 @@
 import { getAnchorsApiResult } from "@/lib/api/anchors";
 import { publicApiJsonResponse } from "@/lib/api/http";
+import { readPaginationQuery } from "@/lib/api/pagination";
 import { getRateLimiter } from "@/lib/api/rateLimiter";
 
 export const dynamic = "force-dynamic";
@@ -7,5 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request): Promise<Response> {
   const decision = await getRateLimiter().check(request, Date.now());
   if (!decision.allowed) return decision.response;
-  return publicApiJsonResponse(await getAnchorsApiResult());
+  return publicApiJsonResponse(await getAnchorsApiResult(
+    {},
+    readPaginationQuery(new URL(request.url).searchParams),
+  ));
 }
