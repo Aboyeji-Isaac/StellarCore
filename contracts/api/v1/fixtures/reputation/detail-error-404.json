@@ -1,0 +1,14 @@
+{
+  "name": "reputation.detail.error_404",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation/:slug",
+  "method": "GET",
+  "expectedStatus": 404,
+  "description": "Not found error for unknown anchor slug",
+  "body": {
+    "error": {
+      "code": "anchor_not_found",
+      "message": "Anchor not found."
+    }
+  }
+}

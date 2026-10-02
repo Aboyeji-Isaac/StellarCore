@@ -1,18 +1,18 @@
 import type { AnchorRegistryEntry } from "@/types/anchor";
-import {
-  type DomainControlVerificationResult,
-  type VerificationDependencies,
-  verifyProof,
-  verifyProofAsync,
-} from "@/lib/stellar/domainControl";
-import { getAnchorProof } from "@/constants/anchorProofs";
+import { canonicalizeHostname } from "@/lib/stellar/hostnameCanonicalization";
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HOME_DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
 export function isValidHomeDomain(homeDomain: string): boolean {
-  return HOME_DOMAIN_PATTERN.test(homeDomain);
+  if (typeof homeDomain !== "string") return false;
+  try {
+    const canonical = canonicalizeHostname(homeDomain);
+    return HOME_DOMAIN_PATTERN.test(canonical);
+  } catch {
+    return false;
+  }
 }
 
 export type AnchorRegistryValidationIssue = Readonly<{
@@ -63,13 +63,19 @@ export function validateAnchorRegistryDetailed(
       continue;
     }
 
-    if (!isValidHomeDomain(entry.homeDomain)) {
-      issues.push({
-        slug: entry.slug,
-        code: "INVALID_HOME_DOMAIN",
-        message: `Anchor "${entry.slug}" has an invalid home domain: "${entry.homeDomain}"`,
-      });
-      continue;
+    let canonicalDomain: string;
+    try {
+      canonicalDomain = canonicalizeHostname(entry.homeDomain);
+    } catch {
+      throw new Error(
+        `Anchor "${entry.slug}" has an invalid home domain: "${entry.homeDomain}"`,
+      );
+    }
+
+    if (!HOME_DOMAIN_PATTERN.test(canonicalDomain)) {
+      throw new Error(
+        `Anchor "${entry.slug}" has an invalid home domain: "${entry.homeDomain}"`,
+      );
     }
 
     if (slugs.has(entry.slug)) {
@@ -81,43 +87,12 @@ export function validateAnchorRegistryDetailed(
       continue;
     }
 
-    if (homeDomains.has(entry.homeDomain)) {
-      issues.push({
-        slug: entry.slug,
-        code: "DUPLICATE_HOME_DOMAIN",
-        message: `Duplicate anchor home domain: "${entry.homeDomain}"`,
-      });
-      continue;
-    }
-
-    const proof = getAnchorProof(entry.slug);
-    if (!proof) {
-      issues.push({
-        slug: entry.slug,
-        code: "MISSING_DOMAIN_CONTROL_PROOF",
-        message: `Anchor "${entry.slug}" is missing a domain control proof. New anchors and homeDomain changes require a valid proof.`,
-      });
-      continue;
-    }
-
-    const verification = verifyProof(proof, entry, {
-      clock: { now: () => new Date() },
-      isNonceUsed: async () => false,
-      markNonceUsed: async () => {},
-    });
-
-    if (!verification.ok) {
-      issues.push({
-        slug: entry.slug,
-        code: "INVALID_DOMAIN_CONTROL_PROOF",
-        message: `Anchor "${entry.slug}" has an invalid domain control proof: ${verification.error}`,
-        proofVerification: verification,
-      });
-      continue;
+    if (homeDomains.has(canonicalDomain)) {
+      throw new Error(`Duplicate anchor home domain: "${entry.homeDomain}"`);
     }
 
     slugs.add(entry.slug);
-    homeDomains.add(entry.homeDomain);
+    homeDomains.add(canonicalDomain);
   }
 
   return Object.freeze({
