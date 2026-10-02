@@ -5,6 +5,12 @@ import {
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
+import {
+  NO_PAGINATION_QUERY,
+  paginate,
+  parsePagination,
+  type PaginationQuery,
+} from "@/lib/api/pagination";
 import { transferCapable } from "@/lib/stellar/anchors";
 import {
   consolePublicApiErrorReporter,
@@ -41,13 +47,21 @@ export function isValidCorridorSlug(slug: string): boolean {
 
 export async function getCorridorsApiResult(
   dependencies: CorridorsApiDependencies = {},
+  pagination: PaginationQuery = NO_PAGINATION_QUERY,
 ): Promise<CorridorsApiResult> {
+  const parsed = parsePagination(pagination);
+  if (!parsed.ok) {
+    return publicApiErrorResult("invalid_pagination", parsed.message);
+  }
+
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
+    const body = serializeCorridors(await repository.findAll());
+    const corridors = paginate(body.corridors, parsed.pagination);
     return Object.freeze({
       status: 200,
-      body: serializeCorridors(await repository.findAll()),
+      body: Object.freeze({ corridors, count: corridors.length }),
     });
   } catch (error) {
     reportError(dependencies, error, "corridors.list");
