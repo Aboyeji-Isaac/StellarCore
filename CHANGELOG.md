@@ -11,6 +11,7 @@ with your pull request.
 
 ### Added
 
+- Anchor detail UI, median-engine property coverage, transfer-outcome webhook schema RFC, and SEP-38 source research from PR #84 (#5, #7, #18, #21).
 - Isolated dependency-install reproducibility verification with bounded drift reports and toolchain capture (#237).
 - Bounded zero-downtime cron secret rotation with deterministic previous-secret revocation (#184).
 - Read-only registry-to-database reconciliation with deterministic drift reports and non-destructive repair plans (#185).
