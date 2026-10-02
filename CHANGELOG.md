@@ -9,8 +9,24 @@ with your pull request.
 
 ## [Unreleased]
 
-_Nothing yet. Meaningful pull requests should add an entry here — see
-[CONTRIBUTING.md](CONTRIBUTING.md#changelog)._
+### Added
+
+- A single server-side clock abstraction and a run-level clock-integrity
+  boundary for evidence capture and evaluation. Excessive positive or negative
+  skew between the application clock and PostgreSQL is rejected with typed,
+  sanitized failures before any `RateSnapshot` or `ReputationScore` is written.
+- Bounded `ClockIntegrityCheck` run/provenance rows (boundary, outcome, typed
+  code, clamped skew, application and database instants). See
+  [docs/clock-integrity.md](docs/clock-integrity.md).
+- Controlled-clock unit tests and opt-in PostgreSQL integration tests
+  (`RUN_CLOCK_INTEGRITY_DATABASE_INTEGRATION=1`).
+
+### Changed
+
+- Freshness, the latest-rate read model, the rate engine, and reputation
+  evaluation now default to the shared server clock instead of reading the
+  system clock directly. A future `capturedAt` is never treated as fresh, and
+  existing persisted timestamps are never rewritten.
 
 ## [Prior work] — 2026-09-25
 

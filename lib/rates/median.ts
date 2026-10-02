@@ -1,4 +1,5 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
+import { SYSTEM_CLOCK } from "@/lib/clock/clock";
 import {
   averageDecimals,
   compareDecimals,
@@ -17,7 +18,7 @@ import type {
 
 export function computeFreshMedian(
   sources: readonly MedianSource[],
-  now: Date = new Date(),
+  now: Date = SYSTEM_CLOCK.now(),
 ): MedianResult {
   const included: Array<{ decimal: ExactDecimal; source: MedianSourceResult }> = [];
   const sourceResults: MedianSourceResult[] = [];

@@ -1,4 +1,5 @@
 import { REPUTATION_OUTCOME_WINDOW_DAYS } from "@/constants/reputation";
+import { SYSTEM_CLOCK } from "@/lib/clock/clock";
 import { PRISMA_REPUTATION_REPOSITORY } from "@/lib/reputation/repository";
 import { calculateReputation } from "@/lib/reputation/score";
 import type {
@@ -16,7 +17,7 @@ export async function evaluateAnchorReputation(
     persist?: boolean;
   }> = {},
 ): Promise<ReputationEvaluationResult> {
-  const evaluatedAt = options.evaluatedAt ?? new Date();
+  const evaluatedAt = options.evaluatedAt ?? SYSTEM_CLOCK.now();
   if (!Number.isFinite(evaluatedAt.getTime())) {
     return failure(anchorSlug, "INVALID_EVALUATION_TIME");
   }

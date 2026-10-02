@@ -1,3 +1,4 @@
+import { SYSTEM_CLOCK } from "@/lib/clock/clock";
 import { snapshotReviewedLiveRates } from "@/lib/rates/snapshotRun";
 import {
   evaluatePersistedAnchorReputations,
@@ -53,7 +54,7 @@ export async function runScheduledRefresh(
 const DEFAULT_DEPENDENCIES = Object.freeze({
   snapshotRates: snapshotReviewedLiveRates,
   evaluateReputation: evaluatePersistedAnchorReputations,
-  now: () => new Date(),
+  now: SYSTEM_CLOCK.now,
 }) satisfies ScheduledRefreshDependencies;
 
 function toScheduledRates(summary: SafeLiveRateRunSummary): ScheduledRefreshResult["rates"] {

@@ -1,3 +1,4 @@
+import type { ClockIntegrityVerdict } from "@/types/clock";
 import type { RateCandidate, RateEngineResult } from "@/types/rates";
 import type { Sep38AssetIdentifier } from "@/types/sep38";
 
@@ -32,4 +33,10 @@ export type SafeLiveRateRunSummary = Readonly<{
   }>[];
   failures: RateEngineResult["failures"];
   skippedSources: RateEngineResult["skippedSources"];
+  /**
+   * The run-level clock-integrity verdict that gated this capture. It is the
+   * rejected verdict when no snapshot was written, and null for the offline
+   * engine formatter.
+   */
+  clockIntegrity: ClockIntegrityVerdict | null;
 }>;

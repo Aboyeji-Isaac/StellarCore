@@ -20,11 +20,18 @@ test("controlled scheduled integration passes one persisted evaluation time from
         snapshots: [],
         failures: [],
         skippedSources: [],
+        clockIntegrity: null,
       };
     },
     evaluateReputation: async ({ evaluatedAt }) => {
       events.push(`reputation:${evaluatedAt.toISOString()}`);
-      return { attempted: 2, succeeded: 2, failed: 0, failures: [] };
+      return {
+        attempted: 2,
+        succeeded: 2,
+        failed: 0,
+        failures: [],
+        clockIntegrity: null,
+      };
     },
     now: () => EVALUATED_AT,
   });

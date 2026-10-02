@@ -77,11 +77,26 @@ transfer outcomes, but the current product has no trusted production writer
 for them and does not infer off-chain settlement from a successful Stellar
 payment or Horizon observation.
 
+## Clock integrity
+
+Every evidence boundary reads time through one server-side clock abstraction
+(`lib/clock/clock.ts`), never a client clock. Before a rate-capture run writes a
+snapshot and before a reputation-evaluation run scores an anchor, a single
+run-level check compares the application instant with PostgreSQL's
+`clock_timestamp()` (`lib/clock/integrity.ts`). The reviewed tolerance is
+`CLOCK_MAXIMUM_SKEW_MS` (5 seconds). Excessive positive or negative skew rejects
+the whole run before anything is written, so a materially wrong clock cannot
+create future observations or extend freshness. Each check persists one bounded
+`ClockIntegrityCheck` row; clock agreement is system-integrity evidence and is
+kept separate from anchor-availability evidence. See
+[clock-integrity.md](clock-integrity.md).
+
 ## Database and public API
 
 Prisma models anchors, corridors, their reviewed associations, rate snapshots,
-transfer-outcome evidence, and one current reputation score per anchor. The
-database is the boundary between maintenance engines and read consumers.
+transfer-outcome evidence, one current reputation score per anchor, and bounded
+clock-integrity provenance rows. The database is the boundary between
+maintenance engines and read consumers.
 
 Routes under `app/api/` expose anchors, corridors, rates, and reputation as
 read-only JSON. They serialize bounded fields, avoid raw errors and internal

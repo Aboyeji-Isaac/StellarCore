@@ -1,6 +1,8 @@
+import { SYSTEM_CLOCK } from "@/lib/clock/clock";
 import { getRateFreshness } from "@/lib/rates/freshness";
 import { computeFreshMedian } from "@/lib/rates/median";
 import { PRISMA_LATEST_RATE_REPOSITORY } from "@/lib/rates/latestRateRepository";
+import type { ServerClock } from "@/types/clock";
 import type {
   LatestCorridorRateReadResult,
   LatestRateRepository,
@@ -13,9 +15,11 @@ export async function readLatestCorridorRate(
   options: Readonly<{
     repository?: LatestRateRepository;
     evaluatedAt?: Date;
+    clock?: ServerClock;
   }> = {},
 ): Promise<LatestCorridorRateReadResult> {
-  const evaluatedAt = options.evaluatedAt ?? new Date();
+  const evaluatedAt = options.evaluatedAt
+    ?? (options.clock ?? SYSTEM_CLOCK).now();
   if (!Number.isFinite(evaluatedAt.getTime())) {
     return failure(corridorSlug, "INVALID_EVALUATION_TIME");
   }

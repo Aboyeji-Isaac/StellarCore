@@ -1,12 +1,12 @@
 > Whatever action you can do yourself, Please do youself, this includes starting apps and verification
 
-#Repository Guidelines
+# Repository Guidelines
 
-##Project Structure & Module Organization
+## Project Structure & Module Organization
 
 StellarCore is planned as a Next.js 15 App Router application. Keep routes and API handlers in `app/`; reusable UI in `components/`; browser-side behavior in `hooks/`; and domain logic in `lib/stellar`, `lib/rates`, and `lib/reputation`. Shared types belong in `types/`, constants in `constants/`, Prisma files in `prisma/`, maintenance jobs in `scripts/`, and static assets in `public/`. Place unit, integration, and Playwright tests under `tests/unit`, `tests/integration`, and `tests/e2e`. Until scaffolding is complete, treat `README.md` as the product and architecture specification.
 
-##Build, Test, and Development Commands
+## Build, Test, and Development Commands
 
 After `package.json` is introduced, use the documented npm workflow:
 
@@ -17,6 +17,7 @@ After `package.json` is introduced, use the documented npm workflow:
 - `npm run audit:config` checks repository-controlled registry relationships offline; run it for anchor, corridor, membership, or reviewed rate-source changes.
 - `npm run registry:print` prints a read-only, human-readable summary of the checked-in anchor, corridor, membership, and reviewed rate-source registries; it touches no database and performs no network requests.
 - `npm run verify:sep10` runs the opt-in live SEP-10 check against Stellar's official test anchor; it is never part of tests or builds.
+- `RUN_CLOCK_INTEGRITY_DATABASE_INTEGRATION=1 npm test` runs the opt-in PostgreSQL clock-integrity tests against a migrated `DATABASE_URL`; they auto-skip otherwise.
 - `npx playwright test` runs browser-level user flows.
 - `npx prisma migrate dev` applies local schema migrations.
 - `npx prisma migrate deploy` applies committed migrations only from a protected production/CI step.
@@ -38,4 +39,4 @@ No commit convention is established yet. Use concise, imperative subjects, optio
 
 ## Security & Configuration
 
-Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests.
+Copy `.env.example` to `.env.local`; never commit credentials, private keys, Supabase secrets, or production anchor tokens. Validate external TOML and quote data at trust boundaries, and apply timeouts and rate limits to outbound requests. Never read client/browser time for evidence decisions: use the shared server clock in `lib/clock` and the run-level clock-integrity boundary described in `docs/clock-integrity.md`.

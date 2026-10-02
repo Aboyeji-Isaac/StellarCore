@@ -138,6 +138,25 @@ Running the bootstrap:
 
 The locally verified run took about ten seconds. At the current reviewed scope of one rate source and three anchors, one Node.js function invocation is acceptable; this is a production observation, not an architectural limit. Add a distributed lock, chunking, or workers before the source/anchor set grows materially; Vercel does not retry failed cron invocations automatically.
 
+## Clock integrity
+
+The scheduled refresh compares the application clock with PostgreSQL before it
+writes any rate snapshot or reputation score. The reviewed tolerance is
+`CLOCK_MAXIMUM_SKEW_MS` (5 seconds); a materially skewed run is rejected and
+recorded as a bounded `clock_integrity_checks` row. Hosts must keep NTP or the
+platform clock synchronized; the boundary is a safety net, not a substitute for
+clock maintenance. Inspect recent rows after a refresh that reports a
+`CLOCK_INTEGRITY` failure:
+
+```sql
+SELECT observed_at, boundary, outcome, code, skew_ms, tolerance_ms
+FROM clock_integrity_checks
+ORDER BY observed_at DESC
+LIMIT 20;
+```
+
+See [clock-integrity.md](clock-integrity.md) for the full contract.
+
 ## First production cycle
 
 1. Apply committed migrations with the **Deploy production migrations**
@@ -147,7 +166,7 @@ The locally verified run took about ten seconds. At the current reviewed scope o
    any nonzero result.
 3. Deploy or redeploy the Vercel application with `npm run build` as the build command.
 4. Let the scheduled refresh ingest indicative rates, then evaluate the currently sparse reputation evidence. It does not ingest transfer outcomes.
-5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`.
+5. Verify `GET /api/anchors`, `/api/corridors`, `/api/rates?corridor=usdc-us-brl-br`, `/api/reputation`, and `/api/reputation/zeam`, and confirm the latest `clock_integrity_checks` rows are `passed`.
 
 ## Rollback
 

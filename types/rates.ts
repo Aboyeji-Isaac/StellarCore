@@ -103,10 +103,15 @@ export type RateQuoteProvider = (
   candidate: RateCandidate,
 ) => Promise<Sep38IndicativePrice>;
 
+/**
+ * A per-source failure (quote/normalization/persistence) carries its anchor and
+ * corridor identity. A run-level `CLOCK_INTEGRITY` failure is decided before
+ * any source is attempted, so it intentionally omits those fields.
+ */
 export type RateEngineFailure = Readonly<{
-  anchorSlug: string;
-  corridorSlug: string;
-  phase: "QUOTE" | "NORMALIZATION" | "PERSISTENCE";
+  anchorSlug?: string;
+  corridorSlug?: string;
+  phase: "QUOTE" | "NORMALIZATION" | "PERSISTENCE" | "CLOCK_INTEGRITY";
   code: string;
 }>;
 

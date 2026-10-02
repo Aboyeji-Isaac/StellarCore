@@ -5,7 +5,32 @@ import {
   snapshotReviewedLiveRates,
   type SnapshotReviewedLiveRatesDependencies,
 } from "@/lib/rates/snapshotRun";
+import type { ClockIntegrityVerdict } from "@/types/clock";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
+
+const PASSED_VERDICT: ClockIntegrityVerdict = Object.freeze({
+  boundary: "RATE_CAPTURE",
+  outcome: "PASSED",
+  code: null,
+  direction: "NONE",
+  skewMs: 0,
+  toleranceMs: 5_000,
+  applicationTime: "2026-08-27T12:00:00.000Z",
+  databaseTime: "2026-08-27T12:00:00.000Z",
+  runId: null,
+});
+
+const REJECTED_VERDICT: ClockIntegrityVerdict = Object.freeze({
+  boundary: "RATE_CAPTURE",
+  outcome: "REJECTED",
+  code: "CLOCK_SKEW_EXCEEDED",
+  direction: "POSITIVE",
+  skewMs: 65_000,
+  toleranceMs: 5_000,
+  applicationTime: "2026-08-27T12:01:05.000Z",
+  databaseTime: "2026-08-27T12:00:00.000Z",
+  runId: null,
+});
 
 test("failed configuration audit short-circuits before live candidate preparation", async () => {
   let buildCalls = 0;
@@ -14,6 +39,7 @@ test("failed configuration audit short-circuits before live candidate preparatio
     assertConfiguration: () => {
       throw new Error("safe configuration failure");
     },
+    checkClockIntegrity: async () => PASSED_VERDICT,
     buildCandidates: async () => {
       buildCalls += 1;
       return [];
@@ -34,6 +60,7 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   const expected = summary();
   const result = await snapshotReviewedLiveRates({
     assertConfiguration: () => events.push("audit"),
+    checkClockIntegrity: async () => PASSED_VERDICT,
     buildCandidates: async () => {
       events.push("prepare");
       return [];
@@ -48,6 +75,34 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   assert.equal(result, expected);
 });
 
+test("a materially skewed clock rejects the whole run before any candidate is built", async () => {
+  let buildCalls = 0;
+  let executeCalls = 0;
+  const result = await snapshotReviewedLiveRates({
+    assertConfiguration: () => {},
+    checkClockIntegrity: async () => REJECTED_VERDICT,
+    buildCandidates: async () => {
+      buildCalls += 1;
+      return [];
+    },
+    executeCandidates: async () => {
+      executeCalls += 1;
+      return summary();
+    },
+  });
+
+  assert.equal(buildCalls, 0);
+  assert.equal(executeCalls, 0);
+  assert.equal(result.snapshotsPersisted, 0);
+  assert.equal(result.failed, 1);
+  assert.deepEqual(result.failures, [{
+    phase: "CLOCK_INTEGRITY",
+    code: "CLOCK_SKEW_EXCEEDED",
+  }]);
+  assert.equal(result.clockIntegrity, REJECTED_VERDICT);
+  assert.doesNotThrow(() => JSON.stringify(result));
+});
+
 function summary(): SafeLiveRateRunSummary {
   return Object.freeze({
     totalCandidates: 0,
@@ -59,5 +114,6 @@ function summary(): SafeLiveRateRunSummary {
     snapshots: Object.freeze([]),
     failures: Object.freeze([]),
     skippedSources: Object.freeze([]),
+    clockIntegrity: null,
   });
 }

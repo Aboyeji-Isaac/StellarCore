@@ -141,6 +141,7 @@ function rateSummary(overrides: Partial<SafeLiveRateRunSummary> = {}): SafeLiveR
     snapshots: [],
     failures: [],
     skippedSources: [],
+    clockIntegrity: null,
     ...overrides,
   });
 }
@@ -151,6 +152,7 @@ function reputationSummary(overrides: Record<string, unknown> = {}) {
     succeeded: 3,
     failed: 0,
     failures: [],
+    clockIntegrity: null,
     ...overrides,
-  }) as Awaited<ReturnType<ScheduledRefreshDependencies["evaluateReputation"]>>;
+  }) as unknown as Awaited<ReturnType<ScheduledRefreshDependencies["evaluateReputation"]>>;
 }

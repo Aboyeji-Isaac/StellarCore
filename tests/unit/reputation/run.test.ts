@@ -5,12 +5,41 @@ import {
   evaluatePersistedAnchorReputations,
   type ReputationEvaluationRunDependencies,
 } from "@/lib/reputation/run";
+import type { ClockIntegrityVerdict } from "@/types/clock";
 
 const EVALUATED_AT = new Date("2026-08-31T15:00:00.000Z");
+
+function passedVerdict(): ClockIntegrityVerdict {
+  return Object.freeze({
+    boundary: "REPUTATION_EVALUATION",
+    outcome: "PASSED",
+    code: null,
+    direction: "NONE",
+    skewMs: 0,
+    toleranceMs: 5_000,
+    applicationTime: EVALUATED_AT.toISOString(),
+    databaseTime: EVALUATED_AT.toISOString(),
+    runId: null,
+  });
+}
+
+function baseDependencies(): ReputationEvaluationRunDependencies {
+  return Object.freeze({
+    listAnchorSlugs: async () => [],
+    checkClockIntegrity: async () => passedVerdict(),
+    now: () => EVALUATED_AT,
+    evaluate: async () => Object.freeze({
+      ok: true as const,
+      calculation: {} as never,
+      persisted: null,
+    }),
+  });
+}
 
 test("persisted reputation evaluation is deterministic, deduplicated, and isolates engine failures", async () => {
   const calls: string[] = [];
   const dependencies: ReputationEvaluationRunDependencies = Object.freeze({
+    ...baseDependencies(),
     listAnchorSlugs: async () => ["zeam", "cowrie", "zeam", "moneygram"],
     evaluate: async (slug, options) => {
       calls.push(`${slug}:${options.evaluatedAt.toISOString()}`);
@@ -39,6 +68,7 @@ test("persisted reputation evaluation is deterministic, deduplicated, and isolat
     succeeded: 2,
     failed: 1,
     failures: [{ anchorSlug: "moneygram", code: "PERSISTENCE_FAILURE" }],
+    clockIntegrity: null,
   });
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.failures), true);
@@ -50,18 +80,53 @@ test("explicit anchor slugs preserve the shared evaluation path without listing 
     anchorSlugs: ["zeam"],
     evaluatedAt: EVALUATED_AT,
     dependencies: Object.freeze({
+      ...baseDependencies(),
       listAnchorSlugs: async () => {
         listed = true;
         return [];
       },
-      evaluate: async () => Object.freeze({
-        ok: true as const,
-        calculation: {} as never,
-        persisted: null,
-      }),
     }),
   });
 
   assert.equal(listed, false);
-  assert.deepEqual(result, { attempted: 1, succeeded: 1, failed: 0, failures: [] });
+  assert.deepEqual(result, {
+    attempted: 1,
+    succeeded: 1,
+    failed: 0,
+    failures: [],
+    clockIntegrity: null,
+  });
+});
+
+test("a rejected clock-integrity gate stops evaluation before listing or scoring anchors", async () => {
+  let listed = false;
+  const rejected: ClockIntegrityVerdict = Object.freeze({
+    boundary: "REPUTATION_EVALUATION",
+    outcome: "REJECTED",
+    code: "CLOCK_SKEW_EXCEEDED",
+    direction: "NEGATIVE",
+    skewMs: -30_000,
+    toleranceMs: 5_000,
+    applicationTime: "2026-08-31T14:59:30.000Z",
+    databaseTime: "2026-08-31T15:00:00.000Z",
+    runId: null,
+  });
+
+  const result = await evaluatePersistedAnchorReputations({
+    dependencies: Object.freeze({
+      ...baseDependencies(),
+      listAnchorSlugs: async () => {
+        listed = true;
+        return ["zeam"];
+      },
+      checkClockIntegrity: async () => rejected,
+    }),
+  });
+
+  assert.equal(listed, false);
+  assert.equal(result.attempted, 0);
+  assert.equal(result.succeeded, 0);
+  assert.equal(result.failed, 1);
+  assert.deepEqual(result.failures, [{ code: "CLOCK_SKEW_EXCEEDED" }]);
+  assert.equal(result.clockIntegrity, rejected);
 });

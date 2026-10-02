@@ -54,3 +54,23 @@ Use explicit status codes, headers, and bodies to model timeout, malformed
 JSON, and upstream errors. Do not weaken production validation just to make a
 test pass. Live integrations belong in an explicitly configured integration
 environment and must not run as part of the default unit suite.
+
+## Database integration tests
+
+PostgreSQL integration tests are gated by flags and auto-skip by default. Point
+`DATABASE_URL` at a migrated compatible database and enable the relevant group:
+
+```bash
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE" \
+RUN_DATABASE_INTEGRATION=1 \
+RUN_REPUTATION_API_DATABASE_INTEGRATION=1 \
+RUN_REPUTATION_DATABASE_INTEGRATION=1 \
+RUN_CLOCK_INTEGRITY_DATABASE_INTEGRATION=1 \
+npm test
+```
+
+Apply migrations first with `npx prisma migrate deploy`. The clock-integrity
+group (`tests/integration/clock/`) verifies the PostgreSQL/application clock
+comparison, that rejected skew is quarantined, that a check never rewrites
+existing timestamps, and that a persisted future timestamp is never treated as
+fresh. See [clock-integrity.md](clock-integrity.md).

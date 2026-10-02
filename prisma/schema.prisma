@@ -46,6 +46,45 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+/// Persisted-evidence boundaries where the application clock is compared with
+/// PostgreSQL before anything is written.
+enum ClockIntegrityBoundary {
+  RATE_CAPTURE          @map("rate_capture")
+  REPUTATION_EVALUATION @map("reputation_evaluation")
+
+  @@map("clock_integrity_boundary")
+}
+
+enum ClockIntegrityOutcome {
+  PASSED   @map("passed")
+  REJECTED @map("rejected")
+
+  @@map("clock_integrity_outcome")
+}
+
+/// One bounded, append-style run/provenance record per clock-integrity check.
+/// `databaseTime` is the authoritative instant; `applicationTime` is retained
+/// only as system-integrity evidence and never used to make evidence look
+/// fresher. Clock agreement is system integrity evidence, not anchor
+/// availability evidence, so this table is intentionally separate from
+/// RateSnapshot and ReputationScore.
+model ClockIntegrityCheck {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  boundary        ClockIntegrityBoundary @map("boundary")
+  outcome         ClockIntegrityOutcome  @map("outcome")
+  code            String?               @map("code")
+  runId           String?               @map("run_id")
+  applicationTime DateTime?             @map("application_time") @db.Timestamptz(6)
+  databaseTime    DateTime?             @map("database_time") @db.Timestamptz(6)
+  skewMs          Int?                  @map("skew_ms")
+  toleranceMs     Int                   @map("tolerance_ms")
+  observedAt      DateTime              @default(now()) @map("observed_at") @db.Timestamptz(6)
+
+  @@index([boundary, observedAt(sort: Desc)], map: "clock_integrity_checks_boundary_observed_at_idx")
+  @@index([runId], map: "clock_integrity_checks_run_id_idx")
+  @@map("clock_integrity_checks")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique

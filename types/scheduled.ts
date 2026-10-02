@@ -6,7 +6,8 @@ export type ScheduledRateFailure = RateEngineFailure | Readonly<{
 }>;
 
 export type ScheduledReputationFailure = Readonly<{
-  anchorSlug: string;
+  /** Absent for a run-level clock-integrity failure. */
+  anchorSlug?: string;
   code: string;
 }>;
 

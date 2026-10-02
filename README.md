@@ -1,4 +1,4 @@
-#StellarCore
+# StellarCore
 
 **The intelligence layer for Stellar anchors.**
 
@@ -12,7 +12,7 @@ Read-only anchor, corridor, rate, and reputation visibility for Stellar.
 
 ---
 
-## TheProblem
+## The Problem
 
 The Stellar network has dozens of anchors — companies like MoneyGram, Cowrie, and others that handle USDC off-ramps to local currencies across Nigeria, Kenya, Ghana, Mexico, and more. But there is no single source of truth for:
 
@@ -154,6 +154,33 @@ Sorted median:   1612
 
 `MIN_FRESH_SOURCES=2` is an architectural invariant. With fewer than two fresh independent sources, the API returns `insufficient_fresh_sources` and a null median. The current single reviewed Zeam source therefore remains insufficient even when fresh.
 
+#### Clock-Integrity Boundary
+
+Every evidence boundary reads time through one server-side clock abstraction
+(`lib/clock/clock.ts`); client or browser time is never used for evidence
+decisions. Before a rate-capture run writes any snapshot, and before a
+reputation-evaluation run scores any anchor, a single run-level check compares
+the application clock with PostgreSQL's `clock_timestamp()`. The reviewed
+tolerance is `CLOCK_MAXIMUM_SKEW_MS = 5000` — well below the 120-second
+freshness window.
+
+* Excessive **positive** skew (a fast application clock) is rejected so a
+  future observation is never persisted.
+* Excessive **negative** skew (a slow application clock) is rejected so a
+  captured timestamp can never appear fresher than it is.
+* A rejected run writes no `RateSnapshot` and no `ReputationScore`; a future
+  `capturedAt` is always `future`, never `fresh`.
+* The decision is recorded as one bounded `ClockIntegrityCheck`
+  run/provenance row (boundary, outcome, typed code, bounded skew,
+  application and database instants); see `docs/clock-integrity.md`.
+* Clock agreement is system-integrity evidence, not anchor-availability
+  evidence, and existing legacy timestamps are never rewritten.
+
+Typed failures (`CLOCK_SKEW_EXCEEDED`, `CLOCK_READ_FAILURE`,
+`INVALID_CLOCK_VALUE`, `CLOCK_METADATA_PERSISTENCE_FAILURE`) surface through the
+scheduled-refresh result and are safe to serialize: they contain no
+configuration, credentials, or stack traces.
+
 ### 3. Reputation Scoring
 
 StellarCore's first reputation engine uses only evidence already persisted by
@@ -264,8 +291,10 @@ For one persisted anchor at one evaluation timestamp:
 
 The source of truth is [prisma/schema.prisma](prisma/schema.prisma). It models
 anchors, corridors, reviewed anchor–corridor associations, individual rate
-snapshots, transfer-outcome evidence, and one current reputation score per
-anchor. Freshness is calculated at read time; it is not stored on a snapshot.
+snapshots, transfer-outcome evidence, one current reputation score per anchor,
+and bounded clock-integrity provenance rows. Freshness is calculated at read
+time; it is not stored on a snapshot, and a clock-integrity check never
+rewrites a persisted timestamp.
 
 `TransferOutcome` supports the scoring model but has no production writer. Its
 presence in the schema must not be read as a claim that StellarCore collects
@@ -387,7 +416,12 @@ npm run registry:print
 ### Running Tests
 
 ```bash
-# Unit and integration tests
+# Unit and integration tests (database tests auto-skip)
+npm test
+
+# Opt-in PostgreSQL integration tests against a migrated DATABASE_URL
+RUN_DATABASE_INTEGRATION=1 RUN_REPUTATION_API_DATABASE_INTEGRATION=1 \
+RUN_REPUTATION_DATABASE_INTEGRATION=1 RUN_CLOCK_INTEGRITY_DATABASE_INTEGRATION=1 \
 npm test
 
 # Pure offline audit of reviewed registry relationships
