@@ -2,6 +2,7 @@ import { StrKey, WebAuth } from "@stellar/stellar-sdk";
 
 import { parseStellarAuthToken } from "@/lib/stellar/auth";
 import { isValidHomeDomain } from "@/lib/stellar/anchorRegistry";
+import { createEgressFetch, EgressPolicyError } from "@/lib/stellar/outboundEgress";
 import type {
   Sep10ChallengeSigner,
   StellarAuthProvider,
@@ -26,6 +27,7 @@ export type Sep10AuthErrorCode =
   | "INVALID_CONFIGURATION"
   | "TIMEOUT"
   | "NETWORK_FAILURE"
+  | "EGRESS_POLICY"
   | "REDIRECT"
   | "HTTP_FAILURE"
   | "RESPONSE_TOO_LARGE"
@@ -95,7 +97,7 @@ export async function requestSep10Token(
   const normalized = normalizeConfig(config);
   validateDependencies(dependencies, normalized.webAuthEndpoint);
   const options = Object.freeze({
-    fetcher: dependencies.fetcher ?? fetch,
+    fetcher: dependencies.fetcher ?? createEgressFetch(),
     timeoutMs: dependencies.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
   validateTimeout(options.timeoutMs, normalized.webAuthEndpoint);
@@ -108,7 +110,11 @@ export async function requestSep10Token(
     normalized.webAuthEndpoint,
   );
 
-  validateSep10Challenge(challenge.transaction, normalized);
+  // Identity of the exact challenge the server issued for this exchange.
+  const originalChallengeHash = validateSep10Challenge(
+    challenge.transaction,
+    normalized,
+  );
 
   let signedTransaction: string;
   try {
@@ -129,7 +135,7 @@ export async function requestSep10Token(
     throw signingFailure(normalized.webAuthEndpoint);
   }
 
-  validateSignedChallenge(signedTransaction, normalized);
+  validateSignedChallenge(signedTransaction, normalized, originalChallengeHash);
 
   const tokenResponse = await requestJson(
     normalized.webAuthEndpoint,
@@ -149,7 +155,11 @@ export async function requestSep10Token(
       homeDomain: normalized.homeDomain,
       expectedSubject: expectedSubject(normalized),
     },
-    { now: dependencies.now?.() },
+    {
+      now: dependencies.now?.(),
+      // Claim parsing only; this is not JWT signature verification.
+      expectedClientDomain: normalized.clientDomain,
+    },
   );
 }
 
@@ -266,7 +276,7 @@ function normalizeConfig(config: Sep10AuthConfig): Sep10AuthConfig {
 function validateSep10Challenge(
   transaction: string,
   config: Sep10AuthConfig,
-): void {
+): string {
   try {
     const webAuthDomain = new URL(config.webAuthEndpoint).hostname;
     const parsed = WebAuth.readChallengeTx(
@@ -286,6 +296,13 @@ function validateSep10Challenge(
     ) {
       throw new Error("challenge identity mismatch");
     }
+
+    // SDK transaction hash: covers the transaction body under the configured
+    // network passphrase and excludes signatures, so added signatures are fine.
+    const hash: unknown = parsed.tx.hash();
+    return typeof hash === "string"
+      ? hash
+      : Buffer.from(hash as Uint8Array).toString("hex");
   } catch {
     throw invalidChallenge(config.webAuthEndpoint);
   }
@@ -336,6 +353,7 @@ function matchesClientDomainOperation(
 function validateSignedChallenge(
   transaction: string,
   config: Sep10AuthConfig,
+  originalChallengeHash: string,
 ): void {
   try {
     requireSafeString(
@@ -344,7 +362,10 @@ function validateSignedChallenge(
       "SIGNING_FAILURE",
       MAX_XDR_BYTES,
     );
-    validateSep10Challenge(transaction, config);
+    const signedHash = validateSep10Challenge(transaction, config);
+    if (signedHash !== originalChallengeHash) {
+      throw new Error("signed challenge body differs from original");
+    }
   } catch {
     throw signingFailure(config.webAuthEndpoint);
   }
@@ -422,6 +443,13 @@ async function requestJson(
     }
   } catch (error) {
     if (error instanceof Sep10AuthError) throw error;
+    if (error instanceof EgressPolicyError) {
+      throw new Sep10AuthError(
+        "EGRESS_POLICY",
+        "SEP-10 request blocked by outbound network policy",
+        safeEndpoint(url),
+      );
+    }
     if (controller.signal.aborted) {
       throw new Sep10AuthError(
         "TIMEOUT",

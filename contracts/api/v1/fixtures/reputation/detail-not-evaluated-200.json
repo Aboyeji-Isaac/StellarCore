@@ -1,0 +1,22 @@
+{
+  "name": "reputation.detail.not_evaluated_200",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation/:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Reputation detail with not_evaluated state and all null metrics/scores",
+  "body": {
+    "reputation": {
+      "anchor": {
+        "slug": "moneygram",
+        "name": "MoneyGram"
+      },
+      "state": "not_evaluated",
+      "score": null,
+      "scoreBand": null,
+      "evidence": null,
+      "metrics": null,
+      "computedAt": null
+    }
+  }
+}

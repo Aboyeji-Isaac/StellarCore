@@ -1,11 +1,22 @@
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
+import {
+  FILE_STALE_EVIDENCE_STORE,
+  restoreStaleEvidence,
+  saveLastKnownGoodEvidence,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
+import { isTransientDatabaseFailure } from "@/lib/databaseErrors";
+import {
+  consolePublicApiErrorReporter,
+  publicApiErrorResult,
+  type PublicApiErrorReporter,
+} from "@/lib/api/errors";
 import { readLatestCorridorRate } from "@/lib/rates/latestRateReadModel";
 import { getReviewedCandidateConfiguration } from "@/lib/rates/reviewedCandidateConfiguration";
 import type { LatestCorridorRate, LatestCorridorRateReadResult } from "@/types/latestRates";
 import type {
   PublicRateObservation,
   PublicRatesResponse,
-  RatesApiErrorCode,
   RatesApiResult,
 } from "@/types/api/rates";
 
@@ -18,6 +29,8 @@ export type RatesApiDependencies = Readonly<{
     options: Readonly<{ evaluatedAt: Date }>,
   ) => Promise<LatestCorridorRateReadResult>;
   now?: () => Date;
+  staleEvidenceStore?: StaleEvidenceStore;
+  reportError?: PublicApiErrorReporter;
 }>;
 
 export async function getRatesApiResult(
@@ -28,27 +41,61 @@ export async function getRatesApiResult(
   if (!validation.ok) return validation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
+  const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
+  const snapshotKey = `rates:v1:${validation.corridorSlug}`;
   const read = dependencies.readLatestRate ?? readLatestCorridorRate;
   let result: LatestCorridorRateReadResult;
 
   try {
     result = await read(validation.corridorSlug, { evaluatedAt });
-  } catch {
-    return errorResult(500, "internal_error", "Unable to read rates.");
+  } catch (error) {
+    if (isTransientDatabaseFailure(error)) {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRatesResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    reportError(dependencies, error, "rates.read");
+    return publicApiErrorResult("internal_error", "Unable to read rates.");
   }
 
   if (!result.ok) {
     if (result.code === "CORRIDOR_NOT_FOUND") {
-      return errorResult(404, "corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
     }
-    return errorResult(500, "internal_error", "Unable to read rates.");
+    if (result.code === "DATABASE_UNAVAILABLE") {
+      const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
+      if (stale) {
+        return Object.freeze({
+          status: 200,
+          body: stale.body as unknown as PublicRatesResponse,
+          degraded: stale.metadata,
+        });
+      }
+    }
+    return publicApiErrorResult("internal_error", "Unable to read rates.");
   }
 
   try {
-    return Object.freeze({ status: 200, body: serializeRates(result) });
-  } catch {
-    return errorResult(500, "internal_error", "Unable to read rates.");
+    const body = serializeRates(result);
+    const sourceTimes = body.observations
+      .map(({ capturedAt }) => capturedAt)
+      .filter(isValidTimestamp);
+    await saveLastKnownGoodEvidence(store, snapshotKey, body, sourceTimes, evaluatedAt);
+    return Object.freeze({ status: 200, body });
+  } catch (error) {
+    reportError(dependencies, error, "rates.serialize");
+    return publicApiErrorResult("internal_error", "Unable to read rates.");
   }
+}
+
+function isValidTimestamp(value: string): boolean {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
 export function serializeRates(result: LatestCorridorRate): PublicRatesResponse {
@@ -107,7 +154,7 @@ function validateCorridorParameter(
   if (value === null || value === "") {
     return Object.freeze({
       ok: false,
-      result: errorResult(400, "missing_corridor", "A corridor slug is required."),
+      result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
     });
   }
 
@@ -117,22 +164,20 @@ function validateCorridorParameter(
   ) {
     return Object.freeze({
       ok: false,
-      result: errorResult(400, "invalid_corridor", "The corridor slug is invalid."),
+      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
     });
   }
 
   return Object.freeze({ ok: true, corridorSlug: value });
 }
 
-function errorResult(
-  status: 400 | 404 | 500,
-  code: RatesApiErrorCode,
-  message: string,
-): RatesApiResult {
-  return Object.freeze({
-    status,
-    body: Object.freeze({
-      error: Object.freeze({ code, message }),
-    }),
+function reportError(
+  dependencies: RatesApiDependencies,
+  error: unknown,
+  operation: string,
+): void {
+  (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
+    operation,
+    code: "internal_error",
   });
 }
