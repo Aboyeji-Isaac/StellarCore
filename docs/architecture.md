@@ -35,19 +35,9 @@ database read models <───────────────────�
 The reviewed anchor registry in `constants/anchors.ts` is the source for the
 manual `npm run bootstrap:registry` job. For each configured anchor,
 `lib/stellar/anchorSync.ts` fetches and validates its `stellar.toml`, discovers
-the supported SEP endpoints and assets, and upserts the result.
-
-Published anchor availability is decided by an evidence-based state machine
-(`lib/stellar/anchorHealth.ts`, policy in
-[anchor-health-policy.md](anchor-health-policy.md)). Discovery failures are
-classified as transient, deterministic, or unknown, and a destructive
-transition (`DEGRADED`, `DOWN`) requires consecutive-failure or sustained-window
-evidence; a single transient timeout never marks a healthy anchor down.
-Recovery to `LIVE` requires repeated successful evidence. The bounded
-per-anchor evidence row (`anchor_health_states`) makes transitions
-deterministic across process restarts and horizontal execution. Status is
-observational health of discovery only — not a claim about transfer success or
-trustworthiness.
+the supported SEP endpoints and assets, and upserts the result. A discovery
+failure is classified and the existing anchor may be marked down; it is not
+silently treated as a healthy anchor.
 
 The corridor registry and anchor-to-corridor mappings in
 `constants/corridors.ts` are synchronized in the same job. Corridor rows are
@@ -93,19 +83,46 @@ Prisma models anchors, corridors, their reviewed associations, rate snapshots,
 transfer-outcome evidence, and one current reputation score per anchor. The
 database is the boundary between maintenance engines and read consumers.
 
-Production PostgreSQL connections are enforced to certificate-verified TLS by
-application policy (`lib/database/tlsPolicy.ts`, policy in
-[database-tls-policy.md](database-tls-policy.md)): TLS parameters are stripped
-from the connection URL, an explicit verified-TLS ssl object is supplied to
-the driver, and production startup fails fast on configuration that disables
-TLS or bypasses verification, except through a separately gated emergency
-mode that never permits plaintext.
+Production database transport is guarded before pool construction by the
+verified-TLS policy in `lib/database/tlsPolicy.ts`. The policy strips
+connection-string TLS overrides, rejects plaintext or unverifiable production
+modes, and passes an explicit certificate-verifying SSL object into the
+hardened pool. Optional provider CA material remains server-only.
 
-Routes under `app/api/` expose anchors, corridors, rates, and reputation as
-read-only JSON. They serialize bounded fields, avoid raw errors and internal
-identifiers, and use no-store behavior where data is dynamic. The
+The database connection is managed through `@prisma/adapter-pg` backed by a
+hardened `pg.Pool`. Connection acquisition and timeouts are bounded by
+`connectionTimeoutMillis` and explicit request deadlines, with TCP keepalive
+and connection lifetime recycling enabled. When transient primary failover or
+endpoint rotation occurs, connection/failover errors trigger proactive eviction
+of stale pooled connections to avoid sequential query failures against dead
+sockets. Interrupted transactions never report success without positive commit
+confirmation, and bounded pool capacity prevents connection storms against
+newly promoted primaries. See `docs/database-failover.md` for full details.
+
+Routes under `app/api/` expose anchors, corridors, rates, rate history, and
+reputation as read-only JSON. Public failures use one shared bounded
+`error.code` / `error.message` envelope and a common response serializer.
+Unknown exceptions are retained only through the server-side reporter seam;
+stack traces, database details, raw upstream responses, and secrets never enter
+the public envelope. Successful response shapes and stale-evidence degradation
+headers remain unchanged. Dynamic responses use no-store behavior. The
 server-rendered `/dashboard` uses the same read models, so the UI and public
 API present the same persisted evidence and uncertainty semantics.
+
+## Integrity audit
+
+`npm run audit:integrity` is a read-only, defense-in-depth check of the
+persisted evidence graph. It loads a bounded snapshot of anchors, corridors,
+reviewed memberships, rate snapshots, transfer outcomes, and reputation rows
+using `findMany` selects only, then evaluates cross-table semantic invariants
+that database constraints cannot fully express.
+
+The pure evaluator emits bounded, deterministic findings keyed by stable record
+identifiers, violation codes, and non-destructive remediation guidance. It does
+not include raw evidence payloads in reports and does not write, update, delete,
+or open a transaction. Database constraints and write-boundary validation remain
+the first line of defense; this audit detects drift after migrations, imports,
+or operational mistakes.
 
 ## Scheduled refresh and operations
 

@@ -47,9 +47,9 @@ test("verified-TLS PostgreSQL configuration connects and executes over the authe
   try {
     const tls = resolveDatabaseTlsPolicyForEnvironment({
       databaseUrl,
+      environmentId: "production",
       environment: {
-        NODE_ENV: "production",
-        ...(inlineCa ? {} : {}),
+        ...(caPath ? { STELLARCORE_DB_CA_PATH: caPath } : {}),
       },
     });
 
@@ -94,7 +94,8 @@ test("policy rejects a plaintext-forcing URL before any driver connection is att
 
   const tls = resolveDatabaseTlsPolicyForEnvironment({
     databaseUrl: plaintextUrl,
-    environment: { NODE_ENV: "production" },
+    environmentId: "production",
+    environment: {},
   });
 
   assert.equal(tls.resolution.accepted, false);

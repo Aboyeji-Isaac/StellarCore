@@ -215,38 +215,11 @@ The manual, protected registry-bootstrap workflow runs `npm run bootstrap:regist
        → Fetch stellar.toml from homeDomain
        → Parse SEPs, assets, and endpoints
        → Run transferCapable() → true / false
-       → Upsert into anchors table (metadata only; status is owned by the
-         health state machine)
+       → Upsert into anchors table
   3. For each anchor + corridor pair:
        → Upsert into anchor_corridors table
   4. Exit nonzero if discovery or persistence fails
 ```
-
-### Anchor Availability Transitions
-
-```
-Discovery failures are evidence, not verdicts:
-
-  1. Classify each discovery failure:
-       → TRANSIENT (timeout, network, 5xx, oversized response)
-       → DETERMINISTIC (invalid TOML/data, missing fields, 4xx)
-       → UNKNOWN (unexpected error; never escalates faster than transient)
-  2. Record bounded evidence in the anchor's health row
-       (anchor_health_states: counters + timestamps, one row per anchor).
-  3. Apply the pure state machine (lib/stellar/anchorHealth.ts):
-       → 1 transient failure on a LIVE anchor: no status change.
-       → 2 consecutive transient failures: DEGRADED.
-       → 3 consecutive transient failures (or a failure ≥48h after the
-         previous one): DOWN.
-       → Deterministic failures: DEGRADED on the first, DOWN on the second.
-       → Recovery: DOWN → DEGRADED on the first success, LIVE on the second.
-  4. Persist the transition with the evidence row in one transaction.
-```
-
-Status is observational health of SEP-1 discovery. It is not a claim about
-transfer success or trustworthiness, and it survives process restarts because
-the full machine state is the one persisted row. The complete policy is
-documented in [docs/anchor-health-policy.md](docs/anchor-health-policy.md).
 
 ### Rate Snapshot Flow
 
@@ -291,17 +264,8 @@ For one persisted anchor at one evaluation timestamp:
 
 The source of truth is [prisma/schema.prisma](prisma/schema.prisma). It models
 anchors, corridors, reviewed anchor–corridor associations, individual rate
-snapshots, transfer-outcome evidence, one current reputation score per anchor,
-and one bounded health-evidence row per anchor (`anchor_health_states`)
-driving deterministic availability transitions. Freshness is calculated at
-read time; it is not stored on a snapshot.
-
-Production PostgreSQL connections always use certificate-verified TLS supplied
-by the application: TLS parameters in `DATABASE_URL` are stripped and
-classified, plaintext and verification-bypass configuration fail startup with
-safe diagnostics, and an optional provider CA is configured through
-environment without committing secrets. The full policy is documented in
-[docs/database-tls-policy.md](docs/database-tls-policy.md).
+snapshots, transfer-outcome evidence, and one current reputation score per
+anchor. Freshness is calculated at read time; it is not stored on a snapshot.
 
 `TransferOutcome` supports the scoring model but has no production writer. Its
 presence in the schema must not be read as a claim that StellarCore collects
@@ -352,19 +316,48 @@ stellarcore/
 ```bash
 # .env.example
 
+# Explicit runtime environment identity.
+# One of: production, preview, development, test, ci.
+STELLARCORE_ENVIRONMENT="development"
+
 # Server-only application/runtime PostgreSQL connection for this environment.
+# Required outside tests. Must use postgres:// or postgresql://.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# Required in production when Vercel Cron is enabled; never expose to the client.
+# Required in production; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional rate-engine settings.
+RATE_FRESHNESS_THRESHOLD_MS="120000"
+MIN_FRESH_SOURCES="2"
+
+# Optional writable directory for bounded last-known-good public evidence snapshots.
+STALE_EVIDENCE_DIRECTORY="/path/to/writable/stale-evidence"
 ```
+
+`STELLARCORE_ENVIRONMENT` declares the runtime identity explicitly. Valid
+values are `production`, `preview`, `development`, `test`, and `ci`.
+When it is absent on Vercel, `VERCEL_ENV` is used; test runs may fall back to
+`NODE_ENV=test`. Runtime identity is never inferred from hostnames or database
+URL contents.
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
 appropriate to its deployment environment; local development may use a
 compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
-repository files, or logs.
+repository files, or logs. The URL must use `postgres://` or `postgresql://`.
+
+`CRON_SECRET` is required in production and optional in non-production
+environments. `RATE_FRESHNESS_THRESHOLD_MS` and `MIN_FRESH_SOURCES` are
+optional positive integers with defaults of 120000 and 2 respectively.
+
+`STALE_EVIDENCE_DIRECTORY` is optional. By default, the Node.js runtime stores
+verified public read snapshots in its temporary directory under
+`stellarcore-stale-evidence`. On multi-instance or serverless deployments this
+store is local to a warm instance; use a writable shared mount if fallback must
+survive instance replacement. If the store is unavailable, corrupt, or older
+than five minutes, the APIs fail closed.
 
 ---
 
@@ -431,6 +424,15 @@ npm test
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
 
+# Public API compatibility contract gate
+npm run audit:compatibility
+
+# Read-only persisted evidence integrity audit
+npm run audit:integrity
+
+# Update canonical API contract fixtures (intentional reviewed changes only)
+npm run contract:update
+
 # Human-readable inspection of the checked-in anchor/corridor registry
 npm run registry:print
 
@@ -440,6 +442,12 @@ npx tsc --noEmit
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 
+# Opt-in: latest-observation queries against a throwaway PostgreSQL database
+RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1 DATABASE_URL=postgresql://... \
+  npm test -- tests/integration/rates/latestObservationsDifferential.database.integration.test.ts
+
+# Opt-in: reproducible latest-observation benchmark (throwaway database only)
+BENCHMARK_DATABASE_URL=postgresql://... npm run benchmark:latest-observations
 ```
 
 `snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
@@ -455,6 +463,14 @@ internally coherent; it does not establish current anchor reachability, SEP
 advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
 independent defense-in-depth boundaries.
+
+`audit:compatibility` verifies that StellarCore's public API serializers and error
+envelopes conform to versioned compatibility contracts (`contracts/api/v1/`). It
+detects accidental breaking changes such as field removals, renames, type or
+nullability regressions, status-code changes, and ordering changes. Compatible
+additive fields are reported separately. Intentional contract changes must use
+`npm run contract:update` and the reviewed manifest workflow documented in
+[`docs/api-compatibility.md`](docs/api-compatibility.md).
 
 `registry:print` is a read-only companion to `audit:config`. It prints the
 checked-in anchors with their home domains, the corridors mapped to each anchor,
@@ -473,10 +489,44 @@ MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network
 request, upserts each anchor's single current `ReputationScore`, and prints only
 safe structured evidence and results.
 
+The latest-observation reads behind `GET /api/rates` and reputation evidence
+take the newest snapshot per anchor (or per corridor) with a bounded lateral
+lookup instead of walking each group's history. The database-backed test
+compares them against the previous `DISTINCT ON` queries, kept verbatim in
+`tests/support/legacyLatestObservationQueries.ts`, on empty groups, uneven
+histories, tied timestamps, stale-only anchors and historically associated
+anchors, then compares the complete public rate and reputation outputs at a
+fixed evaluation time. It also asserts that rows visited do not grow with
+history depth (a row count, never a wall-clock time). It is skipped unless
+`RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1`, and it creates and removes its
+own uniquely named rows, so run it only against a database you can afford to
+write to.
+
+`benchmark:latest-observations` seeds deterministic synthetic snapshots and
+records `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for both forms of each query
+across a history-depth sweep and a group-count sweep. It reads
+`BENCHMARK_DATABASE_URL`, never `DATABASE_URL`, refuses a database that holds
+any anchor or corridor it did not create, and deletes only its own rows. Set
+`BENCHMARK_COLD_RESTART_COMMAND` (for example `podman restart my-postgres`) to
+add a cold-`shared_buffers` measurement. Flags: `--scenario <name>`,
+`--runs <n>`, `--out <file>`, `--plans-dir <dir>`. Results, method and caveats
+are in [docs/benchmarks/latest-observations.md](docs/benchmarks/latest-observations.md).
+It is not run by `npm test`, builds, or `postinstall`, and must never be pointed
+at production.
+
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
+
+SEP-10 contract notes: the signer callback must return the challenge it was
+given with signatures added; StellarCore compares the SDK transaction hash of
+the returned body with the original challenge before any token POST. When a
+client domain was requested, the returned token's `client_domain` claim must be
+present, well formed, and equal to it; otherwise no such claim is required.
+Token claims are decoded, not cryptographically verified: decoding is not JWT
+signature verification, and the SEP-10 signing key is not assumed to be the JWT
+verification key.
 
 ## Production deployment
 
@@ -494,6 +544,38 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 ## API Reference
 
 All public endpoints return JSON and are read-only.
+
+
+### Public API error contract
+
+All public API failures use one bounded envelope:
+
+```json
+{
+  "error": {
+    "code": "corridor_not_found",
+    "message": "Corridor not found."
+  }
+}
+```
+
+The top level contains only `error`; the error object contains only stable
+`code` and bounded human-readable `message`. Successful payload shapes are
+unchanged. Unknown exceptions are reported through a server-side reporter seam
+and never serialized to clients.
+
+| HTTP | Codes |
+|---|---|
+| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug` |
+| 404 | `anchor_not_found`, `corridor_not_found` |
+| 429 | `rate_limited` (reserved for throttling) |
+| 500 | `internal_error` |
+| 503 | `upstream_unavailable` (reserved for bounded dependency failures) |
+
+Responses never expose stack traces, ORM/database messages, raw upstream
+responses, credentials, JWTs, or private endpoint details. Dynamic evidence
+routes retain their stale-evidence response headers when serving a verified
+last-known-good payload.
 
 ### `GET /api/anchors`
 
@@ -626,6 +708,15 @@ when that observation is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.
+
+The latest rates, rate history, and reputation GETs may serve a bounded
+last-known-good response only for recognized transient PostgreSQL connectivity
+or connection-pool errors. Such responses preserve their original
+`evaluatedAt`, `computedAt`, and `capturedAt` values and include a `degraded`
+object with `state: "stale"`, the snapshot `generatedAt`, source evidence
+times, expiry, and snapshot age. They also send `X-Evidence-State: stale` and an HTTP
+`Warning: 110` header. All responses remain `no-store`. Fallback snapshots are
+never read by rate aggregation or reputation evaluation code.
 
 Errors use stable codes:
 
@@ -829,6 +920,7 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] SEP-10 authentication boundary/harness
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
+- [x] Read-only evidence-graph integrity audit with bounded reports and per-class remediation guidance
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
 
 ### Planned/Future

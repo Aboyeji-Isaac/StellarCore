@@ -1,0 +1,45 @@
+name: Verify dependency install reproducibility
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "lib/tooling/installReproducibility.ts"
+      - "scripts/verify-install-reproducibility.ts"
+      - "tests/unit/tooling/installReproducibility.test.ts"
+      - "docs/dependency-install-reproducibility.md"
+      - ".github/workflows/verify-install-reproducibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: node --import tsx --test tests/unit/tooling/installReproducibility.test.ts
+      - name: Run real two-sandbox reproducibility verification
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npm run verify:install-reproducibility -- --ref HEAD --runs 2
+      - run: npm run lint
+      - name: Build
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build

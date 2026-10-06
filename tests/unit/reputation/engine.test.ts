@@ -148,6 +148,11 @@ function sparseEvidence(): ReputationEvidence {
     corridorSlugs: Object.freeze([]),
     latestRates: Object.freeze([]),
     transferOutcomes: Object.freeze([]),
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
 }
 
