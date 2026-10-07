@@ -12,7 +12,7 @@ tab_width = 2
 cursor_max_line_length = off
 
 # TypeScript / JavaScript / JSON / YAML / CSS / Markdown
-[{*.{ts,tsc,jsx,js,jsx,mjs,cjs,json,jsonc,yaml,yml,css,md}]
+[*.{ts,tsc,tsx,js,jsx,mjs,cjs,json,jsonc,yaml,yml,css,md}]
 indent_style = space
 indent_size = 2
 tab_width = 2
@@ -21,15 +21,17 @@ insert_final_newline = true
 end_of_line = lf
 
 # Markdown: preserve trailing whitespace (two spaces mean a line break)
-[{*.md]
+[*.md]
 trim_trailing_whitespace = false
 
 # Makefiles require tabs
 [Makefile]
 indent_style = tab
+indent_size = tab
 
-*[.mk]
+[*.mk]
 indent_style = tab
+indent_size = tab
 
 # Lock files and generated artifacts should not be touched
 [package-lock.json]

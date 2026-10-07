@@ -1,0 +1,79 @@
+# Deterministic parser property/fuzz suites for untrusted SEP-1 and SEP-38
+# response parsing (#141).
+#
+# The suites use a seeded xorshift PRNG (tests/property/seededGenerator.ts), so
+# every run with the same seed produces the exact same generated corpus:
+# - CI runs a fixed default seed for repeatability and bounded runtime.
+# - Scheduled runs sweep an additional rotating seed to widen coverage over
+#   time without making pull requests slow or flaky.
+# - A discovered failure prints its seed; reproduce locally with:
+#     SEED=<printed seed> npx tsx --test tests/property/<suite>.test.ts
+#   and persist a minimized input in tests/property/regressions/ (see
+#   tests/property/regressionCorpus.test.ts).
+#
+# These suites are fully offline: they never call anchors or public networks.
+
+name: Parser property tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "lib/stellar/**"
+      - "tests/property/**"
+  schedule:
+    # Daily rotating-seed sweep at 03:17 UTC (off the hour to reduce load spikes).
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  property-tests:
+    name: sep1/sep38 parser properties
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Pull requests: fixed seed keeps runtime bounded and failures
+      # reproducible from the CI log alone.
+      - name: Run property suites (fixed seed)
+        if: github.event_name != 'schedule'
+        run: npx tsx --test tests/property/sep1Property.test.ts tests/property/sep38Property.test.ts tests/property/regressionCorpus.test.ts
+        env:
+          SEED: "141141"
+          PROPERTY_ITERATIONS: "600"
+
+      # Scheduled sweep: derive a day-stable rotating seed and run a deeper
+      # pass. Still deterministic within a day, so failures remain replayable.
+      - name: Run property suites (rotating daily seed)
+        if: github.event_name == 'schedule'
+        run: |
+          ROTATING_SEED=$(node -e "console.log(Date.now().toString().slice(0, 9))")
+          echo "Rotating seed: ${ROTATING_SEED}"
+          npx tsx --test tests/property/sep1Property.test.ts tests/property/sep38Property.test.ts tests/property/regressionCorpus.test.ts
+        env:
+          SEED: "0"
+          PROPERTY_ITERATIONS: "5000"
+          STELLARCORE_PROPERTY_ROTATING: "1"
+
+      - name: Run regression corpus with several pinned seeds
+        run: |
+          for seed in 1 999 2718 65535 123456789; do
+            echo "::group::regression corpus seed ${seed}"
+            SEED=${seed} npx tsx --test tests/property/regressionCorpus.test.ts
+            echo "::endgroup::"
+          done
+        env:
+          PROPERTY_ITERATIONS: "600"
