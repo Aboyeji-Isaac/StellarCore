@@ -79,7 +79,6 @@ knows published advisories (no zero-days, no malicious-package heuristics);
 gitleaks' entropy rules can miss short, low-entropy passwords — mitigated
 here by the manual credential-URL pass; history from squashed/rebased-away
 commits that were never pushed to this repository is not observable.
-
 ## 3. Raw SQL boundary audit — Prisma `$queryRaw` / `$executeRaw`
 
 Companion audit to the dependency and secrets passes above, covering every
@@ -107,5 +106,3 @@ search terms, filter strings, pagination cursors, timestamps — must be
 passed through a `Prisma.sql` template placeholder (`${value}`), never
 concatenated into the SQL string. Prisma emits these as bound parameters
 on the wire, so injection payloads cannot alter query structure.
-
-

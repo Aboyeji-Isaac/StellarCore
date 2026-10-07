@@ -222,3 +222,26 @@ function row(
 function ago(milliseconds: number): Date {
   return new Date(NOW.getTime() - milliseconds);
 }
+
+
+test("suppressed sources cannot count toward aggregate freshness or median", async () => {
+  const result = await readLatestCorridorRate(CORRIDOR, {
+    evaluatedAt: NOW,
+    repository: repository([
+      row("suppressed", "s1", "1", ago(1)),
+      row("healthy", "h1", "3", ago(1)),
+    ]),
+    listSuppressed: async () => [{
+      anchorSlug: "suppressed",
+      corridorSlug: CORRIDOR,
+    }],
+  });
+
+  assert.equal(result.ok && result.totalIndependentSources, 1);
+  assert.equal(result.ok && result.freshSourceCount, 1);
+  assert.equal(result.ok && result.median, null);
+  assert.deepEqual(
+    result.ok && result.observations.map(({ anchorSlug }) => anchorSlug),
+    ["healthy"],
+  );
+});
