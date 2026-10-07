@@ -1,0 +1,14 @@
+{
+  "name": "rates.error_500",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 500,
+  "description": "Safe internal error response on rate read failure",
+  "body": {
+    "error": {
+      "code": "internal_error",
+      "message": "Unable to read rates."
+    }
+  }
+}
