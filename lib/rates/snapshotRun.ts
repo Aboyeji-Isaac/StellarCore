@@ -1,3 +1,4 @@
+import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
 import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
 import {
   buildReviewedLiveRateCandidates,
@@ -9,12 +10,17 @@ import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
 import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
 import type {
   PreparedLiveRateCandidate,
+  ReviewedLiveRateSource,
   SafeLiveRateRunSummary,
 } from "@/types/liveRateSource";
+import type { ScheduledSourceIdentity } from "@/types/suppression";
 
 export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   assertConfiguration: () => void;
-  buildCandidates: () => Promise<readonly PreparedLiveRateCandidate[]>;
+  buildCandidates: (
+    sources?: readonly ReviewedLiveRateSource[],
+  ) => Promise<readonly PreparedLiveRateCandidate[]>;
+  listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
@@ -32,7 +38,7 @@ export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-  const [suppressions, candidates] = await Promise.all([
+const [suppressions, candidates] = await Promise.all([
     dependencies.listSuppressions(),
     dependencies.buildCandidates(),
   ]);
@@ -53,6 +59,7 @@ export async function snapshotReviewedLiveRates(
 const DEFAULT_DEPENDENCIES = Object.freeze({
   assertConfiguration: assertCurrentStellarCoreConfiguration,
   buildCandidates: buildReviewedLiveRateCandidates,
+  listSuppressed: PRISMA_SUPPRESSION_REPOSITORY.listSuppressed,
   executeCandidates: async (candidates) => formatLiveRateRunSummary(
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,

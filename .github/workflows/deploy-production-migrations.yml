@@ -50,6 +50,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       # `npm ci` runs the existing `postinstall` lifecycle script
       # (`prisma generate`), so no separate Prisma Client generation step is
@@ -66,3 +67,17 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      # Environment isolation (#143): immediately after migrations, stamp the
+      # database with its explicit production identity. The application
+      # runtime verifies this stamp at startup/first access and fails closed
+      # on any mismatch, so a preview or test deployment pointing at this
+      # database can never read or mutate evidence data. The stamp is
+      # idempotent (re-runs succeed) and refuses to rewrite a different
+      # existing identity. The identity variable is a plain literal; the
+      # connection secret stays scoped to the steps and is never printed.
+      - name: Stamp database environment identity
+        run: npm run stamp:environment
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STELLARCORE_STAMP_ENVIRONMENT: production

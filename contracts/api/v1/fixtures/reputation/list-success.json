@@ -1,0 +1,69 @@
+{
+  "name": "reputation.list.success",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Canonical reputation list covering established, insufficient_evidence, and not_evaluated anchors",
+  "body": {
+    "reputation": [
+      {
+        "anchor": {
+          "slug": "cowrie",
+          "name": "Cowrie"
+        },
+        "state": "insufficient_evidence",
+        "score": null,
+        "scoreBand": null,
+        "evidence": {
+          "outcomeCount": 5
+        },
+        "metrics": {
+          "fillRate7d": null,
+          "fillRate30d": null,
+          "fillRate90d": null,
+          "settleP50Ms": null,
+          "settleP95Ms": null,
+          "slippageP50": null,
+          "slippageP95": null
+        },
+        "computedAt": "2026-08-28T12:00:00.000Z"
+      },
+      {
+        "anchor": {
+          "slug": "moneygram",
+          "name": "MoneyGram"
+        },
+        "state": "not_evaluated",
+        "score": null,
+        "scoreBand": null,
+        "evidence": null,
+        "metrics": null,
+        "computedAt": null
+      },
+      {
+        "anchor": {
+          "slug": "zeam",
+          "name": "Zeam"
+        },
+        "state": "established",
+        "score": 95,
+        "scoreBand": "green",
+        "evidence": {
+          "outcomeCount": 30
+        },
+        "metrics": {
+          "fillRate7d": 0.98,
+          "fillRate30d": 0.95,
+          "fillRate90d": 0.94,
+          "settleP50Ms": 1200,
+          "settleP95Ms": 4500,
+          "slippageP50": 0.001,
+          "slippageP95": 0.015
+        },
+        "computedAt": "2026-08-28T12:00:00.000Z"
+      }
+    ],
+    "count": 3
+  }
+}

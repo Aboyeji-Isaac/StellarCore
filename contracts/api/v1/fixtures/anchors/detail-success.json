@@ -1,0 +1,40 @@
+{
+  "name": "anchors.detail.success",
+  "domain": "anchors",
+  "endpoint": "GET /api/anchors/:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Canonical anchor detail response with associated sorted corridors",
+  "body": {
+    "anchor": {
+      "slug": "zeam",
+      "name": "Zeam",
+      "homeDomain": "zeam.example",
+      "status": "LIVE",
+      "seps": [
+        1,
+        10,
+        24,
+        31,
+        38
+      ],
+      "isTransferCapable": true,
+      "corridors": [
+        {
+          "slug": "ngnt-ng-ngn-ng",
+          "sourceAsset": "NGNT",
+          "sourceCountry": "NG",
+          "destinationAsset": "NGN",
+          "destinationCountry": "NG"
+        },
+        {
+          "slug": "usdc-us-brl-br",
+          "sourceAsset": "USDC",
+          "sourceCountry": "US",
+          "destinationAsset": "BRL",
+          "destinationCountry": "BR"
+        }
+      ]
+    }
+  }
+}

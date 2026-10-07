@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CorridorRateEvidence } from "@/components/corridors/CorridorRateEvidence";
+import { CorridorRateHistoryChart } from "@/components/corridors/CorridorRateHistoryChart";
 import { ProductHeader } from "@/components/ui/ProductHeader";
 import { getCorridorApiResult } from "@/lib/api/corridors";
 import { getRatesApiResult } from "@/lib/api/rates";
+import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
 
 type Props = Readonly<{ params: Promise<Readonly<{ slug: string }>> }>;
 
@@ -32,6 +34,7 @@ export default async function CorridorPage({ params }: Props) {
 
   const { corridor } = corridorResult.body;
   const ratesResult = await getRatesApiResult(slug);
+  const historyResult = await getRateHistoryApiResult(slug);
 
   return (
     <>
@@ -39,9 +42,9 @@ export default async function CorridorPage({ params }: Props) {
       <main id="main-content" className="min-h-screen bg-[var(--black)] px-4 py-8 text-[var(--white)] sm:px-8 sm:py-10 lg:px-12">
         <div className="mx-auto max-w-6xl">
           <nav aria-label="Breadcrumb" className="text-xs text-[var(--muted)]">
-            <Link href="/dashboard" className="underline underline-offset-4">Dashboard</Link>
+            <Link href="/dashboard" className="underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]">Dashboard</Link>
             <span aria-hidden="true" className="px-2">/</span>
-            <span>{corridor.slug}</span>
+            <span aria-current="page">{corridor.slug}</span>
           </nav>
 
           <header className="mt-8 max-w-3xl">
@@ -68,7 +71,7 @@ export default async function CorridorPage({ params }: Props) {
                   <Link
                     key={anchor.slug}
                     href={`/anchors/${anchor.slug}`}
-                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)]"
+                    className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5 transition-colors hover:border-[var(--accent)] focus-visible:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -91,6 +94,13 @@ export default async function CorridorPage({ params }: Props) {
           ) : (
             <ErrorState message={ratesResult.body.error.message} />
           )}
+
+          {historyResult.status === 200 ? (
+            <CorridorRateHistoryChart
+              corridorSlug={corridor.slug}
+              initialHistory={historyResult.body}
+            />
+          ) : null}
         </div>
       </main>
     </>

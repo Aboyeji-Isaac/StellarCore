@@ -230,3 +230,49 @@ function reputationSummary(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }) as Awaited<ReturnType<ScheduledRefreshDependencies["evaluateReputation"]>>;
 }
+
+
+test("deterministic normalization failures are recorded but transient failures are not", async () => {
+  const recorded: unknown[] = [];
+  const suppressions = {
+    listSuppressed: async () => [],
+    recordDeterministicFailure: async (input: unknown) => {
+      recorded.push(input);
+      return {} as never;
+    },
+    reactivate: async () => null,
+  };
+
+  await runScheduledRefresh(dependencies({
+    suppressions,
+    snapshotRates: async () => rateSummary({
+      succeeded: 0,
+      failed: 2,
+      snapshotsPersisted: 0,
+      failures: [
+        {
+          anchorSlug: "anchor-a",
+          corridorSlug: "usdc-us-brl-br",
+          phase: "NORMALIZATION",
+          code: "ASSET_MISMATCH",
+        },
+        {
+          anchorSlug: "anchor-b",
+          corridorSlug: "usdc-us-brl-br",
+          phase: "QUOTE",
+          code: "QUOTE_FAILURE",
+        },
+      ],
+    }),
+  }));
+
+  assert.equal(recorded.length, 1);
+  assert.deepEqual(recorded[0], {
+    anchorSlug: "anchor-a",
+    corridorSlug: "usdc-us-brl-br",
+    reason: "PERMANENT_PROTOCOL",
+    failureCode: "ASSET_MISMATCH",
+    failurePhase: "NORMALIZATION",
+    observedAt: STARTED_AT,
+  });
+});
