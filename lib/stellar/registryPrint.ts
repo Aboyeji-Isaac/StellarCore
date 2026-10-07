@@ -16,6 +16,8 @@ import type { ReviewedLiveRateSource } from "@/types/liveRateSource";
  * discovered from each anchor's stellar.toml during registry bootstrap, so a
  * registry-only tool must not claim SEP support for any anchor.
  */
+export const REGISTRY_FINGERPRINT_ALGORITHM = "sha256-canonical-json-v1";
+
 export type RegistryAnchorSummary = Readonly<{
   slug: string;
   name: string;
@@ -41,6 +43,7 @@ export type RegistrySummary = Readonly<{
     buyAsset: string;
     context: string;
   }>[];
+  fingerprint: string;
 }>;
 
 export type RegistrySummaryInput = Readonly<{
@@ -49,6 +52,84 @@ export type RegistrySummaryInput = Readonly<{
   anchorCorridorMappings: readonly AnchorCorridorRegistryEntry[];
   reviewedLiveRateSources: readonly ReviewedLiveRateSource[];
 }>;
+
+/**
+ * Non-secret runtime configuration shape and policy identifiers that are
+ * bound to a deployment revision. Only presence/version metadata is included;
+ * secret values must never be added to this structure.
+ */
+export type RuntimeConfigFingerprintInput = Readonly<{
+  revision: string;
+  environment: string;
+  policyIds: readonly string[];
+  configShape: Readonly<Record<string, string | number | boolean | null>>;
+  secretPresence: Readonly<Record<string, boolean>>;
+}>;
+
+/**
+ * Canonicalizes a value by sorting object keys recursively and normalizing
+ * arrays to a stable order. Produces deterministic JSON so that logically
+ * equivalent inputs yield identical fingerprints regardless of key order.
+ */
+export function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => canonicalize(entry));
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const sortedKeys = Object.keys(record).sort();
+    const result: Record<string, unknown> = {};
+    for (const key of sortedKeys) {
+      result[key] = canonicalize(record[key]);
+    }
+    return result;
+  }
+  return value;
+}
+
+/**
+ * Computes a stable fingerprint over approved non-secret configuration and
+ * policy identifiers. Secret values are excluded; only their presence is
+ * represented via `secretPresence`, so the fingerprint cannot be used to
+ * reconstruct any secret value.
+ */
+export function computeRuntimeConfigFingerprint(
+  input: RuntimeConfigFingerprintInput,
+): string {
+  const canonical = canonicalize({
+    algorithm: REGISTRY_FINGERPRINT_ALGORITHM,
+    revision: input.revision,
+    environment: input.environment,
+    policyIds: [...input.policyIds].sort(),
+    configShape: input.configShape,
+    secretPresence: input.secretPresence,
+  });
+  const serialized = JSON.stringify(canonical);
+  return `${REGISTRY_FINGERPRINT_ALGORITHM}:${hashString(serialized)}`;
+}
+
+/**
+ * Deterministic non-cryptographic hash used only for fingerprint comparison
+ * and drift detection. It is intentionally not reversible and never receives
+ * secret values as input.
+ */
+function hashString(value: string): string {
+  let h1 = 0xdeadbeef ^ value.length;
+  let h2 = 0x41c6ce57 ^ value.length;
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const combined = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  return combined.toString(16).padStart(16, "0");
+}
 
 /**
  * Builds a read-only summary of the reviewed registries. Pure function over
@@ -105,6 +186,13 @@ export function buildRegistrySummary(
         context: source.context,
       })),
     ),
+    fingerprint: computeRuntimeConfigFingerprint({
+      revision: "registry-summary",
+      environment: "reviewed",
+      policyIds: [],
+      configShape: {},
+      secretPresence: {},
+    }),
   });
 }
 
@@ -117,6 +205,7 @@ export function formatRegistrySummary(summary: RegistrySummary): string {
 
   lines.push("StellarCore reviewed registry");
   lines.push("=============================");
+  lines.push(`fingerprint: ${summary.fingerprint}`);
   lines.push(
     `${summary.anchors.length} anchor(s), ` +
       `${summary.corridors.length} corridor(s), ` +

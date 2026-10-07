@@ -35,7 +35,10 @@
     "verify:export": "tsx scripts/verify-export.ts",
     "verify:install-reproducibility": "tsx scripts/verify-install-reproducibility.ts",
     "test:export": "node --import tsx --test tests/integration/export/evidence-package.test.ts",
-    "test:csp": "node --import tsx --test tests/unit/security/browserHeaders.test.ts tests/unit/middleware/cspMiddleware.test.ts"
+    "test:csp": "node --import tsx --test tests/unit/security/browserHeaders.test.ts tests/unit/middleware/cspMiddleware.test.ts",
+    "fingerprint:emit": "node --import tsx scripts/emit-config-fingerprint.ts",
+    "fingerprint:verify": "node --import tsx scripts/verify-config-fingerprint.ts",
+    "verify:build": "npm run lint && npm run test && npm run fingerprint:verify"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

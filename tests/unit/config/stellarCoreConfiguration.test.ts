@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { auditCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
 import {
+  computeStellarCoreConfigurationFingerprint,
+  assertStellarCoreConfigurationFingerprint,
+  StellarCoreConfigurationFingerprintMismatchError,
+} from "@/lib/config/stellarCoreConfigurationFingerprint";
+import {
   assertStellarCoreConfiguration,
   auditStellarCoreConfiguration,
   StellarCoreConfigurationAuditError,
@@ -29,6 +34,70 @@ const ANCHOR_B = Object.freeze({
   name: "Anchor B",
   homeDomain: "anchor-b.example.com",
 }) satisfies AnchorRegistryEntry;
+
+test("matching reviewed configuration produces the expected fingerprint", () => {
+  const input = configuration();
+  const fingerprint = computeStellarCoreConfigurationFingerprint(input);
+
+  assert.equal(typeof fingerprint, "string");
+  assert.equal(fingerprint.length > 0, true);
+  assert.equal(
+    computeStellarCoreConfigurationFingerprint(configuration()),
+    fingerprint,
+  );
+});
+
+test("fingerprint is stable under ordering of collections", () => {
+  const a = configuration({
+    anchors: [ANCHOR_A, ANCHOR_B],
+    corridors: [BRL_CORRIDOR, USD_CORRIDOR],
+    mappings: [
+      mapping(ANCHOR_A.slug, [BRL_CORRIDOR.slug, USD_CORRIDOR.slug]),
+      mapping(ANCHOR_B.slug, [BRL_CORRIDOR.slug]),
+    ],
+    sources: [source(BRL_CORRIDOR), source(USD_CORRIDOR)],
+  });
+  const b = configuration({
+    anchors: [ANCHOR_B, ANCHOR_A],
+    corridors: [USD_CORRIDOR, BRL_CORRIDOR],
+    mappings: [
+      mapping(ANCHOR_B.slug, [BRL_CORRIDOR.slug]),
+      mapping(ANCHOR_A.slug, [USD_CORRIDOR.slug, BRL_CORRIDOR.slug]),
+    ],
+    sources: [source(USD_CORRIDOR), source(BRL_CORRIDOR)],
+  });
+
+  assert.equal(
+    computeStellarCoreConfigurationFingerprint(a),
+    computeStellarCoreConfigurationFingerprint(b),
+  );
+});
+
+test("unexpected non-secret policy/config drift is detected", () => {
+  const expected = computeStellarCoreConfigurationFingerprint(configuration());
+  const drifted = configuration({
+    sources: [source(BRL_CORRIDOR, { buyDeliveryMethod: "PICKUP" })],
+  });
+
+  assert.throws(
+    () => assertStellarCoreConfigurationFingerprint(drifted, expected),
+    (error) => {
+      assert.ok(error instanceof StellarCoreConfigurationFingerprintMismatchError);
+      return true;
+    },
+  );
+});
+
+test("fingerprint does not reflect secret-shaped values", () => {
+  const sentinel = "DATABASE_URL=https://user:secret@example.com/token";
+  const input = configuration({
+    sources: [source(BRL_CORRIDOR, { buyDeliveryMethod: sentinel })],
+  });
+  const fingerprint = computeStellarCoreConfigurationFingerprint(input);
+
+  assert.equal(fingerprint.includes(sentinel), false);
+  assert.equal(fingerprint.includes("secret"), false);
+});
 
 const BRL_CORRIDOR = Object.freeze({
   slug: "usdc-us-brl-br",
