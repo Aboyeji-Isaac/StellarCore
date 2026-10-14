@@ -22,6 +22,21 @@ test("production runtime with a plain URL resolves verified TLS and a sanitized 
   assert.equal(result.emergencyBypassActive, false);
 });
 
+test("production runtime upgrades managed sslmode=require URLs to verified TLS before connecting", () => {
+  const managedUrl = `${PROD_URL}?sslmode=require&application_name=stellarcore`;
+  const result = resolveDatabaseTlsPolicyForEnvironment({
+    databaseUrl: managedUrl,
+    environmentId: "production",
+    environment: { DATABASE_URL: managedUrl },
+  });
+
+  assert.equal(result.resolution.accepted, true);
+  assert.ok(result.resolution.accepted && result.resolution.mode === "VERIFY_FULL");
+  assert.ok(result.resolution.accepted && result.resolution.sslConfig.rejectUnauthorized === true);
+  assert.equal(result.sanitizedConnectionString.includes("sslmode"), false);
+  assert.equal(result.sanitizedConnectionString.includes("application_name=stellarcore"), true);
+});
+
 test("production runtime with a bypass URL rejects with the safe diagnostic and keeps TLS parameters out of the connection string", () => {
   const bypassedUrl = `${PROD_URL}?ssl=no-verify&application_name=stellarcore`;
   const result = resolveDatabaseTlsPolicyForEnvironment({
