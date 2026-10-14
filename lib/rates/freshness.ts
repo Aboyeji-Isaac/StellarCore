@@ -1,4 +1,4 @@
-import { RATE_FRESJNESS_THRESHOLD_MS } from "@/constants/rates";
+import { RATE_FRESHNESS_THRESHOLD_MS } from "@/constants/rates";
 import type { RateFreshness } from "@/types/rates";
 
 /**
@@ -158,7 +158,7 @@ export function recordFailure(
     firstFailureAt: previous?.firstFailureAt ?? observedAt,
     lastFailureAt: observedAt,
     lastEvidence: input.evidence,
-    activationState: suppressed ? "suppressed" : "suppressed",
+    activationState: suppressed ? "suppressed" : "active",
   });
 }
 
