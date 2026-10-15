@@ -53,13 +53,13 @@ enum ScheduledSourceSuppressionReason {
 }
 
 enum ScheduledSourceSuppressionState {
-  ACTIBE    @map("active")
+  ACTIVE    @map("active")
   REACTIVATED @map("reactivated")
 
   @@map("scheduled_source_suppression_state")
 }
 model Anchor {
-  id                String       @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
   name              String
   homeDomain        String       @map("home_domain")
@@ -81,7 +81,7 @@ model Anchor {
 }
 
 model Corridor {
-  id            String @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   assetCodeFrom String @map("asset_code_from")
   countryFrom   String @map("country_from")
   assetCodeTo   String @map("asset_code_to")
@@ -111,14 +111,14 @@ model AnchorCorridor {
 /// One individual anchor quote for a corridor. Freshness is derived from
 /// capturedAt at read time; computed corridor medians are not stored here.
 model RateSnapshot {
-  id                String   @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   anchorId          String   @map("anchor_id") @db.Uuid
   corridorId        String   @map("corridor_id") @db.Uuid
   rate              Decimal  @db.Decimal(38, 18)
   sourceAmount      Decimal  @map("source_amount") @db.Decimal(38, 18)
   destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
   fee               Decimal  @default(0) @db.Decimal(38, 18)
-  capturedAt        DateTime @Default(now()) @map("captured_at") @db.Timestamptz(6)
+  capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -142,7 +142,7 @@ model RateSnapshot {
 }
 
 model TransferOutcome {
-  id           String         @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   anchorId     String         @map("anchor_id") @db.Uuid
   corridorId   String         @map("corridor_id") @db.Uuid
   status       TransferStatus
@@ -159,7 +159,7 @@ model TransferOutcome {
 }
 
 model ReputationScore {
-  id             String               @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   anchorId       String               @unique @map("anchor_id") @db.Uuid
   compositeScore Float?               @map("composite_score")
   scoreBand      ReputationScoreBand? @map("score_band")
@@ -182,7 +182,7 @@ model ReputationScore {
 /// deterministically (permanent configuration or protocol failures). Transient
 /// failures are never recorded here; they remain owned by the circuit breaker.
 model ScheduledSourceSuppression {
-  id               String                         @id @@default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id               String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   anchorId           String                        @map("anchor_id") @db.Uuid
   corridorId         String                        @map("corridor_id") @db.Uuid
   reason              ScheduledSourceSuppressionReason
