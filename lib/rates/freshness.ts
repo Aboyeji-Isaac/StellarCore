@@ -1,4 +1,4 @@
-import { RATE_FRESJNESS_THRESHOLD_MS } from "@/constants/rates";
+import { RATE_FRESHNESS_THRESHOLD_MS } from "@/constants/rates";
 import type { RateFreshness } from "@/types/rates";
 
 /**
@@ -51,7 +51,7 @@ export type TransientFailureClass =
 
 export type FailureClass = PermanentFailureClass | TransientFailureClass;
 
-const PERMANENT_FAILURE_CLASSES: Readonly<Readonly<PermanentFailureClass>[] = Object.freeze(
+const PERMANENT_FAILURE_CLASSES: readonly PermanentFailureClass[] = Object.freeze(
   [
     "invalid_configuration",
     "unsupported_protocol",
@@ -60,7 +60,7 @@ const PERMANENT_FAILURE_CLASSES: Readonly<Readonly<PermanentFailureClass>[] = Ob
   ] as const,
 );
 
-const TRANSIERT_FAILURE_CLASSES: Readonly<Readonly<TransientFailureClass>[] = Object.freeze(
+const TRANSIENT_FAILURE_CLASSES: readonly TransientFailureClass[] = Object.freeze(
   [
     "network_error",
     "timeout",
@@ -158,7 +158,7 @@ export function recordFailure(
     firstFailureAt: previous?.firstFailureAt ?? observedAt,
     lastFailureAt: observedAt,
     lastEvidence: input.evidence,
-    activationState: suppressed ? "suppressed" : "suppressed",
+    activationState: suppressed ? "suppressed" : "active",
   });
 }
 

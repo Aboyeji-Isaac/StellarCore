@@ -13,14 +13,12 @@ import type {
   ReviewedLiveRateSource,
   SafeLiveRateRunSummary,
 } from "@/types/liveRateSource";
-import type { ScheduledSourceIdentity } from "@/types/suppression";
 
 export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   assertConfiguration: () => void;
   buildCandidates: (
     sources?: readonly ReviewedLiveRateSource[],
   ) => Promise<readonly PreparedLiveRateCandidate[]>;
-  listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
@@ -38,20 +36,18 @@ export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-const [suppressions, candidates] = await Promise.all([
-    dependencies.listSuppressions(),
-    dependencies.buildCandidates(),
-  ]);
 
+  const suppressions = await dependencies.listSuppressions();
   const suppressedKeys = new Set(
     suppressions.map((suppression) => `${suppression.anchorSlug}:${suppression.corridorSlug}`),
   );
-  const eligible = candidates.filter(
-    (candidate) => !suppressedKeys.has(`${candidate.anchorSlug}:${candidate.corridorSlug}`),
+  const eligibleSources = REVIEWED_LIVE_RATE_SOURCES.filter(
+    (source) => !suppressedKeys.has(`${source.anchorSlug}:${source.corridorSlug}`),
   );
-  const suppressed = candidates.length - eligible.length;
+  const suppressed = REVIEWED_LIVE_RATE_SOURCES.length - eligibleSources.length;
+  const candidates = await dependencies.buildCandidates(eligibleSources);
+  const summary = await dependencies.executeCandidates(candidates);
 
-  const summary = await dependencies.executeCandidates(eligible);
   if (suppressed === 0) return summary;
   return Object.freeze({ ...summary, suppressed });
 }
@@ -59,7 +55,6 @@ const [suppressions, candidates] = await Promise.all([
 const DEFAULT_DEPENDENCIES = Object.freeze({
   assertConfiguration: assertCurrentStellarCoreConfiguration,
   buildCandidates: buildReviewedLiveRateCandidates,
-  listSuppressed: PRISMA_SUPPRESSION_REPOSITORY.listSuppressed,
   executeCandidates: async (candidates) => formatLiveRateRunSummary(
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,
