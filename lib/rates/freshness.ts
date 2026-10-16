@@ -108,7 +108,9 @@ export function isTransientFailureClass(
  * Determine whether a given failure class is eligible for durable suppression.
  * Transient failures are explicitly excluded.
  */
-export function isSuppressionEligible(failureClass: string): boolean {
+export function isSuppressionEligible(
+  failureClass: string,
+): failureClass is PermanentFailureClass {
   return isPermanentFailureClass(failureClass);
 }
 

@@ -13,6 +13,7 @@ import type {
   ReviewedLiveRateSource,
   SafeLiveRateRunSummary,
 } from "@/types/liveRateSource";
+import type { ScheduledSourceIdentity } from "@/types/suppression";
 
 export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   assertConfiguration: () => void;
@@ -22,7 +23,7 @@ export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
-  listSuppressions: () => Promise<readonly Readonly<{ anchorSlug: string; corridorSlug: string }>[]>;
+  listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
 }>;
 
 /**
@@ -37,7 +38,10 @@ export async function snapshotReviewedLiveRates(
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
 
-  const suppressions = await dependencies.listSuppressions();
+  const suppressions = await (
+    dependencies.listSuppressed ??
+    (async () => Object.freeze([] as ScheduledSourceIdentity[]))
+  )();
   const suppressedKeys = new Set(
     suppressions.map((suppression) => `${suppression.anchorSlug}:${suppression.corridorSlug}`),
   );
@@ -61,11 +65,5 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
     }),
   ),
-  listSuppressions: async () => {
-    const active = await PRISMA_SUPPRESSION_REPOSITORY.listActive();
-    return Object.freeze(active.map((suppression) => Object.freeze({
-      anchorSlug: suppression.anchorSlug,
-      corridorSlug: suppression.corridorSlug,
-    })));
-  },
+  listSuppressed: PRISMA_SUPPRESSION_REPOSITORY.listSuppressed,
 }) satisfies SnapshotReviewedLiveRatesDependencies;

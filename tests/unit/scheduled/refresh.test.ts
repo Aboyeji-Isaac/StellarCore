@@ -69,12 +69,12 @@ test("deterministic configuration failures are recorded against the durable supp
       succeeded: 0,
       failed: 1,
       snapshotsPersisted: 0,
-      failures: [{ anchorSlug: "zeam", corridorSlug: "usdc-us-brl-br", phase: "CONFIGURATION", code: "INVALID_ANCHOR_CONFIGURATION" }],
+      failures: [{ anchorSlug: "zeam", corridorSlug: "usdc-us-brl-br", phase: "NORMALIZATION", code: "INVALID_ANCHOR" }],
     }),
     suppressions: suppressionRepository({
       recordDeterministicFailure: async (input) => {
         recorded.push(input);
-        return null;
+        return {} as never;
       },
     }),
   }));
@@ -85,8 +85,8 @@ test("deterministic configuration failures are recorded against the durable supp
     anchorSlug: "zeam",
     corridorSlug: "usdc-us-brl-br",
     reason: "PERMANENT_CONFIGURATION",
-    failureCode: "INVALID_ANCHOR_CONFIGURATION",
-    failurePhase: "CONFIGURATION",
+    failureCode: "INVALID_ANCHOR",
+    failurePhase: "NORMALIZATION",
     observedAt: STARTED_AT,
   });
 });
@@ -103,7 +103,7 @@ test("transient failures are never recorded as permanent suppressions", async ()
     suppressions: suppressionRepository({
       recordDeterministicFailure: async (input) => {
         recorded.push(input);
-        return null;
+        return {} as never;
       },
     }),
   }));
@@ -198,8 +198,8 @@ function suppressionRepository(
   overrides: Partial<SuppressionRepository> = {},
 ): SuppressionRepository {
   return Object.freeze({
-    listActive: async () => [],
-    recordDeterministicFailure: async () => null,
+    listSuppressed: async () => [],
+    recordDeterministicFailure: async () => ({} as never),
     reactivate: async () => null,
     ...overrides,
   });

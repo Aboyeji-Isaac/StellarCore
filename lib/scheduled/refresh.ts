@@ -4,7 +4,7 @@ import {
   type ReputationEvaluationRunSummary,
 } from "@/lib/reputation/run";
 import {
-  classifySuppressionReason,
+  classifyPermanentScheduledFailure,
 } from "@/lib/scheduled/suppression";
 import {
   PRISMA_SUPPRESSION_REPOSITORY,
@@ -16,7 +16,7 @@ import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/sched
 export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
   evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
-suppressions: SuppressionRepository;
+  suppressions?: SuppressionRepository;
   now: () => Date;
 }>;
 
@@ -38,7 +38,7 @@ export async function runScheduledRefresh(
   let rates: ScheduledRefreshResult["rates"];
 
   try {
-const summary = await dependencies.snapshotRates();
+    const summary = await dependencies.snapshotRates();
     await recordDeterministicFailures(
       summary,
       dependencies.suppressions ?? PRISMA_SUPPRESSION_REPOSITORY,
@@ -82,7 +82,7 @@ async function recordDeterministicFailures(
   observedAt: Date,
 ): Promise<void> {
   for (const failure of summary.failures) {
-    const reason = classifySuppressionReason(failure.code);
+    const reason = classifyPermanentScheduledFailure(failure);
     if (!reason) continue;
     await repository.recordDeterministicFailure({
       anchorSlug: failure.anchorSlug,
@@ -101,29 +101,9 @@ function toScheduledRates(summary: SafeLiveRateRunSummary): ScheduledRefreshResu
     succeeded: summary.succeeded,
     failed: summary.failed,
     skipped: summary.skipped,
-suppressed: summary.suppressed ?? 0,
+    suppressed: summary.suppressed ?? 0,
     failures: Object.freeze(summary.failures.map((failure) => Object.freeze({ ...failure }))),
   });
-}
-
-async function recordPermanentFailures(
-  summary: SafeLiveRateRunSummary,
-  repository: SuppressionRepository,
-  observedAt: Date,
-): Promise<void> {
-  for (const failure of summary.failures) {
-    const reason = classifyPermanentScheduledFailure(failure);
-    if (!reason) continue;
-
-    await repository.recordDeterministicFailure({
-      anchorSlug: failure.anchorSlug,
-      corridorSlug: failure.corridorSlug,
-      reason,
-      failureCode: failure.code,
-      failurePhase: failure.phase,
-      observedAt,
-    });
-  }
 }
 
 function preparationFailure(): ScheduledRefreshResult["rates"] {

@@ -3,12 +3,13 @@ import test from "node:test";
 
 import { runScheduledRefresh } from "@/lib/scheduled/refresh";
 import type { SuppressionRepository } from "@/lib/scheduled/suppressionRepository";
-import type { ScheduledSourceSuppression } from "@/types/scheduled";
+import type { ScheduledSourceSuppression } from "@/types/suppression";
 
 const EVALUATED_AT = new Date("2026-08-31T17:00:00.000Z");
 
 test("controlled scheduled integration passes one persisted evaluation time from rate ingestion to reputation evaluation", async () => {
   const events: string[] = [];
+  const store = new MemorySuppressionStore();
   const result = await runScheduledRefresh({
     snapshotRates: async () => {
       events.push("rate-persisted");
@@ -29,7 +30,7 @@ test("controlled scheduled integration passes one persisted evaluation time from
       events.push(`reputation:${evaluatedAt.toISOString()}`);
       return { attempted: 2, succeeded: 2, failed: 0, failures: [] };
     },
-    suppressions: suppressionRepository(),
+    suppressions: store.repository,
     now: () => EVALUATED_AT,
   });
 
@@ -64,21 +65,21 @@ test("suppression state survives restarts and a reactivated source is no longer 
   // Three consecutive deterministic failures are recorded across runs; the
   // source is durably suppressed once the threshold is reached.
   for (let i = 0; i < 3; i++) {
-    await store.recordDeterministicFailure({
+    await store.repository.recordDeterministicFailure({
       anchorSlug: "zeam",
       corridorSlug: "usdc-us-brl-br",
       reason: "PERMANENT_CONFIGURATION",
-      failureCode: "INVALID_ANCHOR_CONFIGURATION",
-      failurePhase: "CONFIGURATION",
+      failureCode: "INVALID_ANCHOR",
+      failurePhase: "NORMALIZATION",
       observedAt: EVALUATED_AT,
     });
   }
-  assert.equal((await store.repository.listActive()).length, 1);
+  assert.equal((await store.repository.listSuppressed()).length, 1);
 
   // Simulate a process restart by rebuilding the repository over the same
   // durable store. Suppression must still be visible.
   const restarted = store.repository;
-  assert.equal((await restarted.listActive()).length, 1);
+  assert.equal((await restarted.listSuppressed()).length, 1);
 
   // Explicit reactivation after a configuration correction is auditable.
   const reactivated = await restarted.reactivate({
@@ -88,9 +89,9 @@ test("suppression state survives restarts and a reactivated source is no longer 
     reactivatedAt: EVALUATED_AT,
   });
   assert.ok(reactivated);
-  assert.equal(reactivated?.state, "REACTIVATED");
+  assert.equal(reactivated?.state, "ACTIVE");
   assert.equal(reactivated?.reactivationReason, "configuration corrected in PR #120");
-  assert.equal((await restarted.listActive()).length, 0);
+  assert.equal((await restarted.listSuppressed()).length, 0);
 
   // The reactivated source is no longer excluded from a fresh run.
   const result = await runScheduledRefresh(deps);
@@ -98,28 +99,32 @@ test("suppression state survives restarts and a reactivated source is no longer 
 });
 
 class MemorySuppressionStore {
-  private const records = new Map<string, ScheduledSourceSuppression &> { consecutiveFailures: number }>();
+  private readonly records = new Map<string, ScheduledSourceSuppression>();
 
   readonly repository: SuppressionRepository = Object.freeze({
-    listActive: async () => Object.freeze(
-      [...this.records.values()].filter((record) => record.state === "ACTIVE"),
+    listSuppressed: async () => Object.freeze(
+      [...this.records.values()]
+        .filter((record) => record.state === "SUPPRESSED")
+        .map(({ anchorSlug, corridorSlug }) => Object.freeze({ anchorSlug, corridorSlug })),
     ),
     recordDeterministicFailure: async (input) => {
       const key = `${input.anchorSlug}:${input.corridorSlug}`;
       const existing = this.records.get(key);
       const nextConsecutive = (existing?.consecutiveFailures ?? 0) + 1;
-      const state = nextConsecutive >= 3 ? "ACTIVE" : "REACTIVATED";
+      const state = nextConsecutive >= 3 ? "SUPPRESSED" : "ACTIVE";
       const record = Object.freeze({
         anchorSlug: input.anchorSlug,
         corridorSlug: input.corridorSlug,
         reason: input.reason,
-        state: state as ScheduledSourceSuppression["state"],
+        state,
         failureCode: input.failureCode,
         failurePhase: input.failurePhase,
         consecutiveFailures: nextConsecutive,
         firstFailedAt: (existing?.firstFailedAt ?? input.observedAt.toISOString()),
         lastFailedAt: input.observedAt.toISOString(),
-        suppressedAt: input.observedAt.toISOString(),
+        suppressedAt: state === "SUPPRESSED"
+          ? existing?.suppressedAt ?? input.observedAt.toISOString()
+          : null,
         reactivatedAt: null,
         reactivationReason: null,
       });
@@ -132,8 +137,9 @@ class MemorySuppressionStore {
       if (!existing) return null;
       const updated = Object.freeze({
         ...existing,
-        state: "REACTIVATED" as const,
+        state: "ACTIVE" as const,
         consecutiveFailures: 0,
+        suppressedAt: null,
         reactivatedAt: input.reactivatedAt.toISOString(),
         reactivationReason: input.reason,
       });

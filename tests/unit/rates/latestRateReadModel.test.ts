@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RATE_FRESNESS_THRESHOLD_MS } from "@/constants/rates";
+import { RATE_FRESHNESS_THRESHOLD_MS } from "@/constants/rates";
 import {
   readLatestCorridorRate,
   selectLatestPerAnchor,

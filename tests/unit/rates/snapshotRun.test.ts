@@ -16,7 +16,7 @@ test("failed configuration audit short-circuits before live candidate preparatio
     assertConfiguration: () => {
       throw new Error("safe configuration failure");
     },
-    listSuppressions: async () => [],
+    listSuppressed: async () => [],
     buildCandidates: async () => {
       buildCalls += 1;
       return [];
@@ -37,7 +37,7 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   const expected = summary();
   const result = await snapshotReviewedLiveRates({
     assertConfiguration: () => events.push("audit"),
-    listSuppressions: async () => {
+    listSuppressed: async () => {
       events.push("suppressions");
       return [];
     },
@@ -79,7 +79,7 @@ test("durably suppressed sources are removed before candidate preparation", asyn
 
   const result = await snapshotReviewedLiveRates({
     assertConfiguration: () => {},
-    listSuppressions: async () => [{
+    listSuppressed: async () => [{
       anchorSlug: first.anchorSlug,
       corridorSlug: first.corridorSlug,
     }],
