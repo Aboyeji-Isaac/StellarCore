@@ -46,13 +46,16 @@ export async function runRateEngine(
 
     let observation;
     try {
-      observation = normalizeIndicativeRate({
+      const normalized = normalizeIndicativeRate({
         anchorSlug: candidate.anchorSlug,
         corridor: candidate.corridor,
         request: candidate.request,
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
+      observation = candidate.captureRunId
+        ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
+        : normalized;
     } catch (error) {
       failures.push(engineFailure(
         candidate,
