@@ -48,6 +48,7 @@ export type PublicRatesResponse = Readonly<{
 export type RatesApiErrorCode =
   | "missing_corridor"
   | "invalid_corridor"
+  | "invalid_query"
   | "corridor_not_found"
   | "internal_error";
 

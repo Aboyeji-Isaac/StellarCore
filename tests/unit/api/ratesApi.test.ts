@@ -28,6 +28,43 @@ test("route rejects missing and malformed corridor parameters safely", async () 
   }
 });
 
+test("route rejects repeated, unsupported, and out-of-range query parameters", async () => {
+  const invalidRequests = [
+    {
+      name: "repeated corridor",
+      url: `http://localhost/api/rates?corridor=${CORRIDOR}&corridor=${CORRIDOR}`,
+      status: 400,
+      code: "invalid_query",
+    },
+    {
+      name: "unsupported parameter",
+      url: `http://localhost/api/rates?corridor=${CORRIDOR}&limit=10`,
+      status: 400,
+      code: "invalid_query",
+    },
+    {
+      name: "oversized corridor",
+      url: `http://localhost/api/rates?corridor=${"a".repeat(101)}`,
+      status: 400,
+      code: "invalid_corridor",
+    },
+  ] as const;
+
+  for (const value of invalidRequests) {
+    const response = await GET(new Request(value.url));
+    assert.equal(response.status, value.status, value.name);
+    assert.deepEqual(await response.json(), {
+      error: {
+        code: value.code,
+        message: value.code === "invalid_query"
+          ? "The query parameters are invalid."
+          : "The corridor slug is invalid.",
+      },
+    }, value.name);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+});
+
 test("route is request-dynamic and explicitly prevents freshness caching", async () => {
   assert.equal(dynamic, "force-dynamic");
   const response = await GET(new Request("http://localhost/api/rates?corridor=bad--slug"));
@@ -173,6 +210,35 @@ test("configured candidates without observations do not become persisted evidenc
   });
   assert.equal(result.body.state, "insufficient_fresh_sources");
   assert.equal(result.body.medianRate, null);
+  assert.equal(result.body.evaluatedAt, NOW.toISOString());
+  assert.deepEqual(result.body.observations, []);
+  assert.equal(JSON.stringify(result.body.observations).includes(NOW.toISOString()), false);
+});
+
+test("empty evidence and failed reads remain distinct public outcomes", async () => {
+  const empty = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({ observations: Object.freeze([]) }),
+  });
+  const failed = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => {
+      throw new Error("DATABASE_URL=secret");
+    },
+  });
+
+  assert.equal(empty.status, 200);
+  if (empty.status === 200) {
+    assert.deepEqual(empty.body.observations, []);
+    assert.equal(empty.body.sourceCount, 0);
+    assert.equal(empty.body.medianRate, null);
+  }
+  assert.deepEqual(failed, {
+    status: 500,
+    body: { error: { code: "internal_error", message: "Unable to read rates." } },
+  });
+  assert.notDeepEqual(empty, failed);
+  assert.equal(JSON.stringify(failed).includes("secret"), false);
 });
 
 test("serializer exposes an exact healthy median and normalized exclusions", () => {
