@@ -118,7 +118,9 @@ export async function RatePanel() {
                   key={observation.anchor.slug}
                   className="border-b border-[var(--ghost)] align-top last:border-0"
                 >
-                  <td className="px-3 py-2 text-[var(--white)]">{observation.anchor.name}</td>
+                  <td className="px-3 py-2 text-[var(--white)]">
+                    {observation.anchor.name?.trim() ? observation.anchor.name : observation.anchor.slug}
+                  </td>
                   <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">

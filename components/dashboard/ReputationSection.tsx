@@ -59,7 +59,7 @@ export async function ReputationSection() {
         >
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-lg text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-              {entry.anchor.name}
+              {entry.anchor.name?.trim() ? entry.anchor.name : entry.anchor.slug}
             </h3>
             <Badge tone={stateTone(entry.state)} label={stateCopy(entry.state)} />
           </div>
