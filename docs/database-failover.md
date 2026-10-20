@@ -70,3 +70,12 @@ Isolated integration tests in `tests/integration/db/postgresFailover.integration
 3. Commit unconfirmed safety for transactions interrupted mid-commit.
 4. Deadline enforcement during network blackholes.
 5. Connection storm prevention under burst concurrency.
+
+`tests/integration/db/stalePooledConnection.integration.test.ts` covers the case where the server stays up but connections that were already pooled go bad (NAT/proxy idle timeout, `pg_terminate_backend`, `idle_session_timeout`):
+1. A pooled connection that fails on first use is destroyed rather than returned to the idle list, and the next query opens a healthy one.
+2. Without eviction, a second stale idle connection fails the next request too; `handleConnectionError` (wired as PrismaPg's `onConnectionError`) evicts the remaining idle connections so only one request fails, and reconnects stay within `DB_POOL_MAX`.
+3. Ordinary query errors (e.g. `23505`) keep healthy idle connections.
+4. An idle connection terminated by the server with `57P01` is removed via the pool `error` event without crashing the process.
+5. A statement or transaction that hits a stale connection is attempted exactly once: neither `pg` nor the pool manager replays it, and an interrupted transaction surfaces `TransactionInterruptedError`. Retrying is always the caller's explicit decision.
+
+All of these run against the in-process wire-protocol double in `tests/integration/db/fixtures/mockPostgresServer.ts`; no real database outage is needed.
