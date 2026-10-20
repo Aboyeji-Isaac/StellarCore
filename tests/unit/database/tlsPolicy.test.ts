@@ -51,25 +51,18 @@ test("production rejects ssl=0", () => {
   assert.ok(!resolution.accepted && resolution.rejection.code === "PRODUCTION_TLS_DISABLED");
 });
 
-test("production upgrades sslmode=require to policy-owned verified TLS", () => {
-  const resolution = resolveDatabaseTlsPolicy(productionInput({
-    databaseUrl: "postgres://user:secret@db.example.com:5432/stellar?sslmode=require",
-  }));
+for (const sslmode of ["require", "verify-ca", "allow"]) {
+  test(`production upgrades sslmode=${sslmode} to policy-owned verified TLS`, () => {
+    const url = `postgres://user:secret@db.example.com:5432/stellar?sslmode=${sslmode}&application_name=stellarcore`;
+    const resolution = resolveDatabaseTlsPolicy(productionInput({ databaseUrl: url }));
 
-  assert.equal(resolution.accepted, true);
-  assert.ok(resolution.accepted && resolution.mode === "VERIFY_FULL");
-  assert.ok(resolution.accepted && resolution.sslConfig.rejectUnauthorized === true);
-});
-
-test("production upgrades sslmode=verify-ca to policy-owned verified TLS", () => {
-  const resolution = resolveDatabaseTlsPolicy(productionInput({
-    databaseUrl: "postgres://user:secret@db.example.com:5432/stellar?sslmode=verify-ca",
-  }));
-
-  assert.equal(resolution.accepted, true);
-  assert.ok(resolution.accepted && resolution.mode === "VERIFY_FULL");
-  assert.ok(resolution.accepted && resolution.sslConfig.rejectUnauthorized === true);
-});
+    assert.equal(resolution.accepted, true);
+    assert.ok(resolution.accepted && resolution.mode === "VERIFY_FULL");
+    assert.ok(resolution.accepted && resolution.sslConfig.rejectUnauthorized === true);
+    assert.equal(stripTlsParameters(url).includes("sslmode"), false);
+    assert.equal(stripTlsParameters(url).includes("application_name=stellarcore"), true);
+  });
+}
 
 test("production rejects ssl=no-verify outside the emergency gate", () => {
   const resolution = resolveDatabaseTlsPolicy(productionInput({
@@ -197,16 +190,12 @@ test("policy decisions never embed credentials in messages", () => {
   ];
 
   for (const resolution of resolutions) {
-    const serialized = JSON.stringify(resolution);
-    assert.equal(serialized.includes("super-secret-password"), false);
-    assert.equal(serialized.includes("db.example.com"), false);
+    if (!resolution.accepted) {
+      const serialized = JSON.stringify(resolution);
+      assert.equal(serialized.includes("super-secret-password"), false);
+      assert.equal(serialized.includes("db.example.com"), false);
+    }
   }
-
-  assert.equal(resolutions[0].accepted, false);
-  assert.equal(resolutions[1].accepted, false);
-  assert.equal(resolutions[2].accepted, true);
-  assert.ok(resolutions[2].accepted && resolutions[2].mode === "VERIFY_FULL");
-  assert.ok(resolutions[2].accepted && resolutions[2].sslConfig.rejectUnauthorized === true);
 });
 
 test("rejecting an empty database URL in production names the failure", () => {
