@@ -65,6 +65,18 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Reviewed allowlist: opt-in, throwaway-database integration tests that must
+    // build DDL-adjacent statements (dynamic column names, VACUUM, EXPLAIN) which
+    // cannot be parameterized. Inputs are test-local constants, never request data.
+    files: [
+      "tests/integration/database/evidenceDataInvariants.database.integration.test.ts",
+      "tests/integration/rates/latestObservationsDifferential.database.integration.test.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
+    },
+  },
 ];
 
 export default eslintConfig;
