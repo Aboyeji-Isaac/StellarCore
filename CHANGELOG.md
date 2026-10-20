@@ -48,6 +48,9 @@ with your pull request.
 
 ### Fixed
 
+- The dashboard rate panel now labels a degraded last-known-good response as
+  stale evidence with its snapshot generation time, instead of presenting it as
+  a current read (#445).
 - Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
 
 ## [Prior work] — 2026-09-25

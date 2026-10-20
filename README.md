@@ -199,7 +199,7 @@ StellarCore exposes persisted anchors, corridors, rates, and reputation through 
 
 ### 5. The Dashboard
 
-The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
+The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. When a transient read failure produces a verified last-known-good response, the panel marks it as stale evidence with the snapshot generation time and age, and a failure without retained evidence shows the error state instead of old data. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
 
 ---
 
