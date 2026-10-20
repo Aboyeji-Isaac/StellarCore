@@ -1,10 +1,13 @@
+import { SectionRetry } from "@/components/dashboard/SectionRetry";
+
 export function SectionError({ message }: { message: string }) {
   return (
     <div
       role="alert"
       className="rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]"
     >
-      {message}
+      <p>{message}</p>
+      <SectionRetry />
     </div>
   );
 }

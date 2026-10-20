@@ -1,8 +1,8 @@
-import { getCorridorsApiResult } from "@/lib/api/corridors";
+import { getCorridorsApiResult, type CorridorsApiDependencies } from "@/lib/api/corridors";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
-export async function CorridorsSection() {
-  const result = await getCorridorsApiResult();
+export async function CorridorsSection({ dependencies }: { dependencies?: CorridorsApiDependencies } = {}) {
+  const result = await getCorridorsApiResult(dependencies);
 
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
