@@ -184,10 +184,12 @@ the completed-outcome ratio. Settlement and slippage p50/p95 metrics use
 completed outcomes in the trailing 30 days and deterministic nearest-rank
 percentiles; they are explanatory metrics, not hidden score inputs.
 
-The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
-calculation upserts the current row and advances `computedAt`; it does not append
-historical scores. The engine is run by the authenticated scheduled-refresh
-boundary and remains independent of the public, read-only reputation API.
+The schema has one `ReputationScore` per anchor (`anchorId` is unique). A
+calculation advances `computedAt` only when it is later than the stored
+evaluation; an older write is explicitly rejected. When timestamps tie, the
+existing row wins, so the first committed result remains current. Evaluations
+update this single row and do not append historical scores. The engine is run by
+the authenticated scheduled-refresh boundary and remains independent of the public, read-only reputation API.
 
 `TransferOutcome` is implemented data modeling, not a production evidence feed. StellarCore has no trusted production outcome-ingestion source today and does not infer outcomes from Horizon or a successful on-chain payment. SEP-6 and SEP-24 history is customer-scoped where authentication applies; SEP-31 lifecycle access is scoped to authorized participants and partner anchors. Until a legitimate, authorized source with provenance exists, sparse reputation is the intended result and established scores are not supported by sufficient evidence.
 
