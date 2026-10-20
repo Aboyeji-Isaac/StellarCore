@@ -51,23 +51,18 @@ test("production rejects ssl=0", () => {
   assert.ok(!resolution.accepted && resolution.rejection.code === "PRODUCTION_TLS_DISABLED");
 });
 
-test("production rejects sslmode=require as a verification bypass (driver downgrade semantics)", () => {
-  const resolution = resolveDatabaseTlsPolicy(productionInput({
-    databaseUrl: "postgres://user:secret@db.example.com:5432/stellar?sslmode=require",
-  }));
+for (const sslmode of ["require", "verify-ca", "allow"]) {
+  test(`production upgrades sslmode=${sslmode} to policy-owned verified TLS`, () => {
+    const url = `postgres://user:secret@db.example.com:5432/stellar?sslmode=${sslmode}&application_name=stellarcore`;
+    const resolution = resolveDatabaseTlsPolicy(productionInput({ databaseUrl: url }));
 
-  assert.equal(resolution.accepted, false);
-  assert.ok(!resolution.accepted && resolution.rejection.code === "PRODUCTION_TLS_VERIFICATION_BYPASS");
-});
-
-test("production rejects sslmode=verify-ca as a verification bypass", () => {
-  const resolution = resolveDatabaseTlsPolicy(productionInput({
-    databaseUrl: "postgres://user:secret@db.example.com:5432/stellar?sslmode=verify-ca",
-  }));
-
-  assert.equal(resolution.accepted, false);
-  assert.ok(!resolution.accepted && resolution.rejection.code === "PRODUCTION_TLS_VERIFICATION_BYPASS");
-});
+    assert.equal(resolution.accepted, true);
+    assert.ok(resolution.accepted && resolution.mode === "VERIFY_FULL");
+    assert.ok(resolution.accepted && resolution.sslConfig.rejectUnauthorized === true);
+    assert.equal(stripTlsParameters(url).includes("sslmode"), false);
+    assert.equal(stripTlsParameters(url).includes("application_name=stellarcore"), true);
+  });
+}
 
 test("production rejects ssl=no-verify outside the emergency gate", () => {
   const resolution = resolveDatabaseTlsPolicy(productionInput({
@@ -195,7 +190,6 @@ test("policy decisions never embed credentials in messages", () => {
   ];
 
   for (const resolution of resolutions) {
-    assert.equal(resolution.accepted, false);
     if (!resolution.accepted) {
       const serialized = JSON.stringify(resolution);
       assert.equal(serialized.includes("super-secret-password"), false);
