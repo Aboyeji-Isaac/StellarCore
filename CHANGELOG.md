@@ -48,6 +48,8 @@ with your pull request.
 
 ### Fixed
 
+- Public directory pagination now rejects `offset` values that overflow the
+  safe integer range instead of silently serving an empty page (#444).
 - Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
 
 ## [Prior work] — 2026-09-25
