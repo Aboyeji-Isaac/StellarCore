@@ -545,6 +545,23 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+The anchor and corridor directory endpoints accept optional `limit` (1–100)
+and `offset` (a non-negative integer) query parameters. Invalid pagination returns
+400 with `invalid_pagination` before reading evidence. Records are ordered by
+slug before paging, and only the selected page's fields are serialized. `count`
+is the number of records returned, including zero for an offset beyond the end;
+there is no total-count, next-page, or truncation flag. Advance `offset` by
+`limit` until a short or empty page is returned.
+
+For compatibility, omitting `limit` returns all records after the optional
+offset; it does not implicitly cap the response at 100. This pagination bounds
+field serialization for limited requests, but the repository still loads and
+sorts the directory. Other evidence endpoints have no generic row or byte cap;
+the rate-history days limit bounds the requested time window, not response size.
+Generated boundary regression fixtures run with
+`npm test -- tests/unit/api/responseBounds.test.ts` and require no database or
+network access.
+
 
 ### Public API error contract
 
@@ -566,7 +583,7 @@ and never serialized to clients.
 
 | HTTP | Codes |
 |---|---|
-| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug` |
+| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug`, `invalid_pagination` |
 | 404 | `anchor_not_found`, `corridor_not_found` |
 | 429 | `rate_limited` (reserved for throttling) |
 | 500 | `internal_error` |
