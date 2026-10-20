@@ -197,13 +197,16 @@ test("policy decisions never embed credentials in messages", () => {
   ];
 
   for (const resolution of resolutions) {
-    assert.equal(resolution.accepted, false);
-    if (!resolution.accepted) {
-      const serialized = JSON.stringify(resolution);
-      assert.equal(serialized.includes("super-secret-password"), false);
-      assert.equal(serialized.includes("db.example.com"), false);
-    }
+    const serialized = JSON.stringify(resolution);
+    assert.equal(serialized.includes("super-secret-password"), false);
+    assert.equal(serialized.includes("db.example.com"), false);
   }
+
+  assert.equal(resolutions[0].accepted, false);
+  assert.equal(resolutions[1].accepted, false);
+  assert.equal(resolutions[2].accepted, true);
+  assert.ok(resolutions[2].accepted && resolutions[2].mode === "VERIFY_FULL");
+  assert.ok(resolutions[2].accepted && resolutions[2].sslConfig.rejectUnauthorized === true);
 });
 
 test("rejecting an empty database URL in production names the failure", () => {
