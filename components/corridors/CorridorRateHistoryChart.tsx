@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { formatRateTick } from "@/lib/rates/formatting";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -141,9 +142,9 @@ export function CorridorRateHistoryChart({
       : null;
 
   const yTicks = [
-    { value: yMax, label: yMax.toFixed(4) },
-    { value: (yMin + yMax) / 2, label: ((yMin + yMax) / 2).toFixed(4) },
-    { value: yMin, label: yMin.toFixed(4) },
+    { value: yMax, label: formatRateTick(yMax) },
+    { value: (yMin + yMax) / 2, label: formatRateTick((yMin + yMax) / 2) },
+    { value: yMin, label: formatRateTick(yMin) },
   ];
 
   const xTicks = [

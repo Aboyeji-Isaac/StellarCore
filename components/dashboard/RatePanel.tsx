@@ -60,7 +60,7 @@ export async function RatePanel() {
           <dd
             className={medianRate === null
               ? "mt-1 text-lg text-[var(--white)]"
-              : "mt-1 text-2xl text-[var(--white)]"}
+              : "mt-1 text-2xl text-[var(--white)] break-words"}
             style={{ fontFamily: "var(--display)" }}
           >
             {medianRate === null ? "Median unavailable" : medianRate}
@@ -119,8 +119,8 @@ export async function RatePanel() {
                   className="border-b border-[var(--ghost)] align-top last:border-0"
                 >
                   <td className="px-3 py-2 text-[var(--white)]">{observation.anchor.name}</td>
-                  <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
-                  <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
+                  <td className="px-3 py-2 text-[var(--white)] break-all">{observation.rate}</td>
+                  <td className="px-3 py-2 text-[var(--muted)] break-all">{observation.fee}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">
                     {new Date(observation.capturedAt).toLocaleString()}
                   </td>
