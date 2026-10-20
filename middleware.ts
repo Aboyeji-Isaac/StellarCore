@@ -7,13 +7,35 @@ import {
   CSP_NONCE_HEADER,
   generateCspNonce,
 } from "@/lib/security/browserHeaders";
+import {
+  REQUEST_ID_HEADER,
+  resolveRequestId,
+} from "@/lib/security/requestId";
 
 export function middleware(request: NextRequest): NextResponse {
+  const incomingId = request.headers.get(REQUEST_ID_HEADER);
+  const requestId = resolveRequestId(incomingId);
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(REQUEST_ID_HEADER, requestId);
+
+  const pathname = request.nextUrl?.pathname ?? new URL(request.url).pathname;
+  const isApi = pathname.startsWith("/api");
+
+  if (isApi) {
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    response.headers.set(REQUEST_ID_HEADER, requestId);
+    return response;
+  }
+
   const isDevelopment = process.env.NODE_ENV === "development";
   const nonce = generateCspNonce();
   const browserHeaders = buildBrowserSecurityHeaders(nonce, isDevelopment);
 
-  const requestHeaders = new Headers(request.headers);
   requestHeaders.set(CSP_NONCE_HEADER, nonce);
   requestHeaders.set(CSP_HEADER, browserHeaders[CSP_HEADER]!);
 
@@ -23,6 +45,7 @@ export function middleware(request: NextRequest): NextResponse {
     },
   });
 
+  response.headers.set(REQUEST_ID_HEADER, requestId);
   for (const [key, value] of Object.entries(browserHeaders)) {
     response.headers.set(key, value);
   }
@@ -35,7 +58,7 @@ export const config = {
   matcher: [
     {
       source:
-        "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
+        "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

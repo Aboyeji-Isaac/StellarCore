@@ -1,3 +1,4 @@
+import { consolePublicApiErrorReporter, publicApiErrorResult } from "@/lib/api/errors";
 import { publicApiJsonResponse } from "@/lib/api/http";
 import { getRateLimiter } from "@/lib/api/rateLimiter";
 import { getAnchorReputationApiResult } from "@/lib/api/reputation";
@@ -12,10 +13,23 @@ export async function GET(
   const decision = await getRateLimiter().check(request, Date.now());
   if (!decision.allowed) return decision.response;
 
-  const { slug } = await context.params;
-  const result = await getAnchorReputationApiResult(slug);
-  return publicApiJsonResponse(
-    result,
-    staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
-  );
+  try {
+    const { slug } = await context.params;
+    const result = await getAnchorReputationApiResult(slug);
+    return publicApiJsonResponse(
+      result,
+      staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
+      request,
+    );
+  } catch (error) {
+    consolePublicApiErrorReporter(error, {
+      operation: "reputation.detail.route",
+      code: "internal_error",
+    });
+    return publicApiJsonResponse(
+      publicApiErrorResult("internal_error", "Unable to load reputation."),
+      {},
+      request,
+    );
+  }
 }
