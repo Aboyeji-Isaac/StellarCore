@@ -14,6 +14,8 @@
  *   leak memory after the window passes.
  */
 
+import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/security/requestId";
+
 export const PUBLIC_RATE_LIMIT = 100;
 export const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -59,11 +61,15 @@ export function createRateLimiter(
       const clientKey = clientIp(request);
       const count = requestCounts.get(clientKey) ?? 0;
       if (count >= limit) {
+        const requestId = resolveRequestId(request.headers.get(REQUEST_ID_HEADER));
         return Object.freeze({
           allowed: false,
           response: Response.json(RATE_LIMIT_ERROR_BODY, {
             status: 429,
-            headers: Object.freeze({ "Cache-Control": "no-store" }),
+            headers: Object.freeze({
+              "Cache-Control": "no-store",
+              [REQUEST_ID_HEADER]: requestId,
+            }),
           }),
         });
       }
