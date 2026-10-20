@@ -9,3 +9,14 @@ export function publicApiJsonResponse(
     headers: { "Cache-Control": "no-store", ...headers },
   });
 }
+
+export function readQueryParameter(
+  parameters: URLSearchParams,
+  name: string,
+): string | readonly string[] | null {
+  const values = parameters.getAll(name);
+  if (values.length === 0) return null;
+  if (values.length === 1) return values[0]!;
+  return Object.freeze(values);
+}
+
