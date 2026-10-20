@@ -1,3 +1,4 @@
+import * as React from "react";
 export function SectionError({ message }: { message: string }) {
   return (
     <div
