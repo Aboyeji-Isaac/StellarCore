@@ -2,6 +2,7 @@ import { getRatesApiResult } from "@/lib/api/rates";
 import type { RateFreshnessState } from "@/types/rates";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
+import { EvidenceTimestamp } from "@/components/ui/EvidenceTimestamp";
 
 const FEATURED_CORRIDOR_SLUG = "usdc-us-brl-br";
 
@@ -48,7 +49,7 @@ export async function RatePanel() {
             {corridor.destinationCountry})
           </h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
-            Evaluated {new Date(evaluatedAt).toLocaleString()}
+            Evaluated <EvidenceTimestamp value={evaluatedAt} />
           </p>
         </div>
         <Badge tone={state === "healthy" ? "positive" : "warning"} label={state.replace(/_/g, " ")} />
@@ -122,7 +123,7 @@ export async function RatePanel() {
                   <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">
-                    {new Date(observation.capturedAt).toLocaleString()}
+                    <EvidenceTimestamp value={observation.capturedAt} />
                   </td>
                   <td className="px-3 py-2">
                     <Badge tone={freshnessTone(observation.freshness.state)} label={observation.freshness.state} />
