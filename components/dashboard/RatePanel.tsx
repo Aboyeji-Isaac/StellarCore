@@ -1,4 +1,4 @@
-import { getRatesApiResult } from "@/lib/api/rates";
+import { getRatesApiResult, type RatesApiDependencies } from "@/lib/api/rates";
 import type { RateFreshnessState } from "@/types/rates";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
@@ -17,8 +17,12 @@ function freshnessTone(state: RateFreshnessState) {
   }
 }
 
-export async function RatePanel() {
-  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG);
+export async function RatePanel({
+  dependencies = {},
+}: {
+  dependencies?: RatesApiDependencies;
+} = {}) {
+  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG, dependencies);
 
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
