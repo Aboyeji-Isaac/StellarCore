@@ -358,17 +358,9 @@ export function resolveDatabaseTlsPolicy(
 function requireModeResolution(
   input: TlsPolicyEnvironmentInput,
 ): ProductionTlsResolution {
-  // sslmode=require/verify-ca: the vendored driver downgrades these to
-  // unverified transport, so production rejects them in favor of the
-  // policy-owned VERIFY_FULL object. Non-production honors the request.
-  if (input.isProductionLike) {
-    return reject(
-      "PRODUCTION_TLS_VERIFICATION_BYPASS",
-      "Production PostgreSQL configuration uses sslmode=require or verify-ca, which the driver resolves without certificate verification. StellarCore requires authenticated TLS; remove the sslmode parameter so the application supplies a verified-TLS configuration (a provider CA may be set through STELLARCORE_DB_CA).",
-      { mode: "REQUIRE", source: "URL_PARAMETER", parameter: "sslmode" },
-    );
-  }
-
+  // The caller strips TLS URL parameters before constructing the driver
+  // connection. Upgrade require/verify-ca to authenticated TLS instead of
+  // letting the driver's weaker URL semantics override certificate checks.
   return {
     accepted: true,
     mode: "VERIFY_FULL",

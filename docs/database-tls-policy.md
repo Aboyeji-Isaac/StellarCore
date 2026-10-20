@@ -34,7 +34,7 @@ on transport security.
 |---|---|---|
 | Production | None (plain URL) | ✅ Policy supplies verified TLS (`rejectUnauthorized: true`) |
 | Production | `sslmode=verify-full` | ✅ Verified TLS honored |
-| Production | `sslmode=require` or `verify-ca` | ❌ Rejected — driver downgrade, use policy-owned verified TLS |
+| Production | `sslmode=require` or `verify-ca` | ✅ Upgraded to policy-owned verified TLS; URL TLS parameters are stripped before driver construction |
 | Production | `ssl=no-verify` / `sslmode=no-verify` / `prefer` | ❌ Rejected — verification bypass |
 | Production | `sslmode=disable` / `ssl=0` | ❌ Rejected — plaintext, never permitted (even with the emergency gate) |
 | Production | `PGSSLMODE` variants | Same as the equivalent URL posture |
