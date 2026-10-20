@@ -1,4 +1,4 @@
-import { getAnchorsApiResult } from "@/lib/api/anchors";
+import { getAnchorsApiResult, type AnchorsApiDependencies } from "@/lib/api/anchors";
 import { advertisedCapabilities } from "@/lib/stellar/advertisedCapabilities";
 import { SEPS } from "@/constants/seps";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
@@ -18,8 +18,8 @@ function statusPresentation(status: PublicAnchorStatus) {
   }
 }
 
-export async function AnchorsSection() {
-  const result = await getAnchorsApiResult();
+export async function AnchorsSection({ dependencies }: { dependencies?: AnchorsApiDependencies } = {}) {
+  const result = await getAnchorsApiResult(dependencies);
 
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
