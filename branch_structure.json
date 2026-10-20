@@ -1,0 +1,33 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "chore/deployment-readiness",
+    "chore/offline-configuration-consistency-audit",
+    "chore/production-migration-workflow",
+    "main",
+    "origin",
+    "solver/issue-410-98-a0",
+    "solver/issue-418-96-a0",
+    "solver/issue-446-100-a2"
+  ],
+  "parent": {
+    "chore/deployment-readiness": "main",
+    "chore/offline-configuration-consistency-audit": "main",
+    "chore/production-migration-workflow": "main",
+    "main": null,
+    "origin": "main",
+    "solver/issue-410-98-a0": "main",
+    "solver/issue-418-96-a0": "main",
+    "solver/issue-446-100-a2": "main"
+  },
+  "order": [
+    "main",
+    "chore/deployment-readiness",
+    "chore/offline-configuration-consistency-audit",
+    "chore/production-migration-workflow",
+    "origin",
+    "solver/issue-410-98-a0",
+    "solver/issue-418-96-a0",
+    "solver/issue-446-100-a2"
+  ]
+}
