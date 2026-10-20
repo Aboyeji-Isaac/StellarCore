@@ -28,8 +28,13 @@ test("route rejects missing and malformed corridor parameters safely", async () 
   }
 });
 
-test("route is request-dynamic and explicitly prevents freshness caching", async () => {
+test("route is request-dynamic, exports GET only, and explicitly prevents freshness caching", async () => {
   assert.equal(dynamic, "force-dynamic");
+  assert.equal(typeof GET, "function");
+  const route = await import("@/app/api/rates/route");
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+    assert.equal(method in route, false);
+  }
   const response = await GET(new Request("http://localhost/api/rates?corridor=bad--slug"));
   assert.equal(response.headers.get("cache-control"), "no-store");
 });

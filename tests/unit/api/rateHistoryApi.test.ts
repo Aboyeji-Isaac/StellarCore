@@ -44,8 +44,13 @@ test("route validates days parameter correctly", async () => {
   }
 });
 
-test("route is request-dynamic and explicitly prevents caching", async () => {
+test("route is request-dynamic, exports GET only, and explicitly prevents caching", async () => {
   assert.equal(dynamic, "force-dynamic");
+  assert.equal(typeof GET, "function");
+  const route = await import("@/app/api/rates/history/route");
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+    assert.equal(method in route, false);
+  }
   const response = await GET(
     new Request("http://localhost/api/rates/history?corridor=bad--slug"),
   );
