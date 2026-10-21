@@ -9,7 +9,33 @@ export async function GET(request: Request): Promise<Response> {
   const decision = await getRateLimiter().check(request, Date.now());
   if (!decision.allowed) return decision.response;
 
-  const result = await getReputationApiResult();
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
+  let result;
+  try {
+    result = await getReputationApiResult({ signal: request.signal });
+  } catch (error) {
+    if (request.signal?.aborted) {
+      return new Response(null, {
+        status: 499,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    throw error;
+  }
+
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   return publicApiJsonResponse(
     result,
     staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),

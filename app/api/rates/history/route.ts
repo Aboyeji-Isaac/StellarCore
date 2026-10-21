@@ -9,13 +9,39 @@ export async function GET(request: Request): Promise<Response> {
   const decision = await getRateLimiter().check(request, Date.now());
   if (!decision.allowed) return decision.response;
 
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   const evaluatedAt = new Date();
   const url = new URL(request.url);
   const corridor = url.searchParams.get("corridor");
   const days = url.searchParams.get("days");
-  const result = await getRateHistoryApiResult(corridor, days, {
-    now: () => evaluatedAt,
-  });
+  let result;
+  try {
+    result = await getRateHistoryApiResult(corridor, days, {
+      now: () => evaluatedAt,
+      signal: request.signal,
+    });
+  } catch (error) {
+    if (request.signal?.aborted) {
+      return new Response(null, {
+        status: 499,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    throw error;
+  }
+
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
 
   return publicApiJsonResponse(
     result,
