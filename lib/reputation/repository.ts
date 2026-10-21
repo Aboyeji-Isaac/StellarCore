@@ -14,11 +14,14 @@ import type {
 type LatestRateRow = Readonly<{ corridorSlug: string; capturedAt: Date }>;
 
 /**
- * The newest snapshot time per corridor for one anchor, as a bounded set of
- * index probes instead of a walk over the anchor's history.
+ * Raw SQL boundary for reputation evidence reads.
  *
- * Exported so differential tests and the benchmark run the exact SQL that
- * production uses.
+ * Safety notes:
+ * - The anchor Uuid is passed as a Prisma parameter (${anchor.id}), not interpolated
+ *   into the SQL text.
+ * - All table and column names are constant literals in this file. If a future performance
+ *   change needs a dynamic identifier, use `resolveRawIdentifier` from
+ *   `@/lib/db/rawSqlGuardrails`, which enforces the approved allowlist.
  */
 export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
   return Prisma.sql`
@@ -37,7 +40,6 @@ export function latestCorridorRatesQuery(anchorId: string): Prisma.Sql {
     ORDER BY corridor.slug
   `;
 }
-
 export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze({
   async readEvidence(anchorSlug, outcomeWindowStart) {
     const { db, ensureDatabaseEnvironment } = await import("@/lib/dbClient");
@@ -47,7 +49,7 @@ export const PRISMA_REPUTATION_REPOSITORY: ReputationRepository = Object.freeze(
       readEvidenceInSnapshot(tx, identity, anchorSlug, outcomeWindowStart),
     );
 
-    if (!snapshotResult.ok) return toEvidenceReadFailure(snapshotResult.failure);
+if (!snapshotResult.ok) return toEvidenceReadFailure(snapshotResult.failure);
     return snapshotResult.value;
   },
 
