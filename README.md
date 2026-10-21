@@ -199,7 +199,7 @@ StellarCore exposes persisted anchors, corridors, rates, and reputation through 
 
 ### 5. The Dashboard
 
-The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse.
+The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
 
 ---
 
@@ -579,6 +579,12 @@ last-known-good payload.
 
 ### `GET /api/anchors`
 
+The anchor and corridor list routes accept optional `limit` and `offset` query
+parameters. Omission returns the full collection from offset zero. An explicitly
+empty or whitespace-only value is invalid; `limit` must be an integer from 1 to
+100 and `offset` a non-negative integer. Invalid values return HTTP 400
+`invalid_pagination` before a repository read.
+
 Returns the public directory of anchors currently persisted by StellarCore,
 ordered by slug ascending. The static anchor registry is synchronization input
 only; a registry entry that has never been synchronized does not appear here.
@@ -649,6 +655,12 @@ no database details. Both anchor routes are dynamic and send
 live SEP calls, authentication, or writes.
 
 ### `GET /api/rates?corridor=<slug>`
+
+The `corridor` parameter is required. Omitted and explicitly empty values return
+HTTP 400 `missing_corridor`; whitespace-only or malformed values return HTTP 400
+`invalid_corridor`. For `/api/rates/history`, optional `days` defaults to 30 when
+omitted or explicitly empty. Whitespace-only values are invalid; valid values
+are integers from 1 to 365.
 
 Returns the latest persisted rate observation per independent anchor for the
 requested stable corridor slug. The endpoint reads existing snapshots only and
