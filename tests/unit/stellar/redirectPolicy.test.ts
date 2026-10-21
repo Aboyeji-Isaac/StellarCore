@@ -83,6 +83,40 @@ test("egress transport surfaces upstream redirects instead of following them", a
   assert.deepEqual(origin.resolved, ["anchor.example"]);
 });
 
+test("approved evidence origins are fetched exactly once", async () => {
+  const toml = [
+    'NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"',
+    "",
+    "[DOCUMENTATION]",
+    'ORG_NAME = "Example Anchor"',
+    "",
+  ].join("\n");
+  const origin = createSyntheticOrigin({
+    "/.well-known/stellar.toml": () =>
+      new Response(toml, {
+        status: 200,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      }),
+    "/info": () =>
+      new Response(JSON.stringify({ assets: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+  });
+
+  const sep1 = await fetchSep1Toml("anchor.example", {
+    fetcher: origin.fetcher,
+  });
+  const sep38 = await getSep38Info(ORIGIN, { fetcher: origin.fetcher });
+
+  // Control case: the same harness that rejects redirects still serves an
+  // approved origin, so the rejection tests are not passing by accident.
+  assert.equal(sep1.data.organizationName, "Example Anchor");
+  assert.deepEqual(sep38.assets, []);
+  assert.deepEqual(origin.requested, [TOML_URL, INFO_URL]);
+  assert.deepEqual(origin.resolved, ["anchor.example", "anchor.example"]);
+});
+
 test("redirect destinations that violate the protocol policy are rejected before DNS or socket work", async () => {
   const origin = createSyntheticOrigin();
 
