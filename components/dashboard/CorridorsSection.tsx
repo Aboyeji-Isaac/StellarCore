@@ -1,9 +1,15 @@
+import * as React from "react";
 import { getCorridorsApiResult } from "@/lib/api/corridors";
+import type { CorridorsApiResult } from "@/types/api/corridors";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
 export async function CorridorsSection() {
   const result = await getCorridorsApiResult();
+  return <CorridorsSectionView result={result} />;
+}
 
+/** Pure view for the corridors evidence section, rendered from a resolved API result. */
+export function CorridorsSectionView({ result }: { result: CorridorsApiResult }) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
