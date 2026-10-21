@@ -12,8 +12,10 @@ export type ScheduledReputationFailure = Readonly<{
 
 export type ScheduledRefreshResult = Readonly<{
   ok: boolean;
+  runId: string;
   startedAt: string;
   completedAt: string;
+  attempt: number;
   rates: Readonly<{
     attempted: number;
     succeeded: number;
