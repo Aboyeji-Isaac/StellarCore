@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// This is your Prisma schema file, learn more about it here: https://pris.ly/d/prisma-schema
 
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
@@ -52,7 +51,6 @@ enum ScheduledSourceSuppressionState {
 
   @@map("scheduled_source_suppression_state")
 }
-
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -70,7 +68,6 @@ model Anchor {
   rateSnapshots    RateSnapshot[]
   transferOutcomes TransferOutcome[]
   reputationScore  ReputationScore?
-
   @@map("anchors")
 }
 
@@ -85,7 +82,6 @@ model Corridor {
   anchors          AnchorCorridor[]
   rateSnapshots    RateSnapshot[]
   transferOutcomes TransferOutcome[]
-
   @@map("corridors")
 }
 
@@ -112,6 +108,8 @@ model RateSnapshot {
   destinationAmount Decimal  @map("destination_amount") @db.Decimal(38, 18)
   fee               Decimal  @default(0) @db.Decimal(38, 18)
   capturedAt        DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  configurationFingerprint String? @map("configuration_fingerprint")
+  provenanceUnavailable    Boolean @default(false) @map("provenance_unavailable")
 
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -156,23 +154,21 @@ model ReputationScore {
   anchorId       String               @unique @map("anchor_id") @db.Uuid
   compositeScore Float?               @map("composite_score")
   scoreBand      ReputationScoreBand? @map("score_band")
-  fillRate7d     Float?               @map("fill_rate_7d")
-  fillRate30d    Float?               @map("fill_rate_30d")
-  fillRate90d    Float?               @map("fill_rate_90d")
-  settleP50Ms    Int?                 @map("settle_p50_ms")
-  settleP95Ms    Int?                 @map("settle_p95_ms")
-  slippageP50    Float?               @map("slippage_p50")
-  slippageP95    Float?               @map("slippage_p95")
-  sampleSize     Int                  @default(0) @map("sample_size")
-  state          ReputationState      @default(INSUFFICIENT_DATA)
-  computedAt     DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
+  fillRate7d      Float?               @map("fill_rate_7d")
+  fillRate30d     Float?               @map("fill_rate_30d")
+  fillRate90d     Float?               @map("fill_rate_90d")
+  settleP50Ms     Int?                 @map("settle_p50_ms")
+  settleP95Ms     Int?                 @map("settle_p95_ms")
+  slippageP50     Float?               @map("slippage_p50")
+  slippageP95     Float?               @map("slippage_p95")
+  sampleSize      Int                  @default(0) @map("sample_size")
+  state           ReputationState      @default(INSUFFICIENT_DATA)
+  computedAt      DateTime             @default(now()) @map("computed_at") @db.Timestamptz(6)
 
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
 }
-
-
 /// Durable reviewed state for deterministic scheduled-source failures (#234).
 /// Slug identity is stored directly so an invalid/missing registry reference can
 /// still be suppressed and audited without requiring a resolvable foreign key.
