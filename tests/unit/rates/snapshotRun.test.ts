@@ -16,6 +16,7 @@ test("failed configuration audit short-circuits before live candidate preparatio
     assertConfiguration: () => {
       throw new Error("safe configuration failure");
     },
+    listSuppressed: async () => [],
     buildCandidates: async () => {
       buildCalls += 1;
       return [];
@@ -36,6 +37,10 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   const expected = summary();
   const result = await snapshotReviewedLiveRates({
     assertConfiguration: () => events.push("audit"),
+    listSuppressed: async () => {
+      events.push("suppressions");
+      return [];
+    },
     buildCandidates: async () => {
       events.push("prepare");
       return [];
@@ -46,7 +51,7 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
     },
   });
 
-  assert.deepEqual(events, ["audit", "prepare", "execute:0"]);
+  assert.deepEqual(events, ["audit", "suppressions", "prepare", "execute:0"]);
   assert.equal(result, expected);
 });
 

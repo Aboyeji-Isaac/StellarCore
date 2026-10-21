@@ -1,4 +1,4 @@
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     const { auditCurrentStellarCoreConfiguration } = await import(
       "@/lib/config/currentStellarCoreConfiguration"
@@ -25,4 +25,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (require.main === module) {
+  void main();
+}
