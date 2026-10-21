@@ -45,6 +45,11 @@ export async function persistRateSnapshot(
       return failure("ASSOCIATION_NOT_FOUND");
     }
 
+    if (observation.captureRunId && repository.findRunById) {
+      const run = await repository.findRunById(observation.captureRunId);
+      if (!run) return failure("RUN_NOT_FOUND");
+    }
+
     const row = await repository.createSnapshot({
       anchorId: anchor.id,
       corridorId: corridor.id,
@@ -53,6 +58,7 @@ export async function persistRateSnapshot(
       destinationAmount: observation.destinationAmount,
       fee: observation.fee,
       capturedAt: observation.capturedAt,
+      ...(observation.captureRunId ? { captureRunId: observation.captureRunId } : {}),
     });
     const snapshot: PersistedRateSnapshot = Object.freeze({
       id: row.id,
@@ -63,6 +69,7 @@ export async function persistRateSnapshot(
       destinationAmount: row.destinationAmount.toString(),
       fee: row.fee.toString(),
       capturedAt: new Date(row.capturedAt.getTime()),
+      ...(row.captureRunId ? { captureRunId: row.captureRunId } : (observation.captureRunId ? { captureRunId: observation.captureRunId } : {})),
     });
     return Object.freeze({ ok: true, snapshot });
   } catch (error) {
@@ -100,8 +107,9 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
   async createSnapshot(input) {
     const environment = await evidenceDb();
     if (!environment.ok) throw new EnvironmentIsolationRejection();
+    const { captureRunId: _captureRunId, ...createData } = input;
     return environment.db.rateSnapshot.create({
-      data: input,
+      data: createData,
       select: {
         id: true,
         rate: true,
