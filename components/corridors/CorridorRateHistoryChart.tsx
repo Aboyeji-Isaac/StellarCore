@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { resolveApiUrl } from "@/lib/api/resolveApiUrl";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -44,7 +45,7 @@ export function CorridorRateHistoryChart({
 
     try {
       const response = await fetch(
-        `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
+        resolveApiUrl(`/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`),
       );
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);

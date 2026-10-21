@@ -11,6 +11,10 @@ with your pull request.
 
 ### Added
 
+- Resolved base URL resolution for dashboard and client requests, deduplicating path prefixes and safely validating local, preview, and production deployment origins (#439).
+- Public evidence route hardening against malformed percent-encoded path segments, returning safe client errors without exposing raw parser exceptions or executing unintended lookups (#440).
+- Dashboard navigation state coordinator and regression coverage verifying obsolete requests never update inactive views, return navigation follows cache policy, and subscriptions do not leak (#441).
+
 - Evidence-based anchor availability transitions: discovery failures are
   classified (transient / deterministic / unknown) and a destructive status
   change requires consecutive-failure or sustained-window evidence, so one

@@ -4,12 +4,8 @@ import {
   type AnchorDirectoryRecord,
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
-import {
-  NO_PAGINATION_QUERY,
-  paginate,
-  parsePagination,
-  type PaginationQuery,
-} from "@/lib/api/pagination";
+import { NO_PAGINATION_QUERY, paginate, parsePagination, type PaginationQuery } from "@/lib/api/pagination";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import { transferCapable } from "@/lib/stellar/anchors";
 import {
   consolePublicApiErrorReporter,
@@ -67,7 +63,9 @@ export async function getAnchorApiResult(
   slug: string,
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorApiResult> {
-  if (!isValidAnchorSlug(slug)) {
+  const decoded = safeDecodePathSegment(slug);
+  const normalizedSlug = decoded.ok ? decoded.value : slug;
+  if (!isValidAnchorSlug(normalizedSlug)) {
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
@@ -77,7 +75,7 @@ export async function getAnchorApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
-    const anchor = await repository.findBySlug(slug);
+    const anchor = await repository.findBySlug(normalizedSlug);
     if (!anchor) {
       return publicApiErrorResult("anchor_not_found", "Anchor not found.");
     }

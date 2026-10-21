@@ -1,5 +1,7 @@
 import { getAnchorApiResult } from "@/lib/api/anchors";
 import { publicApiJsonResponse } from "@/lib/api/http";
+import { publicApiErrorResult } from "@/lib/api/errors";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import { getRateLimiter } from "@/lib/api/rateLimiter";
 
 export const dynamic = "force-dynamic";
@@ -12,5 +14,12 @@ export async function GET(
   if (!decision.allowed) return decision.response;
 
   const { slug } = await context.params;
-  return publicApiJsonResponse(await getAnchorApiResult(slug));
+  const decoded = safeDecodePathSegment(slug);
+  if (!decoded.ok) {
+    return publicApiJsonResponse(
+      publicApiErrorResult("invalid_anchor_slug", "A valid anchor slug is required."),
+    );
+  }
+
+  return publicApiJsonResponse(await getAnchorApiResult(decoded.value));
 }
