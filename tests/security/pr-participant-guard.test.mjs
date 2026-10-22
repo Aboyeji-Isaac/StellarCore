@@ -132,6 +132,29 @@ test("review requested and removed events inspect both requester and target", ()
   assert.ok(result.findings.some((finding) => finding.includes("removed-unexpected-reviewer")));
 });
 
+test("reviewer-change webhook payload is checked immediately", () => {
+  const requested = evaluateParticipantData(fixture({
+    eventPayload: {
+      action: "review_requested",
+      sender: { login: "unexpected-requester" },
+      requested_reviewer: { login: "unexpected-reviewer" },
+    },
+  }), config, Date.parse("2026-10-22T00:00:00.000Z"));
+  assert.equal(requested.status, "failure");
+  assert.ok(requested.findings.some((finding) => finding.includes("unexpected-requester")));
+  assert.ok(requested.findings.some((finding) => finding.includes("unexpected-reviewer")));
+
+  const removed = evaluateParticipantData(fixture({
+    eventPayload: {
+      action: "review_request_removed",
+      sender: { login: "assigned-contributor" },
+      requested_team: { slug: "unapproved-team" },
+    },
+  }), config, Date.parse("2026-10-22T00:00:00.000Z"));
+  assert.equal(removed.status, "failure");
+  assert.ok(removed.findings.some((finding) => finding.includes("unapproved-team")));
+});
+
 test("current requested reviewer is included even if no timeline event is present", () => {
   const result = evaluateParticipantData(fixture({
     pull: {
