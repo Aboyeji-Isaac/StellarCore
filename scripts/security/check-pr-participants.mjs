@@ -52,7 +52,9 @@ function collectParticipants({ pull, comments, reviews, reviewComments, commits,
 
   for (const item of commits) {
     addActor(participants, item.author?.login, `commit author (${item.sha?.slice(0, 7) ?? "unknown commit"})`);
+    if (!item.author?.login) addEmail(participants, item.commit?.author?.email, `unmapped commit author email (${item.sha?.slice(0, 7) ?? "unknown commit"})`);
     addActor(participants, item.committer?.login, `commit committer (${item.sha?.slice(0, 7) ?? "unknown commit"})`);
+    if (!item.committer?.login) addEmail(participants, item.commit?.committer?.email, `unmapped commit committer email (${item.sha?.slice(0, 7) ?? "unknown commit"})`);
     for (const email of parseCoauthorEmails(item.commit?.message)) {
       addEmail(participants, email, `Co-authored-by trailer (${item.sha?.slice(0, 7) ?? "unknown commit"})`);
     }
@@ -118,16 +120,13 @@ export function evaluateParticipantData(data, config, now = Date.now()) {
   const maintainers = new Set((config.maintainers ?? []).map(normalizeLogin));
   const approvedBots = new Set((config.approvedBots ?? []).map(normalizeLogin));
   const approvedCoauthorEmails = new Set((config.approvedCoauthorEmails ?? []).map((email) => String(email).trim().toLowerCase()));
+  const approvedCommitEmails = new Set((config.approvedCommitEmails ?? []).map((email) => String(email).trim().toLowerCase()));
   const allowedLogins = new Set([...maintainers, ...assignedLogins, ...approvedBots]);
   const participants = collectParticipants(data);
 
-  if (data.pull.user?.login && !allowedLogins.has(normalizeLogin(data.pull.user.login))) {
-    findings.push(`PR author @${data.pull.user.login} is not a configured maintainer or assignee of a linked issue.`);
-  }
-
   for (const participant of participants) {
     const allowed = participant.kind === "email"
-      ? approvedCoauthorEmails.has(participant.identity)
+      ? (participant.source.startsWith("Co-authored-by") ? approvedCoauthorEmails : approvedCommitEmails).has(participant.identity)
       : participant.kind === "team"
         ? (config.approvedReviewerTeams ?? []).map((team) => String(team).toLowerCase()).includes(participant.identity.toLowerCase())
         : allowedLogins.has(normalizeLogin(participant.identity));
