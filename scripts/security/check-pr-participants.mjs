@@ -42,9 +42,12 @@ function addEmail(participants, email, source) {
   participants.push({ identity: email.trim().toLowerCase(), kind: "email", source });
 }
 
-function collectParticipants({ pull, comments, reviews, reviewComments, commits, issueEvents }) {
+function collectParticipants({ pull, comments, reviews, reviewComments, commits, issueEvents, eventPayload }) {
   const participants = [];
   addActor(participants, pull.user?.login, "pull request author");
+  if (eventPayload?.action === "deleted" && eventPayload.comment?.user?.login) {
+    addActor(participants, eventPayload.comment.user.login, "deleted comment event payload");
+  }
 
   for (const item of comments) addActor(participants, item.user?.login, "conversation comment");
   for (const item of reviews) addActor(participants, item.user?.login, "submitted review");
@@ -190,6 +193,8 @@ async function main() {
 
   const configPath = new URL("../../.github/pr-participant-guard.json", import.meta.url);
   const config = JSON.parse(await readFile(configPath, "utf8"));
+  const eventPayloadPath = process.env.GITHUB_EVENT_PATH;
+  const eventPayload = eventPayloadPath ? JSON.parse(await readFile(eventPayloadPath, "utf8")) : {};
   const api = `${API_ROOT}/repos/${repository}`;
   const { body: pull } = await readJson(`${api}/pulls/${pullNumber}`, token);
   if (!pull || !pull.user) {
@@ -211,7 +216,7 @@ async function main() {
     return { number, assignees: body.assignees };
   }));
 
-  const result = evaluateParticipantData({ pull, comments, reviews, reviewComments, commits, issueEvents, linkedIssues }, config);
+  const result = evaluateParticipantData({ pull, comments, reviews, reviewComments, commits, issueEvents, linkedIssues, eventPayload }, config);
   console.log(`PR Participant Guard: ${result.status.toUpperCase()}`);
   for (const finding of result.findings) console.log(`- ${finding}`);
   if (result.status !== "pass") process.exitCode = 1;
