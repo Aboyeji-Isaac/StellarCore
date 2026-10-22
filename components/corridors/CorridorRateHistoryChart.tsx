@@ -5,6 +5,13 @@ import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
 } from "@/types/api/rateHistory";
+import { SectionError } from "@/components/dashboard/SectionStates";
+
+type ChartFailure = Readonly<{
+  code: string;
+  message: string;
+  requestId?: string;
+}>;
 
 type Props = Readonly<{
   corridorSlug: string;
@@ -32,7 +39,7 @@ export function CorridorRateHistoryChart({
   const [history, setHistory] = useState<PublicRateHistoryResponse>(initialHistory);
   const [selectedDays, setSelectedDays] = useState<number>(initialHistory.windowDays);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChartFailure | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   async function handleTimeframeChange(days: number) {
@@ -47,17 +54,28 @@ export function CorridorRateHistoryChart({
         `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
       );
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error?.message ?? "Unable to load rate history.",
-        );
+        const errorData = await response.json().catch(() => null) as {
+          error?: { code?: unknown; message?: unknown; requestId?: unknown };
+        } | null;
+        setError({
+          code: typeof errorData?.error?.code === "string"
+            ? errorData.error.code
+            : "unknown_error",
+          message: typeof errorData?.error?.message === "string"
+            ? errorData.error.message
+            : "",
+          requestId: typeof errorData?.error?.requestId === "string"
+            ? errorData.error.requestId
+            : undefined,
+        });
+        return;
       }
       const data: PublicRateHistoryResponse = await response.json();
       setHistory(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load rate history.",
-      );
+    } catch {
+      // Network failures never surface their raw text; SectionError falls back
+      // to area-aware guidance instead of rendering an exception message.
+      setError({ code: "unknown_error", message: "" });
     } finally {
       setLoading(false);
     }
@@ -221,11 +239,13 @@ export function CorridorRateHistoryChart({
         </div>
 
         {error ? (
-          <div
-            role="alert"
-            className="my-6 rounded border border-[rgba(238,143,129,0.35)] p-4 text-sm text-[#ee8f81]"
-          >
-            {error}
+          <div className="my-6">
+            <SectionError
+              area="rate_history"
+              code={error.code}
+              message={error.message}
+              requestId={error.requestId}
+            />
           </div>
         ) : validPoints.length === 0 ? (
           <div className="py-12 text-center text-sm text-[var(--muted)]">

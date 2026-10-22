@@ -1,5 +1,6 @@
 import * as React from "react";
 import { getRatesApiResult } from "@/lib/api/rates";
+import { createRequestId } from "@/lib/api/requestId";
 import type { RateFreshnessState } from "@/types/rates";
 import type { RatesApiResult } from "@/types/api/rates";
 import { Badge } from "@/components/dashboard/Badge";
@@ -25,14 +26,23 @@ function freshnessTone(state: RateFreshnessState) {
 }
 
 export async function RatePanel() {
-  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG);
+  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG, {
+    requestId: createRequestId(),
+  });
   return <RatePanelView result={result} />;
 }
 
 /** Keeps the rendered freshness tied to persisted evidence in the response. */
 export function RatePanelView({ result }: { result: RatesApiResult }) {
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    return (
+      <SectionError
+        area="rates"
+        code={result.body.error.code}
+        message={result.body.error.message}
+        requestId={result.body.error.requestId}
+      />
+    );
   }
 
   const {

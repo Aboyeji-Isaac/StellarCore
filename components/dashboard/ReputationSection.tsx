@@ -1,4 +1,5 @@
 import { getReputationApiResult } from "@/lib/api/reputation";
+import { createRequestId } from "@/lib/api/requestId";
 import type { PublicReputationScoreBand, PublicReputationState } from "@/types/api/reputation";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
@@ -38,10 +39,17 @@ function formatMs(value: number | null): string {
 }
 
 export async function ReputationSection() {
-  const result = await getReputationApiResult();
+  const result = await getReputationApiResult({ requestId: createRequestId() });
 
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    return (
+      <SectionError
+        area="reputation"
+        code={result.body.error.code}
+        message={result.body.error.message}
+        requestId={result.body.error.requestId}
+      />
+    );
   }
 
   const { reputation, count } = result.body;
