@@ -50,6 +50,17 @@ function collectParticipants({ pull, comments, reviews, reviewComments, commits,
   if (eventPayload?.action === "deleted" && eventPayload.comment?.user?.login) {
     addActor(participants, eventPayload.comment.user.login, "deleted comment event payload");
   }
+  if (["review_requested", "review_request_removed"].includes(eventPayload?.action)) {
+    addActor(participants, eventPayload.sender?.login, `reviewer change requester (${eventPayload.action})`);
+    addActor(participants, eventPayload.requested_reviewer?.login, `reviewer target (${eventPayload.action})`);
+    if (eventPayload.requested_team?.slug) {
+      participants.push({
+        identity: eventPayload.requested_team.slug,
+        kind: "team",
+        source: `reviewer team target (${eventPayload.action})`,
+      });
+    }
+  }
 
   for (const item of comments) addActor(participants, item.user?.login, "conversation comment");
   for (const item of reviews) addActor(participants, item.user?.login, "submitted review");
@@ -210,7 +221,7 @@ async function main() {
     readAllPages(`${api}/pulls/${pullNumber}/reviews?per_page=${PAGE_SIZE}`, token),
     readAllPages(`${api}/pulls/${pullNumber}/comments?per_page=${PAGE_SIZE}`, token),
     readAllPages(`${api}/pulls/${pullNumber}/commits?per_page=${PAGE_SIZE}`, token),
-    readAllPages(`${api}/issues/${pullNumber}/events?per_page=${PAGE_SIZE}`, token),
+    readAllPages(`${api}/issues/${pullNumber}/timeline?per_page=${PAGE_SIZE}`, token),
   ]);
   const linkedIssues = await Promise.all(issueNumbers.map(async (number) => {
     const { body } = await readJson(`${api}/issues/${number}`, token);
