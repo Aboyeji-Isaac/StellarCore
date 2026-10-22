@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const API_ROOT = "https://api.github.com";
 const API_VERSION = "2022-11-28";
@@ -223,7 +225,7 @@ async function main() {
   else console.log(`Reviewed ${result.participantCount} participation records across linked issue(s): ${result.linkedIssues.map((n) => `#${n}`).join(", ")}.`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
     console.error(`PR Participant Guard: INCONCLUSIVE — ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
