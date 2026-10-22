@@ -19,7 +19,7 @@ function isRecord(value) {
 
 export function parseClosingIssueNumbers(body = "") {
   const numbers = new Set();
-  const pattern = /\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s+(?:https?:\/\/github\.com\/[^/]+\/[^/]+\/issues\/)?#(\d+)\b/gi;
+  const pattern = /\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s+(?:https?:\/\/github\.com\/[^/]+\/[^/]+\/issues\/)?#?(\d+)\b/gi;
   for (const match of String(body).matchAll(pattern)) numbers.add(Number(match[1]));
   return [...numbers].filter((number) => Number.isSafeInteger(number) && number > 0);
 }
@@ -193,10 +193,11 @@ async function main() {
   const config = JSON.parse(await readFile(configPath, "utf8"));
   const api = `${API_ROOT}/repos/${repository}`;
   const { body: pull } = await readJson(`${api}/pulls/${pullNumber}`, token);
-  if (!pull || !pull.user || !Array.isArray(pull.requested_reviewers)) {
+  if (!pull || !pull.user) {
     throw new Error("Pull request response is incomplete.");
   }
 
+  pull.requested_reviewers ??= [];
   const issueNumbers = parseClosingIssueNumbers(pull.body ?? "");
   const [comments, reviews, reviewComments, commits, issueEvents] = await Promise.all([
     readAllPages(`${api}/issues/${pullNumber}/comments?per_page=${PAGE_SIZE}`, token),
