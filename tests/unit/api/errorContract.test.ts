@@ -24,7 +24,7 @@ test("public error registry covers documented HTTP classes and current validatio
   for (const code of PUBLIC_API_ERROR_CODES) assert.match(code, /^[a-z0-9_]+$/);
 });
 
-test("error envelope is exactly error.code and error.message", () => {
+test("error envelope is exactly error.code and error.message without a correlation id", () => {
   const envelope = publicApiErrorEnvelope("internal_error", "Unable to load.");
   assert.deepEqual(envelope, {
     error: { code: "internal_error", message: "Unable to load." },
@@ -33,6 +33,29 @@ test("error envelope is exactly error.code and error.message", () => {
   assert.deepEqual(Object.keys(envelope.error).sort(), ["code", "message"]);
   assert.equal(Object.isFrozen(envelope), true);
   assert.equal(Object.isFrozen(envelope.error), true);
+});
+
+test("error envelope adds only a validated request id alongside the existing fields", () => {
+  const envelope = publicApiErrorEnvelope(
+    "internal_error",
+    "Unable to load.",
+    "3f0d5a7c-9a1b-4c2d-8e3f-5b6a7c8d9e0f",
+  );
+  assert.deepEqual(envelope, {
+    error: {
+      code: "internal_error",
+      message: "Unable to load.",
+      requestId: "3f0d5a7c-9a1b-4c2d-8e3f-5b6a7c8d9e0f",
+    },
+  });
+  assert.deepEqual(Object.keys(envelope.error).sort(), ["code", "message", "requestId"]);
+
+  const forged = publicApiErrorEnvelope(
+    "internal_error",
+    "Unable to load.",
+    "postgresql://admin:secret@private-db.internal/core",
+  );
+  assert.deepEqual(Object.keys(forged.error).sort(), ["code", "message"]);
 });
 
 test("status is derived from code and shared serializer preserves additional safe headers", async () => {
@@ -77,10 +100,14 @@ test("representative public routes use the same validation envelope", async () =
   for (let index = 0; index < cases.length; index += 1) {
     const response = cases[index]!;
     assert.equal(response.status, 400);
-    const body = await response.json() as { error: { code: string; message: string } };
+    const body = await response.json() as {
+      error: { code: string; message: string; requestId?: string };
+    };
     assert.deepEqual(Object.keys(body), ["error"]);
-    assert.deepEqual(Object.keys(body.error).sort(), ["code", "message"]);
+    assert.deepEqual(Object.keys(body.error).sort(), ["code", "message", "requestId"]);
     assert.equal(body.error.code, expected[index]);
+    assert.match(body.error.requestId ?? "", /^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/);
+    assert.equal(response.headers.get("x-request-id"), body.error.requestId);
   }
 });
 

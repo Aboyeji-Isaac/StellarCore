@@ -36,6 +36,8 @@ export type RateHistoryApiDependencies = Readonly<{
   now?: () => Date;
   staleEvidenceStore?: StaleEvidenceStore;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id echoed in safe error envelopes and the failure log entry. */
+  requestId?: string;
 }>;
 
 export async function getRateHistoryApiResult(
@@ -43,10 +45,13 @@ export async function getRateHistoryApiResult(
   daysParameter: string | null = null,
   dependencies: RateHistoryApiDependencies = {},
 ): Promise<RateHistoryApiResult> {
-  const corridorValidation = validateCorridorParameter(corridorParameter);
+  const corridorValidation = validateCorridorParameter(
+    corridorParameter,
+    dependencies.requestId,
+  );
   if (!corridorValidation.ok) return corridorValidation.result;
 
-  const daysValidation = validateDaysParameter(daysParameter);
+  const daysValidation = validateDaysParameter(daysParameter, dependencies.requestId);
   if (!daysValidation.ok) return daysValidation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
@@ -72,17 +77,26 @@ export async function getRateHistoryApiResult(
       }
     }
     reportError(dependencies, error, "rate-history.read");
-    return publicApiErrorResult("internal_error", "Unable to read rate history.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to read rate history.",
+      dependencies.requestId,
+    );
   }
 
   if (!result.ok) {
     if (result.code === "CORRIDOR_NOT_FOUND") {
-      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult(
+        "corridor_not_found",
+        "Corridor not found.",
+        dependencies.requestId,
+      );
     }
     if (result.code === "INVALID_WINDOW") {
       return publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
+        dependencies.requestId,
       );
     }
     if (result.code === "DATABASE_UNAVAILABLE") {
@@ -95,7 +109,18 @@ export async function getRateHistoryApiResult(
         });
       }
     }
-    return publicApiErrorResult("internal_error", "Unable to read rate history.");
+    // The read model reports failures as a code instead of throwing, so this
+    // 500 needs its own log entry for the response's correlation id to resolve.
+    reportError(
+      dependencies,
+      new Error(`rate-history.read returned ${result.code} with no usable stale evidence`),
+      "rate-history.read",
+    );
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to read rate history.",
+      dependencies.requestId,
+    );
   }
 
   try {
@@ -107,7 +132,11 @@ export async function getRateHistoryApiResult(
     return Object.freeze({ status: 200, body });
   } catch (error) {
     reportError(dependencies, error, "rate-history.serialize");
-    return publicApiErrorResult("internal_error", "Unable to read rate history.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to read rate history.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -165,13 +194,18 @@ export function serializeRateHistory(
 
 function validateCorridorParameter(
   value: string | null,
+  requestId?: string,
 ):
   | Readonly<{ ok: true; corridorSlug: string }>
   | Readonly<{ ok: false; result: RateHistoryApiResult }> {
   if (value === null || value === "") {
     return Object.freeze({
       ok: false,
-      result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
+      result: publicApiErrorResult(
+        "missing_corridor",
+        "A corridor slug is required.",
+        requestId,
+      ),
     });
   }
 
@@ -181,7 +215,11 @@ function validateCorridorParameter(
   ) {
     return Object.freeze({
       ok: false,
-      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
+      result: publicApiErrorResult(
+        "invalid_corridor",
+        "The corridor slug is invalid.",
+        requestId,
+      ),
     });
   }
 
@@ -190,6 +228,7 @@ function validateCorridorParameter(
 
 function validateDaysParameter(
   value: string | null,
+  requestId?: string,
 ):
   | Readonly<{ ok: true; days: number }>
   | Readonly<{ ok: false; result: RateHistoryApiResult }> {
@@ -203,6 +242,7 @@ function validateDaysParameter(
       result: publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
+        requestId,
       ),
     });
   }
@@ -214,6 +254,7 @@ function validateDaysParameter(
       result: publicApiErrorResult(
         "invalid_days",
         `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
+        requestId,
       ),
     });
   }
@@ -229,5 +270,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }

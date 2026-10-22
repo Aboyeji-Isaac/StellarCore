@@ -46,6 +46,7 @@ export type RateHistoryApiErrorResponse = Readonly<{
   error: Readonly<{
     code: RateHistoryApiErrorCode;
     message: string;
+    requestId?: string;
   }>;
 }>;
 

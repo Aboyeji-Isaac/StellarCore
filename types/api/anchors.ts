@@ -47,6 +47,7 @@ export type AnchorsApiErrorResponse = Readonly<{
   error: Readonly<{
     code: AnchorsApiErrorCode;
     message: string;
+    requestId?: string;
   }>;
 }>;
 

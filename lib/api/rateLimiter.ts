@@ -14,6 +14,9 @@
  *   leak memory after the window passes.
  */
 
+import { publicApiErrorEnvelope } from "@/lib/api/errors";
+import { requestIdHeaders } from "@/lib/api/requestId";
+
 export const PUBLIC_RATE_LIMIT = 100;
 export const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -32,7 +35,12 @@ export type RateLimitDecision = Readonly<{
 }>;
 
 export type RateLimiter = Readonly<{
-  check: (request: Request, now: number) => Promise<RateLimitDecision>;
+  /**
+   * `requestId` is the already-resolved correlation id for this request. When
+   * supplied it is echoed in the 429 envelope and response header so a throttled
+   * caller can still quote a safe reference to the matching server log entry.
+   */
+  check: (request: Request, now: number, requestId?: string) => Promise<RateLimitDecision>;
 }>;
 
 export function createRateLimiter(
@@ -48,7 +56,7 @@ export function createRateLimiter(
    * of tracking per-key windows.
    */
   return {
-    async check(request: Request, now: number): Promise<RateLimitDecision> {
+    async check(request: Request, now: number, requestId?: string): Promise<RateLimitDecision> {
       const window = Math.floor(now / windowMs);
 
       if (activeWindow === undefined || window !== activeWindow) {
@@ -59,11 +67,21 @@ export function createRateLimiter(
       const clientKey = clientIp(request);
       const count = requestCounts.get(clientKey) ?? 0;
       if (count >= limit) {
+        const envelope = publicApiErrorEnvelope(
+          "rate_limited",
+          RATE_LIMIT_ERROR_BODY.error.message,
+          requestId,
+        );
         return Object.freeze({
           allowed: false,
-          response: Response.json(RATE_LIMIT_ERROR_BODY, {
+          response: Response.json(envelope, {
             status: 429,
-            headers: Object.freeze({ "Cache-Control": "no-store" }),
+            headers: Object.freeze({
+              "Cache-Control": "no-store",
+              ...(envelope.error.requestId
+                ? requestIdHeaders(envelope.error.requestId)
+                : {}),
+            }),
           }),
         });
       }
