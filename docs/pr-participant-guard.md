@@ -4,12 +4,12 @@ The PR Participant Guard checks who has participated in a pull request before ma
 
 ## Policy
 
-The guard considers the PR author; conversation comments; submitted reviews; inline review comments; commit authors and committers; `Co-authored-by` email trailers; current requested reviewers and teams; and review-request / review-request-removal events available through GitHub's issue timeline.
+The guard considers the PR author; conversation comments; submitted reviews; inline review comments; commit authors and committers (including unmapped commit emails); `Co-authored-by` email trailers; current requested reviewers and teams; and review-request / review-request-removal events available through GitHub's issue timeline. For deleted comment events, it also checks the comment identity retained in the webhook payload.
 
 An identity is accepted only when it is:
 - listed under `maintainers` in `.github/pr-participant-guard.json`;
 - an assignee of an issue referenced with a closing keyword in the PR body;
-- explicitly listed under `approvedBots`, `approvedCoauthorEmails`, or `approvedReviewerTeams`; or
+- explicitly listed under `approvedBots`, `approvedCommitEmails`, `approvedCoauthorEmails`, or `approvedReviewerTeams`; or
 - covered by a documented exception with a reason and future `expiresAt` timestamp.
 
 Unknown bot accounts are not automatically trusted. Keep the approved lists narrow. Exceptions are temporary and should be removed when no longer needed. For contributor PRs, include a closing reference such as `Closes #123` and assign the issue before expecting a passing result.
