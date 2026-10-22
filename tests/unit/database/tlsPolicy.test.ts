@@ -196,6 +196,12 @@ test("policy decisions never embed credentials in messages", () => {
       assert.equal(serialized.includes("db.example.com"), false);
     }
   }
+
+  assert.equal(resolutions[0].accepted, false);
+  assert.equal(resolutions[1].accepted, false);
+  assert.equal(resolutions[2].accepted, true);
+  assert.ok(resolutions[2].accepted && resolutions[2].mode === "VERIFY_FULL");
+  assert.ok(resolutions[2].accepted && resolutions[2].sslConfig.rejectUnauthorized === true);
 });
 
 test("rejecting an empty database URL in production names the failure", () => {
