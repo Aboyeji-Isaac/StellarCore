@@ -12,6 +12,7 @@ import {
 const config = {
   maintainers: ["Aboyeji-Isaac"],
   approvedBots: ["release-bot[bot]"],
+  approvedCommitEmails: ["assigned@example.test"],
   approvedCoauthorEmails: ["maintainer@example.test"],
   approvedReviewerTeams: ["core-reviewers"],
   exceptions: [
@@ -218,4 +219,35 @@ test("API failures and incomplete pagination reject instead of silently passing"
     headers: { "content-type": "application/json" },
   });
   await assert.rejects(readAllPages("https://api.github.com/repos/org/repo/issues/1/comments?per_page=100", "token"), /omitted Link header/);
+});
+
+
+test("unmapped commit author and committer emails are checked against an explicit allowlist", () => {
+  const approved = evaluateParticipantData(fixture({
+    commits: [{
+      sha: "abcdef012345",
+      author: null,
+      committer: null,
+      commit: {
+        author: { email: "assigned@example.test" },
+        committer: { email: "stranger@example.test" },
+        message: "feat: identity test",
+      },
+    }],
+  }), config);
+  assert.equal(approved.status, "failure");
+  assert.ok(approved.findings.some((finding) => finding.includes("stranger@example.test")));
+  assert.ok(!approved.findings.some((finding) => finding.includes("assigned@example.test")));
+});
+
+test("deleted-comment webhook payload preserves an identity absent from the current comment list", () => {
+  const result = evaluateParticipantData(fixture({
+    comments: [],
+    eventPayload: {
+      action: "deleted",
+      comment: { user: { login: "deleted-comment-author" } },
+    },
+  }), config);
+  assert.equal(result.status, "failure");
+  assert.ok(result.findings.some((finding) => finding.includes("deleted-comment-author") && finding.includes("deleted comment event payload")));
 });
