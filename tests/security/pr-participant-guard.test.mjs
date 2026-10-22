@@ -6,6 +6,7 @@ import {
   evaluateParticipantData,
   parseClosingIssueNumbers,
   parseCoauthorEmails,
+  readAllPages,
 } from "../../scripts/security/check-pr-participants.mjs";
 
 const config = {
@@ -46,7 +47,7 @@ function fixture(overrides = {}) {
 
 test("parses closing issue references and deduplicates them", () => {
   assert.deepEqual(
-    parseClosingIssueNumbers("Fixes #42; closes #42 and Resolves https://github.com/org/repo/issues/#17"),
+    parseClosingIssueNumbers("Fixes #42; closes #42 and Resolves https://github.com/org/repo/issues/17"),
     [42, 17],
   );
 });
@@ -193,4 +194,28 @@ test("workflow is read-only, runs trusted default-branch code, and listens for p
   assert.match(workflow, /pull-requests: read/);
   assert.doesNotMatch(workflow, /pull-requests: write|issues: write|contents: write/);
   assert.doesNotMatch(workflow, /npm install|npm ci|pnpm install|npm test/);
+});
+
+
+test("API failures and incomplete pagination reject instead of silently passing", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "forbidden" }), {
+    status: 403,
+    headers: { "content-type": "application/json" },
+  });
+  await assert.rejects(readAllPages("https://api.github.com/repos/org/repo/issues/1/comments?per_page=100", "token"), /HTTP 403/);
+
+  globalThis.fetch = async () => new Response(JSON.stringify({ unexpected: true }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  await assert.rejects(readAllPages("https://api.github.com/repos/org/repo/issues/1/comments?per_page=100", "token"), /Expected an array response/);
+
+  globalThis.fetch = async () => new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ id: index }))), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  await assert.rejects(readAllPages("https://api.github.com/repos/org/repo/issues/1/comments?per_page=100", "token"), /omitted Link header/);
 });
