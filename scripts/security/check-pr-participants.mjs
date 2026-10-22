@@ -162,7 +162,7 @@ async function readJson(url, token) {
   return { body, link: response.headers.get("link") };
 }
 
-async function readAllPages(url, token) {
+export async function readAllPages(url, token) {
   const items = [];
   let next = url;
   let pages = 0;
