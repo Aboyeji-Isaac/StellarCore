@@ -57,6 +57,7 @@ export type RatesApiErrorResponse = Readonly<{
   error: Readonly<{
     code: RatesApiErrorCode;
     message: string;
+    requestId?: string;
   }>;
 }>;
 

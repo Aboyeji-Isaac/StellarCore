@@ -14,12 +14,12 @@ const NOW = new Date("2026-08-28T12:00:00.000Z");
 test("route rejects missing and malformed corridor parameters safely", async () => {
   const missing = await GET(new Request("http://localhost/api/rates/history"));
   assert.equal(missing.status, 400);
-  assert.deepEqual(await missing.json(), {
-    error: {
-      code: "missing_corridor",
-      message: "A corridor slug is required.",
-    },
-  });
+  const missingBody = await missing.json() as {
+    error: { code: string; message: string; requestId?: string };
+  };
+  assert.equal(missingBody.error.code, "missing_corridor");
+  assert.equal(missingBody.error.message, "A corridor slug is required.");
+  assert.match(missingBody.error.requestId ?? "", /^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/);
 
   for (const value of ["../rates", " USDC ", "a".repeat(101)]) {
     const response = await GET(

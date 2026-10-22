@@ -32,11 +32,15 @@ const MAX_CORRIDOR_SLUG_LENGTH = 100;
 export type CorridorsApiDependencies = Readonly<{
   repository?: CorridorDirectoryRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id echoed in safe error envelopes and the failure log entry. */
+  requestId?: string;
 }>;
 
 export type CorridorApiDependencies = Readonly<{
   repository?: CorridorDetailRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id echoed in safe error envelopes and the failure log entry. */
+  requestId?: string;
 }>;
 
 export function isValidCorridorSlug(slug: string): boolean {
@@ -51,7 +55,7 @@ export async function getCorridorsApiResult(
 ): Promise<CorridorsApiResult> {
   const parsed = parsePagination(pagination);
   if (!parsed.ok) {
-    return publicApiErrorResult("invalid_pagination", parsed.message);
+    return publicApiErrorResult("invalid_pagination", parsed.message, dependencies.requestId);
   }
 
   try {
@@ -65,7 +69,11 @@ export async function getCorridorsApiResult(
     });
   } catch (error) {
     reportError(dependencies, error, "corridors.list");
-    return publicApiErrorResult("internal_error", "Unable to load corridors.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load corridors.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -77,6 +85,7 @@ export async function getCorridorApiResult(
     return publicApiErrorResult(
       "invalid_corridor_slug",
       "A valid corridor slug is required.",
+      dependencies.requestId,
     );
   }
 
@@ -86,7 +95,11 @@ export async function getCorridorApiResult(
     const corridor = await repository.findBySlug(slug);
 
     if (!corridor) {
-      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult(
+        "corridor_not_found",
+        "Corridor not found.",
+        dependencies.requestId,
+      );
     }
 
     return Object.freeze({
@@ -95,7 +108,11 @@ export async function getCorridorApiResult(
     });
   } catch (error) {
     reportError(dependencies, error, "corridors.detail");
-    return publicApiErrorResult("internal_error", "Unable to load corridor.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load corridor.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -152,5 +169,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }

@@ -1,4 +1,5 @@
 import { getAnchorsApiResult } from "@/lib/api/anchors";
+import { createRequestId } from "@/lib/api/requestId";
 import { advertisedCapabilities } from "@/lib/stellar/advertisedCapabilities";
 import { SEPS } from "@/constants/seps";
 import type { PublicAnchorStatus } from "@/types/api/anchors";
@@ -19,10 +20,17 @@ function statusPresentation(status: PublicAnchorStatus) {
 }
 
 export async function AnchorsSection() {
-  const result = await getAnchorsApiResult();
+  const result = await getAnchorsApiResult({ requestId: createRequestId() });
 
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    return (
+      <SectionError
+        area="anchors"
+        code={result.body.error.code}
+        message={result.body.error.message}
+        requestId={result.body.error.requestId}
+      />
+    );
   }
 
   const { anchors, count } = result.body;

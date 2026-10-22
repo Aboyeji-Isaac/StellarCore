@@ -29,8 +29,25 @@ by copying README examples.
 - **Error envelope:** every error response has the shape:
 
 ```json
-{ "error": { "code": "snake_case_code", "message": "Human-readable message." } }
+{
+  "error": {
+    "code": "snake_case_code",
+    "message": "Human-readable message.",
+    "requestId": "9f1c2b3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"
+  }
+}
 ```
+
+  `requestId` is an optional, non-sensitive correlation identifier. The route
+  handlers always include it, and the same value is returned in the
+  `X-Request-Id` response header and recorded in the single-line server log
+  entry (`[stellarcore:public-api] {...}`) written for the failure, so a
+  user-reported error can be matched to its log line. An inbound
+  `X-Request-Id` is adopted only when it matches `8`–`64` characters of
+  `[A-Za-z0-9._-]` starting with an alphanumeric; anything else is replaced by
+  a freshly generated id. The id is a correlation hint only, never an
+  authorization claim. Error bodies never contain stack traces, credentials,
+  SQL, or database connection details.
 
 - **Rate limiting:** all eight public routes are rate limited per client IP
   (see [Rate limiting](#rate-limiting) at the end). The single internal cron
@@ -682,8 +699,17 @@ IP** (`lib/api/rateLimiter.ts`).
 ### 429 Too Many Requests
 
 ```json
-{ "error": { "code": "rate_limited", "message": "Too many requests. Please try again later." } }
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many requests. Please try again later.",
+    "requestId": "9f1c2b3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"
+  }
+}
 ```
+
+The 429 body and `X-Request-Id` header carry the same correlation id as every
+other error response.
 
 The interaction with path segments: because each route enforces the shared
 `getRateLimiter()` singleton, an overloaded client is rejected on **every**

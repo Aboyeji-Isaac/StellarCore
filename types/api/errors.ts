@@ -30,7 +30,15 @@ export const PUBLIC_API_ERROR_STATUS_BY_CODE = {
 } as const satisfies Readonly<Record<PublicApiErrorCode, PublicApiErrorStatus>>;
 
 export type PublicApiErrorEnvelope<Code extends PublicApiErrorCode = PublicApiErrorCode> = Readonly<{
-  error: Readonly<{ code: Code; message: string }>;
+  error: Readonly<{
+    code: Code;
+    message: string;
+    /**
+     * Safe, non-sensitive correlation id. Present only when the caller supplied
+     * (or was assigned) one; never contains internal diagnostics.
+     */
+    requestId?: string;
+  }>;
 }>;
 
 export type PublicApiErrorResult<Code extends PublicApiErrorCode = PublicApiErrorCode> = Readonly<{

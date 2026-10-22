@@ -31,6 +31,8 @@ const MAX_ANCHOR_SLUG_LENGTH = 100;
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id echoed in safe error envelopes and the failure log entry. */
+  requestId?: string;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -45,7 +47,7 @@ export async function getAnchorsApiResult(
 ): Promise<AnchorsApiResult> {
   const parsed = parsePagination(pagination);
   if (!parsed.ok) {
-    return publicApiErrorResult("invalid_pagination", parsed.message);
+    return publicApiErrorResult("invalid_pagination", parsed.message, dependencies.requestId);
   }
 
   try {
@@ -59,7 +61,7 @@ export async function getAnchorsApiResult(
     });
   } catch (error) {
     reportError(dependencies, error, "anchors.list");
-    return publicApiErrorResult("internal_error", "Unable to load anchors.");
+    return publicApiErrorResult("internal_error", "Unable to load anchors.", dependencies.requestId);
   }
 }
 
@@ -71,6 +73,7 @@ export async function getAnchorApiResult(
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
+      dependencies.requestId,
     );
   }
 
@@ -79,7 +82,11 @@ export async function getAnchorApiResult(
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
     const anchor = await repository.findBySlug(slug);
     if (!anchor) {
-      return publicApiErrorResult("anchor_not_found", "Anchor not found.");
+      return publicApiErrorResult(
+        "anchor_not_found",
+        "Anchor not found.",
+        dependencies.requestId,
+      );
     }
 
     return Object.freeze({
@@ -88,7 +95,7 @@ export async function getAnchorApiResult(
     });
   } catch (error) {
     reportError(dependencies, error, "anchors.detail");
-    return publicApiErrorResult("internal_error", "Unable to load anchors.");
+    return publicApiErrorResult("internal_error", "Unable to load anchors.", dependencies.requestId);
   }
 }
 
@@ -150,5 +157,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }

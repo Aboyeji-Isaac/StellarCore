@@ -1,11 +1,19 @@
 import { getCorridorsApiResult } from "@/lib/api/corridors";
+import { createRequestId } from "@/lib/api/requestId";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
 export async function CorridorsSection() {
-  const result = await getCorridorsApiResult();
+  const result = await getCorridorsApiResult({ requestId: createRequestId() });
 
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    return (
+      <SectionError
+        area="corridors"
+        code={result.body.error.code}
+        message={result.body.error.message}
+        requestId={result.body.error.requestId}
+      />
+    );
   }
 
   const { corridors, count } = result.body;

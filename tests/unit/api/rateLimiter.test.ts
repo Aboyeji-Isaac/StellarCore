@@ -118,7 +118,7 @@ test("every current public GET route enforces the shared limiter", () => {
   for (const relative of routeFiles) {
     const source = readFileSync(new URL(relative, import.meta.url), "utf8");
     assert.match(source, /@\/lib\/api\/rateLimiter/);
-    assert.match(source, /getRateLimiter\(\)\.check\(request, Date\.now\(\)\)/);
+    assert.match(source, /getRateLimiter\(\)\.check\(request, Date\.now\(\), requestId\)/);
   }
 
   const internalCron = readFileSync(

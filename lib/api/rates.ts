@@ -31,13 +31,15 @@ export type RatesApiDependencies = Readonly<{
   now?: () => Date;
   staleEvidenceStore?: StaleEvidenceStore;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id echoed in safe error envelopes and the failure log entry. */
+  requestId?: string;
 }>;
 
 export async function getRatesApiResult(
   corridorParameter: string | null,
   dependencies: RatesApiDependencies = {},
 ): Promise<RatesApiResult> {
-  const validation = validateCorridorParameter(corridorParameter);
+  const validation = validateCorridorParameter(corridorParameter, dependencies.requestId);
   if (!validation.ok) return validation.result;
 
   const evaluatedAt = dependencies.now?.() ?? new Date();
@@ -60,12 +62,16 @@ export async function getRatesApiResult(
       }
     }
     reportError(dependencies, error, "rates.read");
-    return publicApiErrorResult("internal_error", "Unable to read rates.");
+    return publicApiErrorResult("internal_error", "Unable to read rates.", dependencies.requestId);
   }
 
   if (!result.ok) {
     if (result.code === "CORRIDOR_NOT_FOUND") {
-      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult(
+        "corridor_not_found",
+        "Corridor not found.",
+        dependencies.requestId,
+      );
     }
     if (result.code === "DATABASE_UNAVAILABLE") {
       const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
@@ -77,7 +83,14 @@ export async function getRatesApiResult(
         });
       }
     }
-    return publicApiErrorResult("internal_error", "Unable to read rates.");
+    // The read model reports failures as a code instead of throwing, so this
+    // 500 needs its own log entry for the response's correlation id to resolve.
+    reportError(
+      dependencies,
+      new Error(`rates.read returned ${result.code} with no usable stale evidence`),
+      "rates.read",
+    );
+    return publicApiErrorResult("internal_error", "Unable to read rates.", dependencies.requestId);
   }
 
   try {
@@ -89,7 +102,7 @@ export async function getRatesApiResult(
     return Object.freeze({ status: 200, body });
   } catch (error) {
     reportError(dependencies, error, "rates.serialize");
-    return publicApiErrorResult("internal_error", "Unable to read rates.");
+    return publicApiErrorResult("internal_error", "Unable to read rates.", dependencies.requestId);
   }
 }
 
@@ -148,13 +161,18 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
 
 function validateCorridorParameter(
   value: string | null,
+  requestId?: string,
 ):
   | Readonly<{ ok: true; corridorSlug: string }>
   | Readonly<{ ok: false; result: RatesApiResult }> {
   if (value === null || value === "") {
     return Object.freeze({
       ok: false,
-      result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
+      result: publicApiErrorResult(
+        "missing_corridor",
+        "A corridor slug is required.",
+        requestId,
+      ),
     });
   }
 
@@ -164,7 +182,11 @@ function validateCorridorParameter(
   ) {
     return Object.freeze({
       ok: false,
-      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
+      result: publicApiErrorResult(
+        "invalid_corridor",
+        "The corridor slug is invalid.",
+        requestId,
+      ),
     });
   }
 
@@ -179,5 +201,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }
