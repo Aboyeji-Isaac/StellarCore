@@ -36,6 +36,10 @@ jobs:
               const files = await github.paginate(github.rest.pulls.listFiles, {
                 owner, repo, pull_number: pull.number, per_page: 100
               });
+              if (files.length >= 300) {
+                core.setFailed("Changed-file list is at the API limit; refusing to authorize a protected-file change.");
+                return;
+              }
               changedPaths = files.map(file => file.filename);
 
               if (changedPaths.some(path => protectedPaths.has(path))) {
