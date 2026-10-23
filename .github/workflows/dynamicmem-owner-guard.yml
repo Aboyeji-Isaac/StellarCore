@@ -1,0 +1,85 @@
+name: DynamicMem ownership guard
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [development, main]
+  push:
+    branches: [development, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  enforce-owner:
+    name: enforce-owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce DynamicMem ownership
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allowedOwner = "Aboyeji-Isaac";
+            const protectedPath = "DynamicMem.md";
+            const { owner, repo } = context.repo;
+            let changedPaths = [];
+            let commitAuthors = [];
+
+            if (context.eventName === "pull_request_target") {
+              const pull = context.payload.pull_request;
+              if (!pull) {
+                core.setFailed("Missing pull-request payload; refusing to infer ownership.");
+                return;
+              }
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: pull.number, per_page: 100
+              });
+              changedPaths = files.map(file => file.filename);
+
+              if (changedPaths.includes(protectedPath)) {
+                const commits = await github.paginate(github.rest.pulls.listCommits, {
+                  owner, repo, pull_number: pull.number, per_page: 100
+                });
+                commitAuthors = commits.map(commit => commit.author?.login ?? null);
+              }
+            } else if (context.eventName === "push") {
+              const before = context.payload.before;
+              const after = context.payload.after;
+              if (!before || !after || /^0+$/.test(before)) {
+                core.setFailed("Cannot verify the complete push range; refusing to authorize a DynamicMem change.");
+                return;
+              }
+              const comparison = await github.rest.repos.compareCommits({
+                owner, repo, base: before, head: after
+              });
+              if (comparison.data.total_commits !== comparison.data.commits.length) {
+                core.setFailed("Push range exceeds the verifiable commit list; refusing to authorize a DynamicMem change.");
+                return;
+              }
+              changedPaths = (comparison.data.files ?? []).map(file => file.filename);
+              if (changedPaths.includes(protectedPath)) {
+                commitAuthors = comparison.data.commits.map(commit => commit.author?.login ?? null);
+              }
+            } else {
+              core.setFailed("Unexpected event; refusing to infer ownership.");
+              return;
+            }
+
+            if (!changedPaths.includes(protectedPath)) {
+              core.info("DynamicMem.md was not changed; ownership check passed.");
+              return;
+            }
+
+            if (context.actor !== allowedOwner) {
+              core.setFailed(`Only @${allowedOwner} may update DynamicMem.md; event actor was @${context.actor}.`);
+              return;
+            }
+
+            if (commitAuthors.length === 0 || commitAuthors.some(login => login !== allowedOwner)) {
+              core.setFailed("DynamicMem.md changed, but one or more commits are not attributed by GitHub to the authorized owner. Failing closed.");
+              return;
+            }
+
+            core.info("DynamicMem.md change is attributed to the authorized repository owner.");

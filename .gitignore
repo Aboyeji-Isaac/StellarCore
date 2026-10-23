@@ -32,7 +32,6 @@ next-env.d.ts
 .DS_Store
 
 # Local AI/project context
-DynamicMem.md
 PROJECT_CONTEXT.md
 
 # Local agent skills
