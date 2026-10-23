@@ -725,6 +725,10 @@ test("a transaction timeout in the scheduled evidence read fails closed, is not 
     ) {
       transactionOptions.push(options);
       const tx = {
+        async $executeRaw(sql: unknown) {
+          transactionQueries.push(String(sql));
+          return 0;
+        },
         async $executeRawUnsafe(sql: string) {
           transactionQueries.push(sql);
           return 0;
@@ -804,6 +808,9 @@ test("a lock timeout inside the scheduled evidence read is retried a bounded num
     async $transaction(fn: (tx: unknown) => Promise<unknown>) {
       attempts += 1;
       const tx = {
+        async $executeRaw() {
+          return 0;
+        },
         async $executeRawUnsafe() {
           return 0;
         },
