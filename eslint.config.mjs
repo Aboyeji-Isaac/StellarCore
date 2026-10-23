@@ -31,6 +31,27 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Reviewed raw-SQL allowlist (see the rule message above).
+    //
+    // These two opt-in database integration suites exercise PostgreSQL DDL,
+    // VACUUM, and EXPLAIN statements that cannot be expressed as parameterized
+    // `Prisma.sql` templates: column names, SET fragments, and the explained
+    // statement are composed from fixed literals inside the test file, and no
+    // value from outside the test is interpolated. Both suites run only when a
+    // dedicated throwaway database is supplied, never in the default test run
+    // and never against production data.
+    //
+    // Each entry is an explicit review decision. Add a file here only with the
+    // same justification; prefer `Prisma.sql` template tags everywhere else.
+    files: [
+      "tests/integration/database/evidenceDataInvariants.database.integration.test.ts",
+      "tests/integration/rates/latestObservationsDifferential.database.integration.test.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
+    },
+  },
 ];
 
 export default eslintConfig;
