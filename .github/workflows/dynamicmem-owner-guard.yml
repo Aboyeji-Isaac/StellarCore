@@ -54,16 +54,16 @@ jobs:
               const comparison = await github.rest.repos.compareCommits({
                 owner, repo, base: before, head: after
               });
-              if (comparison.data.total_commits !== comparison.data.commits.length) {
-                core.setFailed("Push range exceeds the verifiable commit list; refusing to authorize a DynamicMem change.");
-                return;
-              }
               if (!comparison.data.files || comparison.data.files.length >= 300) {
                 core.setFailed("Changed-file list is incomplete or at its API limit; refusing to authorize a protected-file change.");
                 return;
               }
               changedPaths = comparison.data.files.map(file => file.filename);
               if (changedPaths.some(path => protectedPaths.has(path))) {
+                if (comparison.data.total_commits !== comparison.data.commits.length) {
+                  core.setFailed("Push range exceeds the verifiable commit list; refusing to authorize a protected-file change.");
+                  return;
+                }
                 commitAuthors = comparison.data.commits.map(commit => commit.author?.login ?? null);
               }
             } else {
