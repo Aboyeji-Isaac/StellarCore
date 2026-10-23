@@ -12,8 +12,34 @@ export async function GET(
   const decision = await getRateLimiter().check(request, Date.now());
   if (!decision.allowed) return decision.response;
 
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   const { slug } = await context.params;
-  const result = await getAnchorReputationApiResult(slug);
+  let result;
+  try {
+    result = await getAnchorReputationApiResult(slug, { signal: request.signal });
+  } catch (error) {
+    if (request.signal?.aborted) {
+      return new Response(null, {
+        status: 499,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    throw error;
+  }
+
+  if (request.signal?.aborted) {
+    return new Response(null, {
+      status: 499,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   return publicApiJsonResponse(
     result,
     staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
