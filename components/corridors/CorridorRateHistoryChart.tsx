@@ -1,6 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  createRateHistoryLoader,
+  type RateHistoryLoader,
+} from "@/lib/rates/rateHistoryRequests";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -34,33 +38,39 @@ export function CorridorRateHistoryChart({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const loaderRef = useRef<RateHistoryLoader | null>(null);
 
-  async function handleTimeframeChange(days: number) {
-    if (days === selectedDays || loading) return;
+  useEffect(() => {
+    const loader = createRateHistoryLoader({
+      corridorSlug,
+      callbacks: {
+        onSuccess: (data) => {
+          setHistory(data);
+          setLoading(false);
+        },
+        onError: (message) => {
+          setError(message);
+          setLoading(false);
+        },
+      },
+    });
+    loaderRef.current = loader;
+    return () => {
+      loader.dispose();
+      if (loaderRef.current === loader) {
+        loaderRef.current = null;
+      }
+    };
+  }, [corridorSlug]);
+
+  function handleTimeframeChange(days: number) {
+    if (days === selectedDays) return;
     setSelectedDays(days);
     setLoading(true);
     setError(null);
     setHoveredPointIndex(null);
-
-    try {
-      const response = await fetch(
-        `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error?.message ?? "Unable to load rate history.",
-        );
-      }
-      const data: PublicRateHistoryResponse = await response.json();
-      setHistory(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load rate history.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    // The loader aborts any in-flight request, so only the latest selection can update the chart.
+    void loaderRef.current?.load(days);
   }
 
   const validPoints = history.points
@@ -181,7 +191,6 @@ export function CorridorRateHistoryChart({
                 key={option.days}
                 type="button"
                 onClick={() => handleTimeframeChange(option.days)}
-                disabled={loading}
                 aria-pressed={selectedDays === option.days}
                 className={`rounded px-3 py-1 font-medium transition-colors ${
                   selectedDays === option.days
@@ -196,7 +205,10 @@ export function CorridorRateHistoryChart({
         </div>
       </div>
 
-      <div className="mt-5 rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5">
+      <div
+        aria-busy={loading}
+        className="mt-5 rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--ghost)] text-xs text-[var(--muted)]">
           <div className="flex items-center gap-4">
             <span>
