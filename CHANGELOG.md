@@ -11,6 +11,10 @@ with your pull request.
 
 ### Added
 
+- Visibility-aware dashboard refresh: the dashboard re-reads its panels at most
+  once per minute while the page is visible, pauses polling entirely while the
+  tab is hidden, and resumes per the documented interval when the page becomes
+  visible again (#443).
 - Evidence-based anchor availability transitions: discovery failures are
   classified (transient / deterministic / unknown) and a destructive status
   change requires consecutive-failure or sustained-window evidence, so one
