@@ -100,5 +100,16 @@ function parseOffset(
     });
   }
 
-  return Object.freeze({ ok: true, value: Number(raw) });
+  // A syntactically valid integer can still overflow the safe range. Reject it
+  // instead of silently accepting `Infinity`, which would return an empty
+  // page for a value that is not an integer at all.
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    return Object.freeze({
+      ok: false,
+      message: "offset must be a non-negative integer.",
+    });
+  }
+
+  return Object.freeze({ ok: true, value });
 }

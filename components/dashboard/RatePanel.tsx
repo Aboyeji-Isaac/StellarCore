@@ -1,5 +1,5 @@
 import * as React from "react";
-import { getRatesApiResult } from "@/lib/api/rates";
+import { getRatesApiResult, type RatesApiDependencies } from "@/lib/api/rates";
 import type { RateFreshnessState } from "@/types/rates";
 import type { RatesApiResult } from "@/types/api/rates";
 import { Badge } from "@/components/dashboard/Badge";
@@ -24,8 +24,11 @@ function freshnessTone(state: RateFreshnessState) {
   }
 }
 
-export async function RatePanel() {
-  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG);
+export async function RatePanel(props?: {
+  dependencies?: RatesApiDependencies;
+  result?: RatesApiResult;
+}) {
+  const result = props?.result ?? await getRatesApiResult(FEATURED_CORRIDOR_SLUG, props?.dependencies);
   return <RatePanelView result={result} />;
 }
 

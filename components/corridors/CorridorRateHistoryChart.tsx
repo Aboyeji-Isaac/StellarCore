@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { resolveApiUrl } from "@/lib/api/resolveApiUrl";
+import { createPanelRequestState } from "@/lib/ui/panelRequestState";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -30,20 +31,25 @@ export function CorridorRateHistoryChart({
   initialHistory,
 }: Props) {
   const chartId = useId();
-  const [history, setHistory] = useState<PublicRateHistoryResponse>(initialHistory);
+  const [requests] = useState(() => createPanelRequestState(
+    initialHistory,
+    "Unable to load rate history.",
+  ));
+  const { data: history, loading, error } = useSyncExternalStore(
+    requests.subscribe,
+    requests.getSnapshot,
+    requests.getSnapshot,
+  );
+  useEffect(() => () => requests.cancel(), [requests]);
   const [selectedDays, setSelectedDays] = useState<number>(initialHistory.windowDays);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
 
   async function handleTimeframeChange(days: number) {
-    if (days === selectedDays || loading) return;
+    if (days === selectedDays) return;
     setSelectedDays(days);
-    setLoading(true);
-    setError(null);
     setHoveredPointIndex(null);
 
-    try {
+    await requests.refresh(async () => {
       const response = await fetch(
         resolveApiUrl(`/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`),
       );
@@ -54,14 +60,8 @@ export function CorridorRateHistoryChart({
         );
       }
       const data: PublicRateHistoryResponse = await response.json();
-      setHistory(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load rate history.",
-      );
-    } finally {
-      setLoading(false);
-    }
+      return data;
+    });
   }
 
   const validPoints = history.points
@@ -156,6 +156,7 @@ export function CorridorRateHistoryChart({
   return (
     <section
       aria-labelledby="rate-history-heading"
+      aria-busy={loading}
       className="mt-10"
       data-testid="corridor-rate-history-section"
     >
@@ -182,7 +183,6 @@ export function CorridorRateHistoryChart({
                 key={option.days}
                 type="button"
                 onClick={() => handleTimeframeChange(option.days)}
-                disabled={loading}
                 aria-pressed={selectedDays === option.days}
                 className={`rounded px-3 py-1 font-medium transition-colors ${
                   selectedDays === option.days

@@ -53,6 +53,11 @@ export async function runRateEngine(
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
+      // Add fingerprint from dependencies
+      observation = {
+        ...observation,
+        configurationFingerprint: dependencies.configurationFingerprint,
+      };
     } catch (error) {
       failures.push(engineFailure(
         candidate,

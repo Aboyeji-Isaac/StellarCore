@@ -199,7 +199,14 @@ StellarCore exposes persisted anchors, corridors, rates, and reputation through 
 
 ### 5. The Dashboard
 
-The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
+The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. While the page is visible, the dashboard re-reads the same panels at most once per minute (`DASHBOARD_REFRESH_INTERVAL_MS`, 60 seconds); a hidden tab cancels the pending refresh and issues no requests, and returning to the tab refreshes immediately when the interval has already elapsed or waits for the remaining time otherwise. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
+
+The corridor detail rate-history panel allows timeframe changes while loading.
+Only the latest started request may update its evidence, error, or loading state;
+obsolete completions are ignored, including requests pending when the panel is
+unmounted. Deferred-promise regression tests run with
+`npm test -- tests/unit/dashboard/panelRequestState.test.ts`, without network
+requests, timers, or database writes.
 
 ---
 
@@ -544,6 +551,17 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 ## API Reference
 
 All public endpoints return JSON and are read-only.
+
+Public evidence GET routes use the URL path and query parameters as input.
+They always return `application/json`, including errors; they do not negotiate
+representations using `Accept` (and do not return 406 for other requested media
+types). Request `Content-Type` does not affect processing and does not cause
+415 responses, because these routes do not inspect, parse, or use request bodies.
+Clients should send GET requests without a body. A body reaching a handler is
+ignored; it cannot supply or override path or query parameters. Normal parameter
+validation and rate limiting still apply regardless of these headers. This
+contract covers anchors, corridors, rates, rate history, and reputation, including
+detail routes; it does not cover the internal cron endpoint.
 
 
 ### Public API error contract
