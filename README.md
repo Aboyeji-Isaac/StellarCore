@@ -462,7 +462,8 @@ registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
 `audit:config` performs a pure, deterministic check of the checked-in anchor,
-corridor, membership, and reviewed rate-source relationships. It requires no
+corridor, membership, and reviewed rate-source relationships, and verifies that
+`vercel.json` retains the single daily midnight-UTC refresh cron. It requires no
 database, network, or environment secrets. Registry bootstrap and reviewed rate
 snapshot preparation run the same preflight before operational work begins.
 Passing this audit means only that repository-controlled configuration is
