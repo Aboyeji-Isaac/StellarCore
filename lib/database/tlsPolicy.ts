@@ -340,9 +340,9 @@ export function resolveDatabaseTlsPolicy(
 function requireModeResolution(
   input: TlsPolicyEnvironmentInput,
 ): ProductionTlsResolution {
-  // The driver interprets these modes without full certificate verification.
-  // The runtime strips the URL parameter before constructing pg.Pool and
-  // supplies this explicit verified-TLS object, so we can safely upgrade them.
+  // The caller strips TLS URL parameters before constructing the driver
+  // connection. Upgrade require/verify-ca to authenticated TLS instead of
+  // letting the driver's weaker URL semantics override certificate checks.
   return {
     accepted: true,
     mode: "VERIFY_FULL",
