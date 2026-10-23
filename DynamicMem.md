@@ -590,3 +590,33 @@ The Rate Engine milestone was reconstructed on the replacement laptop on the
   longer occur after client generation. No commit, push, PR, migration
   application, production database access, or production configuration change
   was performed.
+
+## 2026-10-23 — Dynamic project memory ownership and tracking
+
+- Prepared PR #557, `security/dynamicmem-owner-guard`, to track this file in
+  `Aboyeji-Isaac/StellarCore` and establish a dedicated ownership guard.
+- The uploaded project history above was retained without rewriting. This
+  section records the memory-tracking setup itself so future work has a clear
+  audit trail.
+- The PR removes only the `DynamicMem.md` ignore entry, adds an explicit
+  `/DynamicMem.md @Aboyeji-Isaac` CODEOWNERS entry, and adds
+  `.github/workflows/dynamicmem-owner-guard.yml`. The guard checks the
+  authenticated GitHub event actor and GitHub-associated commit authors for
+  changes to this file, and fails closed when it cannot verify attribution.
+- State at preparation time: PR #557 is open as a draft and remains unmerged.
+  The new `pull_request_target` guard cannot run on this initial PR because
+  GitHub loads that workflow from the base branch; it becomes active for future
+  PRs after it is merged.
+- Repository settings still need owner action: GitHub reports the
+  `development` branch as unprotected, the visible rulesets list is empty,
+  and the connected integration could not read or modify branch protection.
+  A required status check, restricted push/bypass permissions, and enforced
+  CODEOWNERS review must be configured before treating the file as protected.
+- Validation so far: the repository copy was checked against the uploaded
+  file before this tracking note was appended; the ignore rule and explicit
+  CODEOWNERS entry were verified. No CI run was returned for the PR head at
+  the time of this entry.
+- No merge, direct write to `development`, production operation, database
+  change, or unrelated CI modification was performed. Future implementation
+  milestones, architectural decisions, test results, CI outcomes, and known
+  defects should be appended here as verified facts rather than inferred.
