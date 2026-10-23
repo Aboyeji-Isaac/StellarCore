@@ -201,6 +201,13 @@ StellarCore exposes persisted anchors, corridors, rates, and reputation through 
 
 The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
 
+The corridor detail rate-history panel allows timeframe changes while loading.
+Only the latest started request may update its evidence, error, or loading state;
+obsolete completions are ignored, including requests pending when the panel is
+unmounted. Deferred-promise regression tests run with
+`npm test -- tests/unit/dashboard/panelRequestState.test.ts`, without network
+requests, timers, or database writes.
+
 ---
 
 ## Data Flow

@@ -97,6 +97,7 @@ export default async function CorridorPage({ params }: Props) {
 
           {historyResult.status === 200 ? (
             <CorridorRateHistoryChart
+              key={corridor.slug}
               corridorSlug={corridor.slug}
               initialHistory={historyResult.body}
             />
