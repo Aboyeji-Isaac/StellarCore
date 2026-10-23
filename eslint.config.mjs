@@ -9,7 +9,7 @@ const REVIEWED_UNSAFE_RAW_SQL_ALLOWLIST = [
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  { ignores: [".next/**", "node_modules/**", "next-env.d.ts"] },
+  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "app/generated/prisma/**"] },
   {
     files: ["**/*.js", "**/*.mjs", "**/*.ts", "**/*.tsx"],
     ignores: REVIEWED_UNSAFE_RAW_SQL_ALLOWLIST,
