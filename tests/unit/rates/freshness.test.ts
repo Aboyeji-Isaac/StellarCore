@@ -32,3 +32,30 @@ test("freshness is deterministic immediately before, at, and after the threshold
     ageMs: null,
   });
 });
+
+test("freshness boundary remains fresh one millisecond under and at the threshold", () => {
+  assert.deepEqual(
+    getRateFreshness(
+      new Date(NOW.getTime() - RATE_FRESHNESS_THRESHOLD_MS + 1),
+      NOW,
+    ),
+    { state: "fresh", ageMs: RATE_FRESHNESS_THRESHOLD_MS - 1 },
+  );
+  assert.deepEqual(
+    getRateFreshness(
+      new Date(NOW.getTime() - RATE_FRESHNESS_THRESHOLD_MS),
+      NOW,
+    ),
+    { state: "fresh", ageMs: RATE_FRESHNESS_THRESHOLD_MS },
+  );
+});
+
+test("freshness boundary becomes stale one millisecond over the threshold", () => {
+  assert.deepEqual(
+    getRateFreshness(
+      new Date(NOW.getTime() - RATE_FRESHNESS_THRESHOLD_MS - 1),
+      NOW,
+    ),
+    { state: "stale", ageMs: RATE_FRESHNESS_THRESHOLD_MS + 1 },
+  );
+});

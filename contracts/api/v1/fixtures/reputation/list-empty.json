@@ -1,0 +1,12 @@
+{
+  "name": "reputation.list.empty",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Empty reputation list response",
+  "body": {
+    "reputation": [],
+    "count": 0
+  }
+}

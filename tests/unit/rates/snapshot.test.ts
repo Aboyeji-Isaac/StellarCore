@@ -48,6 +48,20 @@ test("repeated legitimate observations append historical snapshots", async () =>
   assert.equal(state.rows.length, 2);
 });
 
+test("database constraint failures remain bounded persistence failures", async () => {
+  const state = repository();
+  state.value = {
+    ...state.value,
+    createSnapshot: async () => {
+      throw new Error("check constraint leaked supplied evidence=secret");
+    },
+  };
+
+  const result = await persistRateSnapshot(OBSERVATION, state.value);
+  assert.deepEqual(result, { ok: false, code: "PERSISTENCE_FAILURE" });
+  assert.doesNotMatch(JSON.stringify(result), /constraint|evidence|secret/);
+});
+
 function repository() {
   const rows: Array<Record<string, unknown>> = [];
   const lookups: string[] = [];

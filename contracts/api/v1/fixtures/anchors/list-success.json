@@ -1,0 +1,53 @@
+{
+  "name": "anchors.list.success",
+  "domain": "anchors",
+  "endpoint": "GET /api/anchors",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Canonical list of anchors with sorted SEPs, corridor counts, and transfer capability",
+  "body": {
+    "anchors": [
+      {
+        "slug": "cowrie",
+        "name": "Cowrie",
+        "homeDomain": "cowrie.example",
+        "status": "LIVE",
+        "seps": [
+          1,
+          24,
+          31
+        ],
+        "isTransferCapable": true,
+        "corridorCount": 2
+      },
+      {
+        "slug": "moneygram",
+        "name": "MoneyGram",
+        "homeDomain": "moneygram.example",
+        "status": "LIVE",
+        "seps": [
+          1,
+          24
+        ],
+        "isTransferCapable": true,
+        "corridorCount": 1
+      },
+      {
+        "slug": "zeam",
+        "name": "Zeam",
+        "homeDomain": "zeam.example",
+        "status": "LIVE",
+        "seps": [
+          1,
+          10,
+          24,
+          31,
+          38
+        ],
+        "isTransferCapable": true,
+        "corridorCount": 2
+      }
+    ],
+    "count": 3
+  }
+}

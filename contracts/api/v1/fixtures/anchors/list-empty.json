@@ -1,0 +1,12 @@
+{
+  "name": "anchors.list.empty",
+  "domain": "anchors",
+  "endpoint": "GET /api/anchors",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Empty anchor directory response",
+  "body": {
+    "anchors": [],
+    "count": 0
+  }
+}

@@ -27,6 +27,11 @@ test("controlled evidence composes through calculation and current-score persist
         slippage: 0,
         recordedAt: new Date(NOW.getTime() - index * 1_000),
       }))),
+    snapshot: Object.freeze({
+      snapshotId: "100:5:",
+      readAt: NOW,
+      isolationLevel: "REPEATABLE READ" as const,
+    }),
   });
   const repository: ReputationRepository = Object.freeze({
     readEvidence: async () => evidence,

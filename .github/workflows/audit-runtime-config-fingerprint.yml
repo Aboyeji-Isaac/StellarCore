@@ -1,0 +1,53 @@
+name: Audit runtime configuration fingerprint
+
+on:
+  pull_request:
+    paths:
+      - "instrumentation.ts"
+      - "lib/config/runtimeConfig.ts"
+      - "lib/config/runtimeConfigFingerprint.ts"
+      - "scripts/generate-release-manifest.ts"
+      - "scripts/release-cli.ts"
+      - "tests/unit/config/runtimeConfigFingerprint.test.ts"
+      - "tests/unit/config/releaseManifest.test.ts"
+      - ".github/workflows/audit-runtime-config-fingerprint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit runtime configuration fingerprint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run fingerprint and release-manifest tests
+        run: >-
+          npx tsx --test
+          tests/unit/config/runtimeConfigFingerprint.test.ts
+          tests/unit/config/releaseManifest.test.ts
+
+      - name: Generate release manifest
+        run: npm run release:manifest
+        env:
+          STELLARCORE_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          STELLARCORE_WORKFLOW_REF: ${{ github.workflow_ref }}
+          STELLARCORE_INVOCATION_ID: ${{ github.run_id }}
+          STELLARCORE_ENVIRONMENT_ID: production
+
+      - name: Verify release manifest
+        run: npm run verify:release
+        env:
+          STELLARCORE_RELEASE_DIR: dist-release

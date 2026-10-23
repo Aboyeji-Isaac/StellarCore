@@ -49,6 +49,7 @@ export async function runRateEngine(
       observation = normalizeIndicativeRate({
         anchorSlug: candidate.anchorSlug,
         corridor: candidate.corridor,
+        request: candidate.request,
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
