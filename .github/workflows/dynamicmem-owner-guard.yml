@@ -22,7 +22,7 @@ jobs:
         with:
           script: |
             const allowedOwner = "Aboyeji-Isaac";
-            const protectedPath = "DynamicMem.md";
+            const protectedPaths = new Set(["DynamicMem.md", ".github/CODEOWNERS", ".github/workflows/dynamicmem-owner-guard.yml"]);
             const { owner, repo } = context.repo;
             let changedPaths = [];
             let commitAuthors = [];
@@ -38,7 +38,7 @@ jobs:
               });
               changedPaths = files.map(file => file.filename);
 
-              if (changedPaths.includes(protectedPath)) {
+              if (changedPaths.some(path => protectedPaths.has(path))) {
                 const commits = await github.paginate(github.rest.pulls.listCommits, {
                   owner, repo, pull_number: pull.number, per_page: 100
                 });
@@ -58,8 +58,12 @@ jobs:
                 core.setFailed("Push range exceeds the verifiable commit list; refusing to authorize a DynamicMem change.");
                 return;
               }
-              changedPaths = (comparison.data.files ?? []).map(file => file.filename);
-              if (changedPaths.includes(protectedPath)) {
+              if (!comparison.data.files || comparison.data.files.length >= 300) {
+                core.setFailed("Changed-file list is incomplete or at its API limit; refusing to authorize a protected-file change.");
+                return;
+              }
+              changedPaths = comparison.data.files.map(file => file.filename);
+              if (changedPaths.some(path => protectedPaths.has(path))) {
                 commitAuthors = comparison.data.commits.map(commit => commit.author?.login ?? null);
               }
             } else {
@@ -67,19 +71,19 @@ jobs:
               return;
             }
 
-            if (!changedPaths.includes(protectedPath)) {
-              core.info("DynamicMem.md was not changed; ownership check passed.");
+            if (!changedPaths.some(path => protectedPaths.has(path))) {
+              core.info("No protected memory/ownership files changed; ownership check passed.");
               return;
             }
 
             if (context.actor !== allowedOwner) {
-              core.setFailed(`Only @${allowedOwner} may update DynamicMem.md; event actor was @${context.actor}.`);
+              core.setFailed(`Only @${allowedOwner} may update DynamicMem.md or its ownership controls; event actor was @${context.actor}.`);
               return;
             }
 
             if (commitAuthors.length === 0 || commitAuthors.some(login => login !== allowedOwner)) {
-              core.setFailed("DynamicMem.md changed, but one or more commits are not attributed by GitHub to the authorized owner. Failing closed.");
+              core.setFailed("A protected memory/ownership file changed, but one or more commits are not attributed by GitHub to the authorized owner. Failing closed.");
               return;
             }
 
-            core.info("DynamicMem.md change is attributed to the authorized repository owner.");
+            core.info("Protected memory/ownership file change is attributed to the authorized repository owner.");

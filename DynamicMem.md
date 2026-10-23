@@ -602,7 +602,8 @@ The Rate Engine milestone was reconstructed on the replacement laptop on the
   `/DynamicMem.md @Aboyeji-Isaac` CODEOWNERS entry, and adds
   `.github/workflows/dynamicmem-owner-guard.yml`. The guard checks the
   authenticated GitHub event actor and GitHub-associated commit authors for
-  changes to this file, and fails closed when it cannot verify attribution.
+  changes to this file, its own workflow, and CODEOWNERS; it fails closed when
+  it cannot verify attribution or the complete changed-file list.
 - State at preparation time: PR #557 is open as a draft and remains unmerged.
   The new `pull_request_target` guard cannot run on this initial PR because
   GitHub loads that workflow from the base branch; it becomes active for future
