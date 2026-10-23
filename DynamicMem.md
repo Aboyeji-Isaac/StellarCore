@@ -617,6 +617,11 @@ The Rate Engine milestone was reconstructed on the replacement laptop on the
   file before this tracking note was appended; the ignore rule and explicit
   CODEOWNERS entry were verified. No CI run was returned for the PR head at
   the time of this entry.
+- Follow-up guard review on 2026-10-23: extended the protected-path set to include
+  `.github/CODEOWNERS` and `.github/workflows/dynamicmem-owner-guard.yml`, and made
+  the workflow fail closed when GitHub's changed-file API reaches its 300-file
+  cap for either PRs or pushes. These checks were reviewed in the branch file;
+  the workflow itself has not run because it is not yet present on the base branch.
 - No merge, direct write to `development`, production operation, database
   change, or unrelated CI modification was performed. Future implementation
   milestones, architectural decisions, test results, CI outcomes, and known
