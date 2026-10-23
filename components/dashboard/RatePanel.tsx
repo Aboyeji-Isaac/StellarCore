@@ -1,4 +1,5 @@
 import { getRatesApiResult } from "@/lib/api/rates";
+import type { RatesApiResult } from "@/types/api/rates";
 import type { RateFreshnessState } from "@/types/rates";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
@@ -18,8 +19,11 @@ function freshnessTone(state: RateFreshnessState) {
 }
 
 export async function RatePanel() {
-  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG);
+  return <RatePanelView result={await getRatesApiResult(FEATURED_CORRIDOR_SLUG)} />;
+}
 
+/** Pure render of a rates API result; contract-tested against canonical fixtures. */
+export function RatePanelView({ result }: Readonly<{ result: RatesApiResult }>) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
