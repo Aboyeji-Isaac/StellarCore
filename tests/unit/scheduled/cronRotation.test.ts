@@ -325,7 +325,7 @@ function successfulRun() {
     ok: true,
     startedAt: "2026-09-15T00:00:00.000Z",
     completedAt: "2026-09-15T00:00:01.000Z",
-    rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] }),
+    rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [], skippedSources: [] }),
     reputation: Object.freeze({ attempted: 3, succeeded: 3, failed: 0, failures: [] }),
   });
 }

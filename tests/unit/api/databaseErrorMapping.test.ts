@@ -10,6 +10,7 @@ import { getRatesApiResult } from "@/lib/api/rates";
 import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
 import type { ReputationApiRepository } from "@/lib/api/reputationRepository";
 import type { StaleEvidenceStore } from "@/lib/api/staleEvidence";
+import type { PublicApiErrorReporter } from "@/lib/api/errors";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,10 +31,10 @@ const EMPTY_STALE_STORE: StaleEvidenceStore = Object.freeze({
  */
 function captureReporter(): [
   Array<{ error: unknown; context: { operation: string; code: string } }>,
-  (error: unknown, context: { operation: string; code: string }) => void,
+  PublicApiErrorReporter,
 ] {
   const reported: Array<{ error: unknown; context: { operation: string; code: string } }> = [];
-  return [reported, (error, context) => reported.push({ error, context })];
+  return [reported, (error, context) => reported.push({ error, context: (context ?? { operation: "", code: "" }) as { operation: string; code: string } })];
 }
 
 /** Creates a Prisma-shaped error with code and optional nested driver error. */

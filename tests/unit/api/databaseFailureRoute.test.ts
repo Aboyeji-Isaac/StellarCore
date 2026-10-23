@@ -23,6 +23,7 @@ test("anchors list route returns safe 500 when database fails", async () => {
   const result = await getAnchorsApiResult({
     repository: {
       findAll: async () => { throw DB_ERROR; },
+      findBySlug: async () => null,
     },
   });
   const response = publicApiJsonResponse(result);
@@ -153,7 +154,7 @@ test("rate history route returns safe 500 when database fails", async () => {
 
 test("no route fabricates success data when database fails", async () => {
   const testCases = [
-    { name: "anchors list", fn: () => getAnchorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; } } }) },
+    { name: "anchors list", fn: () => getAnchorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; }, findBySlug: async () => null } }) },
     { name: "anchor detail", fn: () => getAnchorApiResult("zeam", { repository: { findAll: async () => [], findBySlug: async () => { throw DB_ERROR; } } }) },
     { name: "corridors list", fn: () => getCorridorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; } } }) },
     { name: "corridor detail", fn: () => getCorridorApiResult("usdc-us-brl-br", { repository: { findBySlug: async () => { throw DB_ERROR; } } }) },
@@ -173,7 +174,7 @@ test("no route fabricates success data when database fails", async () => {
 
 test("all public read routes disable caching on error responses", async () => {
   const routes = [
-    { name: "anchors list", getResult: () => getAnchorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; } } }) },
+    { name: "anchors list", getResult: () => getAnchorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; }, findBySlug: async () => null } }) },
     { name: "anchor detail", getResult: () => getAnchorApiResult("zeam", { repository: { findAll: async () => [], findBySlug: async () => { throw DB_ERROR; } } }) },
     { name: "corridors list", getResult: () => getCorridorsApiResult({ repository: { findAll: async () => { throw DB_ERROR; } } }) },
     { name: "corridor detail", getResult: () => getCorridorApiResult("usdc-us-brl-br", { repository: { findBySlug: async () => { throw DB_ERROR; } } }) },
@@ -211,7 +212,7 @@ test("different database error types are all mapped to safe internal_error", asy
 
   for (const error of errorTypes) {
     const result = await getAnchorsApiResult({
-      repository: { findAll: async () => { throw error; } },
+      repository: { findAll: async () => { throw error; }, findBySlug: async () => null },
     });
     assert.equal(result.status, 500);
     assert.equal(result.body.error.code, "internal_error");

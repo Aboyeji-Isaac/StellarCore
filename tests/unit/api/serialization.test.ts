@@ -1,14 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  serializeRates,
-  type LatestCorridorRate,
-} from "@/lib/api/rates";
-import {
-  serializeRateHistory,
-  type CorridorRateHistory,
-} from "@/lib/api/rateHistory";
+import { serializeRates } from "@/lib/api/rates";
+import type { LatestCorridorRate } from "@/types/latestRates";
+import { serializeRateHistory } from "@/lib/api/rateHistory";
+import type { CorridorRateHistory } from "@/types/rateHistory";
 import { serializeReputation } from "@/lib/api/reputation";
 import type { ReputationApiAnchorRecord } from "@/lib/api/reputationRepository";
 
@@ -203,7 +199,7 @@ test("decimal comparisons avoid floating-point equality assumptions", () => {
   assert.equal(body.medianRate, "0.1000000000000000015");
   assert.equal(body.observations[0]?.rate, "0.100000000000000001");
   assert.equal(
-    body.medianRate !== body.observations[0]?.rate,
+    (body.medianRate as string) !== (body.observations[0]?.rate as string),
     true,
     "textually distinct decimal strings must remain distinct as strings",
   );

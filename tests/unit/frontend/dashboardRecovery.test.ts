@@ -337,6 +337,7 @@ test("async server components simulate unavailable-then-available sequence deter
           freshSourceCount: 2,
           observations: [
             {
+              snapshotId: "snapshot-1",
               anchorSlug: "zeam",
               anchorName: "Zeam",
               rate: "5.50",
@@ -344,8 +345,9 @@ test("async server components simulate unavailable-then-available sequence deter
               destinationAmount: "550",
               fee: "0",
               capturedAt: CAPTURE_TIME,
-              freshness: { state: "fresh" as const, ageMs: 1_000 },
-              eligibleForMedian: true,
+              freshnessState: "fresh" as const,
+              ageMs: 1_000,
+              included: true,
             },
           ],
           exclusions: [],
