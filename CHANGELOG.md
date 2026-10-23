@@ -11,6 +11,9 @@ with your pull request.
 
 ### Added
 
+- Resolved base URL resolution for dashboard and client requests, deduplicating path prefixes and safely validating local, preview, and production deployment origins (#439).
+- Public evidence route hardening against malformed percent-encoded path segments, returning safe client errors without exposing raw parser exceptions or executing unintended lookups (#440).
+- Dashboard navigation state coordinator and regression coverage verifying obsolete requests never update inactive views, return navigation follows cache policy, and subscriptions do not leak (#441).
 - Visibility-aware dashboard refresh: the dashboard re-reads its panels at most
   once per minute while the page is visible, pauses polling entirely while the
   tab is hidden, and resumes per the documented interval when the page becomes

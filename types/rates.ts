@@ -12,7 +12,7 @@ export type NormalizedRateObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-  configurationFingerprint: string;
+  configurationFingerprint?: string;
 }>;
 
 export type RateFreshnessState = "fresh" | "stale" | "future" | "invalid";
@@ -60,8 +60,8 @@ export type PersistedRateSnapshot = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-  configurationFingerprint: string | null;
-  provenanceUnavailable: boolean;
+  configurationFingerprint?: string | null;
+  provenanceUnavailable?: boolean;
 }>;
 
 export type RateSnapshotPersistenceCode =
@@ -83,7 +83,7 @@ export type RateSnapshotRepository = Readonly<{
   findAnchorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
   findCorridorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
   hasAssociation: (anchorId: string, corridorId: string) => Promise<boolean>;
-  findProvenanceBySnapshotId: (id: string) => Promise<RateSnapshotProvenance | null>;
+  findProvenanceBySnapshotId?: (id: string) => Promise<RateSnapshotProvenance | null>;
   createSnapshot: (input: Readonly<{
     anchorId: string;
     corridorId: string;
@@ -92,7 +92,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
-    configurationFingerprint: string;
+    configurationFingerprint?: string | null;
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -100,8 +100,8 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
-    configurationFingerprint: string | null;
-    provenanceUnavailable: boolean;
+    configurationFingerprint?: string | null;
+    provenanceUnavailable?: boolean;
   }>>;
 }>;
 

@@ -93,14 +93,14 @@ test("concurrent duplicate delivery completes without errors", async () => {
   };
 
   const results = await runConcurrently(
-    () => runScheduledRefresh(deps as any),
+    () => runScheduledRefresh(deps as never),
     concurrency,
   );
 
   // All concurrent runs should complete successfully
   assert.equal(results.length, concurrency);
   assert.equal(
-    results.every((r: any) => r.ok),
+    results.every((r: { ok: boolean }) => r.ok),
     true,
   );
 });
@@ -128,10 +128,10 @@ test("concurrent duplicate delivery passes reliably on repeated runs", async () 
     };
 
     const results = await runConcurrently(
-      () => runScheduledRefresh(deps as any),
+      () => runScheduledRefresh(deps as never),
       concurrency,
     );
-    if (!results.every((r: any) => r.ok)) {
+    if (!results.every((r: { ok: boolean }) => r.ok)) {
       failures += 1;
     }
   }

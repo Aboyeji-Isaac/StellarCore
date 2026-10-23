@@ -237,7 +237,6 @@ function okQuote(overrides: Partial<Sep38IndicativePrice> = {}): Sep38Indicative
 function sequencedQuote(outcomes: readonly string[]) {
   const responder = ((): ((candidate: RateCandidate) => Promise<Sep38IndicativePrice>) => {
     let call = 0;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return async (_candidate: RateCandidate) => {
       const outcome = call < outcomes.length ? outcomes[call] : "ok";
       call += 1;

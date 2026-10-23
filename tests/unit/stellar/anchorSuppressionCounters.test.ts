@@ -34,6 +34,7 @@ function makeDependencies(
   let run = 0;
 
   const dependencies: AnchorSyncDependencies = {
+    allocateOrder: async () => 1n,
     discover: async (entry) => {
       run += 1;
       if (runOutcome(run).discovery === "FAIL") {
@@ -57,9 +58,9 @@ function makeDependencies(
       };
     },
     markDown: async (slug) => {
-      if (!statuses.has(slug)) return false;
+      if (!statuses.has(slug)) return "NOT_FOUND";
       statuses.set(slug, "DOWN");
-      return true;
+      return "MARKED_DOWN";
     },
   };
 
@@ -111,7 +112,7 @@ test("suppression persists across repeated failed runs and each run counts itsel
     ...dependencies,
     markDown: async () => {
       markDownCalls += 1;
-      return true;
+      return "MARKED_DOWN";
     },
   };
   await runOnce(counting, [ENTRY]);
@@ -144,13 +145,14 @@ test("recovery resets suppression only when discovery and persistence both succe
 
 test("recovery-probe failures remain distinguishable from ordinary failed runs", async () => {
   const notFound: AnchorSyncDependencies = {
+    allocateOrder: async () => 1n,
     discover: async () => {
       throw new Error("simulated discovery failure");
     },
     persist: async () => {
       throw new Error("must not be reached");
     },
-    markDown: async () => false,
+    markDown: async () => "NOT_FOUND",
   };
   const suppressedWriteFailed: AnchorSyncDependencies = {
     ...notFound,
@@ -172,11 +174,12 @@ test("recovery-probe failures remain distinguishable from ordinary failed runs",
   );
 
   const persistedOnlyFailed: AnchorSyncDependencies = {
+    allocateOrder: async () => 1n,
     discover: async (entry) => Object.freeze({ ...entry }) as DiscoveredAnchor,
     persist: async () => {
       throw new Error("simulated persistence failure");
     },
-    markDown: async () => true,
+    markDown: async () => "MARKED_DOWN",
   };
   const persistenceRun = await runOnce(persistedOnlyFailed, [ENTRY]);
   assert.deepEqual(

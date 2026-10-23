@@ -5,12 +5,8 @@ import {
   type CorridorDirectoryRecord,
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
-import {
-  NO_PAGINATION_QUERY,
-  paginate,
-  parsePagination,
-  type PaginationQuery,
-} from "@/lib/api/pagination";
+import { NO_PAGINATION_QUERY, paginate, parsePagination, type PaginationQuery } from "@/lib/api/pagination";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import { transferCapable } from "@/lib/stellar/anchors";
 import {
   consolePublicApiErrorReporter,
@@ -73,7 +69,9 @@ export async function getCorridorApiResult(
   slug: string,
   dependencies: CorridorApiDependencies = {},
 ): Promise<CorridorApiResult> {
-  if (!isValidCorridorSlug(slug)) {
+  const decoded = safeDecodePathSegment(slug);
+  const normalizedSlug = decoded.ok ? decoded.value : slug;
+  if (!isValidCorridorSlug(normalizedSlug)) {
     return publicApiErrorResult(
       "invalid_corridor_slug",
       "A valid corridor slug is required.",
@@ -83,7 +81,7 @@ export async function getCorridorApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const corridor = await repository.findBySlug(slug);
+    const corridor = await repository.findBySlug(normalizedSlug);
 
     if (!corridor) {
       return publicApiErrorResult("corridor_not_found", "Corridor not found.");

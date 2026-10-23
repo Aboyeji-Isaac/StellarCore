@@ -1,4 +1,5 @@
 import { isValidAnchorSlug } from "@/lib/api/anchors";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import {
   FILE_STALE_EVIDENCE_STORE,
   restoreStaleEvidence,
@@ -64,7 +65,9 @@ export async function getAnchorReputationApiResult(
   slug: string,
   dependencies: ReputationApiDependencies = {},
 ): Promise<ReputationApiDetailResult> {
-  if (!isValidAnchorSlug(slug)) {
+  const decoded = safeDecodePathSegment(slug);
+  const normalizedSlug = decoded.ok ? decoded.value : slug;
+  if (!isValidAnchorSlug(normalizedSlug)) {
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
@@ -73,10 +76,10 @@ export async function getAnchorReputationApiResult(
 
   const now = dependencies.now?.() ?? new Date();
   const store = dependencies.staleEvidenceStore ?? FILE_STALE_EVIDENCE_STORE;
-  const key = `reputation-detail:v1:${slug}`;
+  const key = `reputation-detail:v1:${normalizedSlug}`;
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
-    const record = await repository.findBySlug(slug);
+    const record = await repository.findBySlug(normalizedSlug);
     if (!record) {
       return publicApiErrorResult("anchor_not_found", "Anchor not found.");
     }

@@ -275,7 +275,6 @@ async function addHistory(
   // statistics; without both this would measure an unrepresentative plan.
   // PostgreSQL VACUUM cannot execute inside a prepared transaction.
   // Reviewed exception: fixed SQL with no external or interpolated input.
-  // eslint-disable-next-line no-restricted-syntax
   await db.$executeRawUnsafe("VACUUM (ANALYZE) rate_snapshots");
 }
 

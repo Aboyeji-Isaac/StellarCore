@@ -53,6 +53,7 @@ export async function persistRateSnapshot(
       destinationAmount: observation.destinationAmount,
       fee: observation.fee,
       capturedAt: observation.capturedAt,
+      configurationFingerprint: observation.configurationFingerprint,
     });
     const snapshot: PersistedRateSnapshot = Object.freeze({
       id: row.id,
@@ -63,6 +64,8 @@ export async function persistRateSnapshot(
       destinationAmount: row.destinationAmount.toString(),
       fee: row.fee.toString(),
       capturedAt: new Date(row.capturedAt.getTime()),
+      configurationFingerprint: row.configurationFingerprint ?? null,
+      provenanceUnavailable: row.provenanceUnavailable ?? false,
     });
     return Object.freeze({ ok: true, snapshot });
   } catch (error) {
