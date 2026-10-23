@@ -552,6 +552,17 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+Public evidence GET routes use the URL path and query parameters as input.
+They always return `application/json`, including errors; they do not negotiate
+representations using `Accept` (and do not return 406 for other requested media
+types). Request `Content-Type` does not affect processing and does not cause
+415 responses, because these routes do not inspect, parse, or use request bodies.
+Clients should send GET requests without a body. A body reaching a handler is
+ignored; it cannot supply or override path or query parameters. Normal parameter
+validation and rate limiting still apply regardless of these headers. This
+contract covers anchors, corridors, rates, rate history, and reputation, including
+detail routes; it does not cover the internal cron endpoint.
+
 
 ### Public API error contract
 
