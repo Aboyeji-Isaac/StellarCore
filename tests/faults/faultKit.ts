@@ -199,6 +199,7 @@ export function faultSnapshotRepository(
     corridorId: string;
     rate: string;
     capturedAt: Date;
+    configurationFingerprint: string;
   }) => {
     const row: SnapshotLedgerRow = {
       id: `snapshot-${ledger.rows.length + 1}`,
@@ -215,6 +216,8 @@ export function faultSnapshotRepository(
       destinationAmount: "0",
       fee: "0",
       capturedAt: new Date(input.capturedAt.getTime()),
+      configurationFingerprint: input.configurationFingerprint,
+      provenanceUnavailable: false,
     };
   };
 
@@ -228,6 +231,7 @@ export function faultSnapshotRepository(
     findCorridorBySlug: (slug: string) => corridorResponder(slug),
     hasAssociation: (anchorId: string, corridorId: string) =>
       associationResponder({ anchorId, corridorId }),
+    findProvenanceBySnapshotId: async () => null,
     createSnapshot: (input: Parameters<typeof okCreate>[0]) => createResponder(input),
   };
 }

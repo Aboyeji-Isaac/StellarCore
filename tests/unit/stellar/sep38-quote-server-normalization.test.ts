@@ -143,6 +143,7 @@ function repository(): RateSnapshotRepository {
     findAnchorBySlug: async (slug) => ({ id: slug }),
     findCorridorBySlug: async (slug) => ({ id: slug }),
     hasAssociation: async () => true,
-    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input }),
+    findProvenanceBySnapshotId: async () => null,
+    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input, provenanceUnavailable: false }),
   };
 }

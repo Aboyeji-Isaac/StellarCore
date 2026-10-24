@@ -1,6 +1,7 @@
 import {
   isRecoverablePublicApiErrorCode,
   type PublicApiErrorCode,
+  type PublicApiErrorStatus,
 } from "@/types/api/errors";
 
 /**
@@ -18,7 +19,7 @@ export type DashboardPanelError = Readonly<{
 export type DashboardPanelResult<T> =
   | Readonly<{ status: 200; body: T }>
   | Readonly<{
-      status: number;
+      status: PublicApiErrorStatus;
       body: Readonly<{ error: DashboardPanelError }>;
     }>;
 

@@ -15,6 +15,7 @@ const OBSERVATION: NormalizedRateObservation = Object.freeze({
   destinationAmount: "101",
   fee: "1",
   capturedAt: new Date("2026-08-27T12:00:00.000Z"),
+  configurationFingerprint: "test-fingerprint",
 });
 
 test("snapshot persistence resolves stable slugs and requires an existing association", async () => {
@@ -86,9 +87,10 @@ function repository() {
       lookups.push(`association:${anchorId}:${corridorId}`);
       return state.associated;
     },
+    findProvenanceBySnapshotId: async () => null,
     createSnapshot: async (input) => {
       rows.push(input);
-      return { id: `snapshot-${rows.length}`, ...input };
+      return { id: `snapshot-${rows.length}`, ...input, provenanceUnavailable: false };
     },
   };
   return state;
