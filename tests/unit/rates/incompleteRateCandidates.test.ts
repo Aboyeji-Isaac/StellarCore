@@ -86,13 +86,14 @@ function makeRepository() {
     findAnchorBySlug: async (slug) => ({ id: slug }),
     findCorridorBySlug: async (slug) => ({ id: slug }),
     hasAssociation: async () => true,
+    findProvenanceBySnapshotId: async () => null,
     createSnapshot: async (input) => {
       persisted.push(Object.freeze({
         anchorId: input.anchorId,
         corridorId: input.corridorId,
         rate: input.rate,
       }));
-      return { id: `snapshot-${persisted.length}`, ...input };
+      return { id: `snapshot-${persisted.length}`, ...input, provenanceUnavailable: false };
     },
   };
   return Object.freeze({ repository, persisted });

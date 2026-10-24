@@ -1,145 +1,160 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
+import { getRatesApiResult } from "@/lib/api/rates";
 
-const COMPUTED_AT = new Date("2026-08-31T13:54:34.979Z");
+const NOW = new Date("2026-08-27T12:00:00.000Z");
+const CORRIDOR = "usdc-us-brl-br";
 
-function anchor(slug: string, reputationScore: any) {
+type RateReadResultOverride = Partial<{
+  ok: boolean;
+  corridor: Readonly<{
+    slug: string;
+    assetCodeFrom: string;
+    countryFrom: string;
+    assetCodeTo: string;
+    countryTo: string;
+  }>;
+  evaluatedAt: string;
+  state: string;
+  median: string | null;
+  totalIndependentSources: number;
+  freshSourceCount: number;
+  observations: readonly unknown[];
+  exclusions: readonly unknown[];
+}>;
+
+function readResult(overrides: RateReadResultOverride = {}) {
   return Object.freeze({
-    slug,
-    name: slug[0]!.toUpperCase() + slug.slice(1),
-    reputationScore,
-  });
-}
-
-function score(overrides: Partial<any> = {}) {
-  return Object.freeze({
-    compositeScore: 90,
-    scoreBand: "AMBER",
-    fillRate7d: null,
-    fillRate30d: null,
-    fillRate90d: null,
-    settleP50Ms: null,
-    settleP95Ms: null,
-    slippageP50: null,
-    slippageP95: null,
-    sampleSize: 30,
-    state: "OK",
-    computedAt: COMPUTED_AT,
+    ok: true,
+    corridor: Object.freeze({
+      slug: CORRIDOR,
+      assetCodeFrom: "USDC",
+      countryFrom: "US",
+      assetCodeTo: "BRL",
+      countryTo: "BR",
+    }),
+    evaluatedAt: NOW.toISOString(),
+    state: "insufficient_fresh_sources",
+    median: null,
+    totalIndependentSources: 0,
+    freshSourceCount: 0,
+    observations: Object.freeze([]),
+    exclusions: Object.freeze([]),
     ...overrides,
   });
 }
 
-function repository(records: readonly any[]) {
+function observation(
+  anchorSlug: string,
+  rate: string,
+  freshnessState: "fresh" | "stale" | "future" | "invalid",
+  ageMs: number | null,
+  included: boolean,
+  exclusionReason?: "stale" | "future_timestamp",
+) {
   return Object.freeze({
-    findAll: async () => records,
-    findBySlug: async () => null,
+    snapshotId: `${anchorSlug}-snapshot`,
+    anchorSlug,
+    anchorName: anchorSlug[0]!.toUpperCase() + anchorSlug.slice(1),
+    rate,
+    sourceAmount: "100.000000000000000001",
+    destinationAmount: "17.000000000000000001",
+    fee: "1.000000000000000001",
+    capturedAt: freshnessState === "invalid" ? "invalid" : NOW.toISOString(),
+    freshnessState,
+    ageMs,
+    included,
+    ...(exclusionReason ? { exclusionReason } : {}),
   });
 }
 
-test("empty anchor directory is a successful immutable reputation response", async () => {
-  const result = await getReputationApiResult({ repository: repository([]) });
-
-  assert.deepEqual(result, { status: 200, body: { reputation: [], count: 0 } });
-  assert.equal(Object.isFrozen(result.body), true);
-  if (result.status === 200) assert.equal(Object.isFrozen(result.body.reputation), true);
-});
-
-test("anchor serialization maps internal fields to public API format", async () => {
-  const result = await getReputationApiResult({ repository: repository([anchor("zeam", score())]) });
-
-  assert.deepEqual(result.body, {
-    reputation: [{
-      anchor: { slug: "zeam", name: "Zeam" },
-      state: "established",
-      score: 90,
-      scoreBand: "amber",
-      evidence: { outcomeCount: 30 },
-      metrics: {
-        fillRate7d: null,
-        fillRate30d: null,
-        fillRate90d: null,
-        settleP50Ms: null,
-        settleP95Ms: null,
-        slippageP50: null,
-        slippageP95: null,
-      },
-      computedAt: COMPUTED_AT.toISOString(),
-    }],
-    count: 1,
+test("empty corridor returns insufficient fresh sources", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({ observations: Object.freeze([]) }),
   });
-  assert.equal(Object.isFrozen(result.body.reputation[0]), true);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
+  assert.deepEqual(result.body.observations, []);
+  assert.equal(result.body.sourceCount, 0);
+  assert.equal(result.body.freshSourceCount, 0);
 });
 
-test("anchor ordering is deterministic and serialization excludes internal fields", async () => {
-  const result = await getReputationApiResult({ repository: repository([
-    anchor("zeam", score()),
-    anchor("cowrie", null),
-    anchor("moneygram", score({ state: "INSUFFICIENT_DATA", compositeScore: null, scoreBand: null })),
-  ]) });
-  
-  // Guard against undefined reputation
-  assert.ok(result.body.reputation, "reputation should be defined");
-  assert.deepEqual(result.body.reputation.map(({ anchor: result }) => result.slug), [
-    "cowrie",
-    "moneygram",
-    "zeam",
-  ]);
-  assert.equal(Object.isFrozen(result.body.reputation[0]), true);
-  assert.doesNotThrow(() => JSON.stringify(result.body));
-  const serialized = JSON.stringify(result.body);
-  for (const forbidden of ["anchorId", "INSUFFICIENT_DATA", "rateSnapshots", "transferOutcomes"]) {
-    assert.equal(serialized.includes(forbidden), false);
-  }
-});
-
-test("detail validates slugs before repository access and distinguishes unknown anchors", async () => {
-  for (const slug of ["", "../cowrie", " Cowrie ", "bad--slug", "a".repeat(101)]) {
-    let accessed = false;
-    const result = await getAnchorReputationApiResult(slug, {
-      repository: repository([], null),
-    });
-    assert.equal(result.status, 400);
-    assert.equal(result.body.error.code, "invalid_anchor_slug");
-    assert.equal(accessed, false);
-  }
-
-  const missing = await getAnchorReputationApiResult("not-a-real-anchor", {
-    repository: repository([], null),
+test("single fresh source returns insufficient state", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({
+      totalIndependentSources: 1,
+      freshSourceCount: 1,
+      observations: [observation("zeam", "0.170000000000000001", "fresh", 1_000, true)],
+    }),
   });
-  assert.deepEqual(missing, {
-    status: 404,
-    body: { error: { code: "anchor_not_found", message: "Anchor not found." } },
-  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
+  assert.equal(result.body.sourceCount, 1);
+  assert.equal(result.body.freshSourceCount, 1);
+  assert.equal(result.body.observations[0]?.anchor.slug, "zeam");
+  assert.equal(result.body.observations[0]?.rate, "0.170000000000000001");
 });
 
-test("repository failures fallback to stale evidence (returns 200)", async () => {
-  // The API falls back to stale evidence on database failure, returning 200
-  const list = await getReputationApiResult({
-    repository: repository([], null, new Error("DATABASE_URL=secret")),
+test("healthy median with multiple sources", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => readResult({
+      state: "healthy",
+      median: "0.1000000000000000015",
+      totalIndependentSources: 4,
+      freshSourceCount: 2,
+      observations: [
+        observation("zeam", "0.100000000000000001", "fresh", 1, true),
+        observation("anchor-b", "0.100000000000000002", "fresh", 2, true),
+        observation("anchor-c", "9", "stale", 120_001, false, "stale"),
+        observation("anchor-d", "8", "future", -1, false, "future_timestamp"),
+      ],
+    }),
   });
-  // List returns 200 with stale evidence, not 500
-  assert.equal(list.status, 200);
-  assert.equal(list.body.reputation.length, 0); // No stale evidence available
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "healthy");
+  assert.equal(result.body.medianRate, "0.1000000000000000015");
+  assert.equal(result.body.sourceCount, 4);
+  assert.equal(result.body.freshSourceCount, 2);
+  assert.equal(result.body.observations[2]?.freshness.state, "stale");
+  assert.equal(result.body.observations[3]?.exclusionReason, "future_timestamp");
 });
 
-test("routes are GET-only dynamic no-store handlers", async () => {
-  const listRoute = await import("@/app/api/reputation/route");
-  const detailRoute = await import("@/app/api/reputation/[slug]/route");
+test("repository failures return stable safe error envelope", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
+    now: () => NOW,
+    readLatestRate: async () => {
+      throw new Error("DATABASE_URL=secret SQL failure");
+    },
+  });
 
-  for (const route of [listRoute, detailRoute]) {
-    assert.equal((route as any).dynamic, "force-dynamic");
-    assert.equal("POST" in route, false);
-    assert.equal("PUT" in route, false);
-    assert.equal("PATCH" in route, false);
-    assert.equal("DELETE" in route, false);
-  }
+  assert.deepEqual(result, {
+    status: 500,
+    body: {
+      error: { code: "internal_error", message: "Unable to read rates." },
+    },
+  });
+  assert.equal(JSON.stringify(result).includes("secret"), false);
+});
 
-  const response = await (detailRoute as any).GET(
-    new Request("http://localhost/api/reputation/bad--slug"),
-    { params: Promise.resolve({ slug: "bad--slug" }) }
-  );
-  assert.equal(response.status, 400);
-  assert.equal(response.headers.get("cache-control"), "no-store");
+test("corridor not found returns 404", async () => {
+  const result = await getRatesApiResult("unknown-corridor", {
+    now: () => NOW,
+    readLatestRate: async () => ({
+      ok: false,
+      corridorSlug: "unknown-corridor",
+      code: "CORRIDOR_NOT_FOUND",
+    }),
+  });
+
+  assert.equal(result.status, 404);
+  assert.equal(result.body.error.code, "corridor_not_found");
 });

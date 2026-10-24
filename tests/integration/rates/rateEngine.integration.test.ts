@@ -15,8 +15,9 @@ test("controlled quote to normalization to persistence to median composition sta
     findAnchorBySlug: async (slug) => ({ id: `anchor:${slug}` }),
     findCorridorBySlug: async (slug) => ({ id: `corridor:${slug}` }),
     hasAssociation: async () => true,
+    findProvenanceBySnapshotId: async () => null,
     createSnapshot: async (input) => {
-      const row = { id: `snapshot-${rows.length + 1}`, ...input };
+      const row = { id: `snapshot-${rows.length + 1}`, ...input, provenanceUnavailable: false };
       rows.push(row);
       return row;
     },
@@ -34,6 +35,7 @@ test("controlled quote to normalization to persistence to median composition sta
     }),
     repository,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
   const median = computeFreshMedian(result.snapshots.map((snapshot) => ({
     anchorSlug: snapshot.anchorSlug,

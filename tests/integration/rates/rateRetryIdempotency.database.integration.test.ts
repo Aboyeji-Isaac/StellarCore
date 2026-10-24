@@ -52,6 +52,7 @@ test("rate-capture retries persist one row per logical observation", {
       destinationAmount: "101",
       fee: "1",
       capturedAt: new Date("2026-08-27T12:00:00.000Z"),
+      configurationFingerprint: "test-fingerprint",
     });
     const countRows = () =>
       db.rateSnapshot.count({ where: { anchorId: anchor.id, corridorId: corridor.id } });

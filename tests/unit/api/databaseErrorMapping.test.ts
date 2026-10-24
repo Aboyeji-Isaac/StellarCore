@@ -7,6 +7,7 @@ import {
   isFailoverOrConnectionError,
 } from "@/lib/db/failoverErrors";
 import { getRatesApiResult } from "@/lib/api/rates";
+import type { PublicApiErrorReporter } from "@/lib/api/errors";
 import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
 import type { ReputationApiRepository } from "@/lib/api/reputationRepository";
 import type { StaleEvidenceStore } from "@/lib/api/staleEvidence";
@@ -29,11 +30,17 @@ const EMPTY_STALE_STORE: StaleEvidenceStore = Object.freeze({
  * Returns [reported[], reporter].
  */
 function captureReporter(): [
-  Array<{ error: unknown; context: { operation: string; code: string } }>,
-  (error: unknown, context: { operation: string; code: string }) => void,
+  Array<{
+    error: unknown;
+    context: { operation?: string; code?: string; [key: string]: unknown };
+  }>,
+  PublicApiErrorReporter,
 ] {
-  const reported: Array<{ error: unknown; context: { operation: string; code: string } }> = [];
-  return [reported, (error, context) => reported.push({ error, context })];
+  const reported: Array<{
+    error: unknown;
+    context: { operation?: string; code?: string; [key: string]: unknown };
+  }> = [];
+  return [reported, (error, context) => reported.push({ error, context: context ?? {} })];
 }
 
 /** Creates a Prisma-shaped error with code and optional nested driver error. */

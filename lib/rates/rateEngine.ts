@@ -15,6 +15,12 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
+    /**
+     * Deterministic fingerprint of the reviewed rate-source configuration
+     * used for this run. Persisted with every snapshot so captured evidence
+     * can be traced back to the configuration that produced it.
+     */
+    configurationFingerprint: string;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
