@@ -130,6 +130,8 @@ test("safe summary excludes remote metadata and retains only normalized snapshot
       destinationAmount: "17",
       fee: "1",
       capturedAt: new Date("2026-08-27T12:00:00.000Z"),
+      configurationFingerprint: "test-fingerprint",
+      provenanceUnavailable: false,
     })]),
     failures: Object.freeze([]),
     skippedSources: Object.freeze([]),

@@ -274,9 +274,10 @@ function memoryRepository(): Readonly<{
     findAnchorBySlug: async (slug: string) => Object.freeze({ id: `anchor-${slug}` }),
     findCorridorBySlug: async (slug: string) => Object.freeze({ id: `corridor-${slug}` }),
     hasAssociation: async () => true,
+    findProvenanceBySnapshotId: async () => null,
     createSnapshot: async (input) => {
       rows.push(Object.freeze({ ...input }));
-      return Object.freeze({ id: `snapshot-${rows.length}`, ...input });
+      return Object.freeze({ id: `snapshot-${rows.length}`, ...input, provenanceUnavailable: false });
     },
   });
 
@@ -348,6 +349,7 @@ test("an empty response from one configured source persists nothing while an ind
     }),
     repository: store.repository,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.deepEqual(
@@ -444,6 +446,7 @@ test("when the configured source answers 204 the capture run reports failure and
         }),
         repository: store.repository,
         now: () => NOW,
+        configurationFingerprint: "test-fingerprint",
       }),
     ),
   });
@@ -517,6 +520,7 @@ test("an empty /prices response fails preparation and stores no observation", as
         quote: quoteProvider({ [EMPTY_HOST]: emptyJsonResponse }),
         repository: store.repository,
         now: () => NOW,
+        configurationFingerprint: "test-fingerprint",
       }));
     },
     evaluateReputation: async () => Object.freeze({

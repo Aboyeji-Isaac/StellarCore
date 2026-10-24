@@ -27,6 +27,7 @@ test("[R1] quote-phase fault fails exactly one source without fabricating succes
     quote: sequencedQuote(["fault:NETWORK_FAILURE", "ok", "ok"]),
     repository: repository(ledger),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.totalAttempted, 3);
@@ -56,6 +57,7 @@ test("[R2] persistence-phase fault keeps the run partial and attributes the fail
     quote: async () => okQuote(),
     repository: faulted,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.succeeded, 2);
@@ -82,6 +84,7 @@ test("[R3] mid-cycle database disconnect preserves committed rows and reports th
     quote: async () => okQuote(),
     repository: connectableRepository,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.succeeded, 2);
@@ -101,6 +104,7 @@ test("[R4] deadline-exceeded during quote maps to QUOTE_FAILURE without partial 
     quote: sequencedQuote(["deadline:DEADLINE_EXCEEDED"]),
     repository: repository(ledger),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.succeeded, 0);
@@ -126,6 +130,7 @@ test("[R5] malformed quote fails normalization without any database interaction"
     quote: async () => okQuote({ price: "not-a-number", totalPrice: "not-a-number" }),
     repository: countingRepository,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.failed, 1);
@@ -143,6 +148,7 @@ test("[R6] duplicate candidates are skipped without consuming quote or persisten
       quote: sequencedQuote(["ok"]),
       repository: repository(ledger, { createSnapshot: ["ok", "fault:SHOULD_NOT_FIRE"] }),
       now: () => NOW,
+      configurationFingerprint: "test-fingerprint",
     },
   );
 
@@ -164,6 +170,7 @@ test("[R7] rerun after partial failure completes the set without duplicating pri
     quote: async () => okQuote(),
     repository: repository(ledger, faulted),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
   assert.equal(before.succeeded, 0);
   assert.equal(before.failed, 3);
@@ -173,6 +180,7 @@ test("[R7] rerun after partial failure completes the set without duplicating pri
     quote: async () => okQuote(),
     repository: repository(ledger),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(after.succeeded, 3);
@@ -194,6 +202,7 @@ test("[R8] persisted snapshots round-trip their inputs exactly (no fabricated va
     }),
     repository: repository(ledger),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
 
   assert.equal(result.snapshotsPersisted, 1);
