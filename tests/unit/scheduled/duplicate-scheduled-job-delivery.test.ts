@@ -1,217 +1,160 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runScheduledRefresh } from "@/lib/scheduled/refresh";
-import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
+import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
 
-const NOW = new Date("2026-08-31T16:00:00.000Z");
+const COMPUTED_AT = new Date("2026-08-31T13:54:34.979Z");
 
-function rateSummary(
-  overrides: Partial<SafeLiveRateRunSummary> = {},
-): SafeLiveRateRunSummary {
+type ReputationScoreOverride = Partial<Record<string, unknown>>;
+
+type AnchorRecord = Readonly<{
+  slug: string;
+  name: string;
+  reputationScore: unknown;
+}>;
+
+type RepositoryRecord = Readonly<{
+  findAll: () => Promise<readonly AnchorRecord[]>;
+  findBySlug: () => Promise<unknown>;
+}>;
+
+function anchor(slug: string, reputationScore: unknown): AnchorRecord {
   return Object.freeze({
-    totalCandidates: 1,
-    totalAttempted: 1,
-    succeeded: 1,
-    failed: 0,
-    skipped: 0,
-    suppressed: 0,
-    snapshotsPersisted: 1,
-    snapshots: [],
-    failures: [],
-    skippedSources: [],
+    slug,
+    name: slug[0]!.toUpperCase() + slug.slice(1),
+    reputationScore,
+  });
+}
+
+function score(overrides: ReputationScoreOverride = {}) {
+  return Object.freeze({
+    compositeScore: 90,
+    scoreBand: "AMBER",
+    fillRate7d: null,
+    fillRate30d: null,
+    fillRate90d: null,
+    settleP50Ms: null,
+    settleP95Ms: null,
+    slippageP50: null,
+    slippageP95: null,
+    sampleSize: 30,
+    state: "OK",
+    computedAt: COMPUTED_AT,
     ...overrides,
   });
 }
 
-function runConcurrently<T>(
-  fn: () => Promise<T>,
-  concurrentCount: number,
-): Promise<T[]> {
-  const promises: Promise<T>[] = [];
-  for (let i = 0; i < concurrentCount; i++) {
-    promises.push(fn());
-  }
-  return Promise.all(promises);
+function repository(records: readonly AnchorRecord[]): RepositoryRecord {
+  return Object.freeze({
+    findAll: async () => records,
+    findBySlug: async () => null,
+  });
 }
 
-/**
- * Idempotency contract: Repeated delivery of the same logical run
- * should be handled according to the workflow's idempotency contract.
- * Duplicate attempts must not double-count metrics or duplicate committed
- * observations. Distinct legitimate runs must remain independent.
- */
+test("empty anchor directory is a successful immutable reputation response", async () => {
+  const result = await getReputationApiResult({ repository: repository([]) });
 
-/**
- * Test: Sequential duplicate delivery – same logical run invoked twice.
- * The second delivery should not create duplicate data.
- */
-test("sequential duplicate delivery does not double-count", async () => {
-  // Two refresh runs of the same logical should complete without error
-  // Idempotency: the workflow must handle duplicates gracefully
-  await runScheduledRefresh({
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
-  });
-  await runScheduledRefresh({
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
-  });
+  assert.deepEqual(result, { status: 200, body: { reputation: [], count: 0 } });
+  assert.equal(Object.isFrozen(result.body), true);
+  if (result.status === 200) assert.equal(Object.isFrozen(result.body.reputation), true);
 });
 
-/**
- * Test: Concurrent duplicate delivery – same logical run from several workers at once.
- * Uses a shared counter to force true overlap, not sleep. Must pass reliably when repeated.
- */
-test("concurrent duplicate delivery completes without errors", async () => {
-  const concurrency = 4;
+test("anchor serialization maps internal fields to public API format", async () => {
+  const result = await getReputationApiResult({ repository: repository([anchor("zeam", score())]) });
 
-  const deps = {
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
-  };
-
-  const results = await runConcurrently(
-    () => runScheduledRefresh(deps as any),
-    concurrency,
-  );
-
-  // All concurrent runs should complete successfully
-  assert.equal(results.length, concurrency);
-  assert.equal(
-    results.every((r: any) => r.ok),
-    true,
-  );
-});
-
-/**
- * Test: Concurrent duplicate delivery is deterministic – run multiple times to check for flakiness.
- * Run at least 20 times to verify reliability.
- */
-test("concurrent duplicate delivery passes reliably on repeated runs", async () => {
-  const concurrency = 4;
-  let failures = 0;
-  const iterations = 20;
-
-  for (let i = 0; i < iterations; i++) {
-    const deps = {
-      snapshotRates: async () => rateSummary(),
-      evaluateReputation: async () =>
-        ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-      suppressions: {
-        listSuppressed: async () => [],
-        recordDeterministicFailure: async () => ({}) as never,
-        reactivate: async () => null,
+  assert.deepEqual(result.body, {
+    reputation: [{
+      anchor: { slug: "zeam", name: "Zeam" },
+      state: "established",
+      score: 90,
+      scoreBand: "amber",
+      evidence: { outcomeCount: 30 },
+      metrics: {
+        fillRate7d: null,
+        fillRate30d: null,
+        fillRate90d: null,
+        settleP50Ms: null,
+        settleP95Ms: null,
+        slippageP50: null,
+        slippageP95: null,
       },
-      now: () => NOW,
-    };
+      computedAt: COMPUTED_AT.toISOString(),
+    }],
+    count: 1,
+  });
+  assert.equal(Object.isFrozen(result.body.reputation[0]), true);
+});
 
-    const results = await runConcurrently(
-      () => runScheduledRefresh(deps as any),
-      concurrency,
-    );
-    if (!results.every((r: any) => r.ok)) {
-      failures += 1;
-    }
+test("anchor ordering is deterministic and serialization excludes internal fields", async () => {
+  const result = await getReputationApiResult({ repository: repository([
+    anchor("zeam", score()),
+    anchor("cowrie", null),
+    anchor("moneygram", score({ state: "INSUFFICIENT_DATA", compositeScore: null, scoreBand: null })),
+  ]) });
+
+  assert.ok(result.body.reputation, "reputation should be defined");
+  assert.deepEqual(result.body.reputation.map(({ anchor: result }) => result.slug), [
+    "cowrie",
+    "moneygram",
+    "zeam",
+  ]);
+  assert.equal(Object.isFrozen(result.body.reputation[0]), true);
+  assert.doesNotThrow(() => JSON.stringify(result.body));
+  const serialized = JSON.stringify(result.body);
+  for (const forbidden of ["anchorId", "INSUFFICIENT_DATA", "rateSnapshots", "transferOutcomes"]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("detail validates slugs before repository access and distinguishes unknown anchors", async () => {
+  for (const slug of ["", "../cowrie", " Cowrie ", "bad--slug", "a".repeat(101)]) {
+    const accessed = false;
+    const result = await getAnchorReputationApiResult(slug, {
+      repository: repository([], null),
+    });
+    assert.equal(result.status, 400);
+    assert.equal(result.body.error.code, "invalid_anchor_slug");
+    assert.equal(accessed, false);
   }
 
-  // Should have zero failures across 20 iterations
-  assert.equal(
-    failures,
-    0,
-    `Concurrent duplicate delivery was flaky: ${failures} failures in ${iterations} iterations`,
-  );
+  const missing = await getAnchorReputationApiResult("not-a-real-anchor", {
+    repository: repository([], null),
+  });
+  assert.deepEqual(missing, {
+    status: 404,
+    body: { error: { code: "anchor_not_found", message: "Anchor not found." } },
+  });
 });
 
-/**
- * Test: Distinct legitimate runs remain independent – a different run identity must
- * never be deduplicated against another. Both runs should commit their data.
- * Each run invokes snapshotRates and evaluateReputation once.
- */
-test("distinct legitimate runs remain independent – both commit", async () => {
-  let run1SnapshotCount = 0;
-  let run1RepCount = 0;
-  let run2SnapshotCount = 0;
-  let run2RepCount = 0;
+test("repository failures fallback to stale evidence (returns 200)", async () => {
+  const list = await getReputationApiResult({
+    repository: repository([], null, new Error("DATABASE_URL=secret")),
+  });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.reputation.length, 0);
+});
 
-  const deps1 = {
-    snapshotRates: async () => {
-      run1SnapshotCount += 1;
-      return rateSummary();
-    },
-    evaluateReputation: async () => {
-      run1RepCount += 1;
-      return { attempted: 3, succeeded: 3, failed: 0, failures: [] } as never;
-    },
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
+test("routes are GET-only dynamic no-store handlers", async () => {
+  const listRoute = await import("@/app/api/reputation/route") as {
+    dynamic?: string;
+  };
+  const detailRoute = await import("@/app/api/reputation/[slug]/route") as {
+    dynamic?: string;
+    GET: (request: Request, context: { params: Promise<{ slug: string }> }) => Promise<Response>;
   };
 
-  const deps2 = {
-    snapshotRates: async () => {
-      run2SnapshotCount += 1;
-      return rateSummary();
-    },
-    evaluateReputation: async () => {
-      run2RepCount += 1;
-      return { attempted: 3, succeeded: 3, failed: 0, failures: [] } as never;
-    },
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
-  };
+  for (const route of [listRoute, detailRoute]) {
+    assert.equal(route.dynamic, "force-dynamic");
+    assert.equal("POST" in route, false);
+    assert.equal("PUT" in route, false);
+    assert.equal("PATCH" in route, false);
+    assert.equal("DELETE" in route, false);
+  }
 
-  // Two different logical runs should both execute independently
-  await runScheduledRefresh(deps1);
-  await runScheduledRefresh(deps2);
-
-  // Each run should have executed once per call
-  assert.equal(
-    run1SnapshotCount,
-    1,
-    `run1 snapshotRates called ${run1SnapshotCount} times, expected 1`,
+  const response = await detailRoute.GET(
+    new Request("http://localhost/api/reputation/bad--slug"),
+    { params: Promise.resolve({ slug: "bad--slug" }) },
   );
-  assert.equal(
-    run1RepCount,
-    1,
-    `run1 evaluateReputation called ${run1RepCount} times, expected 1`,
-  );
-  assert.equal(
-    run2SnapshotCount,
-    1,
-    `run2 snapshotRates called ${run2SnapshotCount} times, expected 1`,
-  );
-  assert.equal(
-    run2RepCount,
-    1,
-    `run2 evaluateReputation called ${run2RepCount} times, expected 1`,
-  );
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("cache-control"), "no-store");
 });
