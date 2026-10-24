@@ -1,10 +1,6 @@
 import * as React from "react";
-import { getReputationApiResult } from "@/lib/api/reputation";
-import type {
-  PublicReputationScoreBand,
-  PublicReputationState,
-  ReputationApiListResult,
-} from "@/types/api/reputation";
+import { getReputationApiResult, type ReputationApiDependencies } from "@/lib/api/reputation";
+import type { PublicReputationScoreBand, PublicReputationState, ReputationApiListResult } from "@/types/api/reputation";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
@@ -42,12 +38,14 @@ function formatMs(value: number | null): string {
   return value === null ? "—" : `${value} ms`;
 }
 
-export async function ReputationSection() {
-  const result = await getReputationApiResult();
+export async function ReputationSection(props?: {
+  dependencies?: ReputationApiDependencies;
+  result?: ReputationApiListResult;
+}) {
+  const result = props?.result ?? await getReputationApiResult(props?.dependencies);
   return <ReputationSectionView result={result} />;
 }
 
-/** Pure view for the reputation evidence section, rendered from a resolved API result. */
 export function ReputationSectionView({ result }: { result: ReputationApiListResult }) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;

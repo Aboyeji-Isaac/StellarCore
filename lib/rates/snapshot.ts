@@ -97,6 +97,22 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
       select: { anchorId: true },
     })) !== null;
   },
+  async findProvenanceBySnapshotId(id) {
+    const environment = await evidenceDb();
+    if (!environment.ok) throw new EnvironmentIsolationRejection();
+    const row = await environment.db.rateSnapshot.findUnique({
+      where: { id },
+      select: { configurationFingerprint: true, provenanceUnavailable: true },
+    });
+    if (!row) return null;
+    if (row.provenanceUnavailable || !row.configurationFingerprint) {
+      return Object.freeze({ available: false });
+    }
+    return Object.freeze({
+      available: true,
+      configurationFingerprint: row.configurationFingerprint,
+    });
+  },
   async createSnapshot(input) {
     const environment = await evidenceDb();
     if (!environment.ok) throw new EnvironmentIsolationRejection();
@@ -109,6 +125,8 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
         destinationAmount: true,
         fee: true,
         capturedAt: true,
+        configurationFingerprint: true,
+        provenanceUnavailable: true,
       },
     });
   },

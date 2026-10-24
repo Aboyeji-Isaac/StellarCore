@@ -1,5 +1,5 @@
 import * as React from "react";
-import { getAnchorsApiResult } from "@/lib/api/anchors";
+import { getAnchorsApiResult, type AnchorsApiDependencies } from "@/lib/api/anchors";
 import { advertisedCapabilities } from "@/lib/stellar/advertisedCapabilities";
 import { SEPS } from "@/constants/seps";
 import type { AnchorsApiResult, PublicAnchorStatus } from "@/types/api/anchors";
@@ -19,12 +19,14 @@ function statusPresentation(status: PublicAnchorStatus) {
   }
 }
 
-export async function AnchorsSection() {
-  const result = await getAnchorsApiResult();
+export async function AnchorsSection(props?: {
+  dependencies?: AnchorsApiDependencies;
+  result?: AnchorsApiResult;
+}) {
+  const result = props?.result ?? await getAnchorsApiResult(props?.dependencies);
   return <AnchorsSectionView result={result} />;
 }
 
-/** Pure view for the anchors evidence section, rendered from a resolved API result. */
 export function AnchorsSectionView({ result }: { result: AnchorsApiResult }) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;

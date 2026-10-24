@@ -22,14 +22,24 @@ export function publicApiErrorResult<Code extends PublicApiErrorCode>(
   });
 }
 
+export type PublicApiErrorContext = Readonly<{
+  operation?: string | undefined;
+  code?: PublicApiErrorCode | string | undefined;
+  requestId?: string | undefined;
+  [key: string]: unknown;
+}>;
+
 export type PublicApiErrorReporter = (
   error: unknown,
-  context: Readonly<{ operation: string; code: PublicApiErrorCode }>,
+  context?: PublicApiErrorContext | undefined,
 ) => void;
 
 export const consolePublicApiErrorReporter: PublicApiErrorReporter = (error, context) => {
+  const operation = (context && typeof context.operation === "string" && context.operation) || "unknown";
+  const code = (context && typeof context.code === "string" && context.code) || "internal_error";
   console.error(
-    `[stellarcore:public-api] ${context.operation} failed (${context.code})`,
+    `[stellarcore:public-api] ${operation} failed (${code})`,
     error,
   );
 };
+
