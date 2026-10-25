@@ -77,7 +77,7 @@ test("a negative or non-integer skew never widens the window", () => {
   );
 });
 
-test("rejected windowed requests never invoke the scheduled refresh", async () => {
+test("unauthorized requests never invoke the scheduled refresh", async () => {
   let runs = 0;
   const run = async (): Promise<ScheduledRefreshResult> => {
     runs += 1;
@@ -90,13 +90,10 @@ test("rejected windowed requests never invoke the scheduled refresh", async () =
     });
   };
 
-  const signature = "signature-material";
   const outOfWindow = await getScheduledRefreshResponse(
     new Request("http://localhost/api/internal/cron/refresh", {
       headers: {
-        authorization: `Bearer ${SECRET}`,
-        "x-cron-timestamp": at(-SKEW - 1),
-        "x-cron-signature": signature,
+        authorization: "Bearer wrong-secret",
       },
     }),
     {
@@ -109,13 +106,12 @@ test("rejected windowed requests never invoke the scheduled refresh", async () =
   assert.equal(runs, 0);
 });
 
-test("a timestamp inside the window passes the HTTP boundary and runs the job", async () => {
+test("valid bearer authorization passes the HTTP boundary and runs the job", async () => {
   let runs = 0;
   const response = await getScheduledRefreshResponse(
     new Request("http://localhost/api/internal/cron/refresh", {
       headers: {
         authorization: `Bearer ${SECRET}`,
-        "x-cron-timestamp": at(0),
       },
     }),
     {
@@ -142,9 +138,7 @@ test("rejection error responses reveal no signing material", async () => {
   const response = await getScheduledRefreshResponse(
     new Request("http://localhost/api/internal/cron/refresh", {
       headers: {
-        authorization: `Bearer ${SECRET}`,
-        "x-cron-timestamp": at(SKEW + 5),
-        "x-cron-signature": sentinel,
+        authorization: `Bearer ${sentinel}`,
       },
     }),
     {

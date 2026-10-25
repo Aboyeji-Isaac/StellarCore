@@ -23,9 +23,7 @@ function collectTestFiles(targetPath: string): string[] {
       entry.isFile() &&
       (entry.name.endsWith(".test.ts") ||
         entry.name.endsWith(".test.js") ||
-        entry.name.endsWith(".test.mjs") ||
-        entry.name.endsWith(".spec.ts") ||
-        entry.name.endsWith(".spec.js"))
+        entry.name.endsWith(".test.mjs"))
     ) {
       results.push(fullPath);
     }

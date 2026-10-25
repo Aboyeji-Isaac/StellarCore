@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
+import {
+  getReputationApiResult,
+  getAnchorReputationApiResult,
+  serializeReputation,
+} from "@/lib/api/reputation";
 import type {
   ReputationApiAnchorRecord,
   ReputationApiRepository,
   ReputationApiScoreRecord,
 } from "@/lib/api/reputationRepository";
-import type { StaleEvidenceStore } from "@/lib/api/staleEvidence";
+import {
+  STALE_EVIDENCE_MAX_AGE_MS,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
 
 const COMPUTED_AT = new Date("2026-08-31T13:54:34.979Z");
 
@@ -60,11 +67,14 @@ function repository(
 }
 
 function staleStore(): StaleEvidenceStore {
+  const reputation = serializeReputation(anchor("moneygram", score()));
   return Object.freeze({
     read: async () => Object.freeze({
-      payload: Object.freeze({ reputation: Object.freeze([]), count: 0 }),
+      payload: Object.freeze({ reputation: Object.freeze([reputation]), count: 1 }),
       generatedAt: COMPUTED_AT.toISOString(),
-      expiresAt: new Date(COMPUTED_AT.getTime() + 60_000).toISOString(),
+      expiresAt: new Date(
+        COMPUTED_AT.getTime() + STALE_EVIDENCE_MAX_AGE_MS,
+      ).toISOString(),
       sourceTimes: Object.freeze([COMPUTED_AT.toISOString()]),
     }),
     write: async () => {},
@@ -156,7 +166,8 @@ test("repository failures fallback to stale evidence (returns 200)", async () =>
 
   // The API falls back to stale evidence on a transient database failure.
   assert.equal(list.status, 200);
-  assert.equal(list.body.reputation.length, 0);
+  assert.equal(list.body.reputation.length, 1);
+  assert.equal(list.degraded?.state, "stale");
   assert.equal(JSON.stringify(list).includes("secret"), false);
 });
 

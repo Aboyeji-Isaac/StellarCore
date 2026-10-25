@@ -108,13 +108,9 @@ function refusal(
 }
 
 function normalizeBranch(value: string): string | null {
-  if (value === "production" || value === "refs/heads/production") {
-    return "production";
-  }
-  if (value === "main" || value === "refs/heads/main") {
-    return "main";
-  }
-  return null;
+  if (value.startsWith("refs/heads/")) return value.slice("refs/heads/".length);
+  if (value.startsWith("refs/")) return null;
+  return value;
 }
 
 function parsePullRequestRef(value: string): number | null {

@@ -112,7 +112,7 @@ test("success after retry clears the panel error state", async () => {
   ]);
 
   assert.equal(results.length, 2);
-  assert.equal(results[0].status, 503);
+  assert.equal(results[0].status, 429);
   assert.equal(results[0].body.error.code, "rate_limited");
   assert.deepEqual(results[1], recovered);
 });

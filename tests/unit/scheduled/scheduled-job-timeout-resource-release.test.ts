@@ -275,7 +275,6 @@ async function settleWithin(run: JobRun, budgetMs = 2_000): Promise<void> {
     timer = setTimeout(() => {
       reject(new Error(`the job never released its resources (${budgetMs}ms budget)`));
     }, budgetMs);
-    timer.unref?.();
   });
 
   try {
@@ -725,8 +724,8 @@ test("a transaction timeout in the scheduled evidence read fails closed, is not 
     ) {
       transactionOptions.push(options);
       const tx = {
-        async $executeRawUnsafe(sql: string) {
-          transactionQueries.push(sql);
+        async $executeRaw() {
+          transactionQueries.push("SET TRANSACTION READ ONLY");
           return 0;
         },
         async $queryRaw() {
@@ -809,7 +808,7 @@ test("a lock timeout inside the scheduled evidence read is retried a bounded num
     async $transaction(fn: (tx: unknown) => Promise<unknown>) {
       attempts += 1;
       const tx = {
-        async $executeRawUnsafe() {
+        async $executeRaw() {
           return 0;
         },
         async $queryRaw() {

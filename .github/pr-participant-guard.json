@@ -1,6 +1,6 @@
 {
   "maintainers": ["Aboyeji-Isaac"],
-  "approvedBots": [],
+  "approvedBots": ["drips-wave[bot]"],
   "approvedCommitEmails": [],
   "approvedCoauthorEmails": [],
   "approvedReviewerTeams": [],
