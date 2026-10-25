@@ -85,7 +85,7 @@ test("rejected windowed requests never invoke the scheduled refresh", async () =
       ok: true,
       startedAt: NOW.toISOString(),
       completedAt: NOW.toISOString(),
-      rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] }),
+      rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [], skippedSources: [] }),
       reputation: Object.freeze({ attempted: 0, succeeded: 0, failed: 0, failures: [] }),
     });
   };
@@ -101,7 +101,7 @@ test("rejected windowed requests never invoke the scheduled refresh", async () =
     }),
     {
       cronSecret: SECRET,
-      cronTimestampNow: () => NOW,
+      cronNow: () => NOW.getTime(),
       run,
     },
   );
@@ -120,14 +120,14 @@ test("a timestamp inside the window passes the HTTP boundary and runs the job", 
     }),
     {
       cronSecret: SECRET,
-      cronTimestampNow: () => NOW,
+      cronNow: () => NOW.getTime(),
       run: async () => {
         runs += 1;
         return Object.freeze({
           ok: true,
           startedAt: NOW.toISOString(),
           completedAt: NOW.toISOString(),
-          rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] }),
+          rates: Object.freeze({ attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [], skippedSources: [] }),
           reputation: Object.freeze({ attempted: 0, succeeded: 0, failed: 0, failures: [] }),
         });
       },
@@ -149,7 +149,7 @@ test("rejection error responses reveal no signing material", async () => {
     }),
     {
       cronSecret: SECRET,
-      cronTimestampNow: () => NOW,
+      cronNow: () => NOW.getTime(),
       run: async () => {
         throw new Error("must not run");
       },

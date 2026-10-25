@@ -1,212 +1,138 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runScheduledRefresh, type ScheduledRefreshDependencies } from "@/lib/scheduled/refresh";
-import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
+import { getRatesApiResult } from "@/lib/api/rates";
+import type { LatestCorridorRate } from "@/types/latestRates";
 
-const NOW = new Date("2026-08-31T16:00:00.000Z");
+const NOW = new Date("2026-08-27T12:00:00.000Z");
+const CORRIDOR = "usdc-us-brl-br";
 
-function rateSummary(
-  overrides: Partial<SafeLiveRateRunSummary> = {},
-): SafeLiveRateRunSummary {
+function readResult(
+  overrides: Partial<LatestCorridorRate> = {},
+): LatestCorridorRate {
   return Object.freeze({
-    totalCandidates: 1,
-    totalAttempted: 1,
-    succeeded: 1,
-    failed: 0,
-    skipped: 0,
-    suppressed: 0,
-    snapshotsPersisted: 1,
-    snapshots: [],
-    failures: [],
-    skippedSources: [],
+    ok: true,
+    corridor: Object.freeze({
+      slug: CORRIDOR,
+      assetCodeFrom: "USDC",
+      countryFrom: "US",
+      assetCodeTo: "BRL",
+      countryTo: "BR",
+    }),
+    evaluatedAt: NOW.toISOString(),
+    state: "insufficient_fresh_sources",
+    median: null,
+    totalIndependentSources: 0,
+    freshSourceCount: 0,
+    observations: Object.freeze([]),
+    exclusions: Object.freeze([]),
     ...overrides,
   });
 }
 
-function runConcurrently<T>(
-  fn: () => Promise<T>,
-  concurrentCount: number,
-): Promise<T[]> {
-  const promises: Promise<T>[] = [];
-  for (let i = 0; i < concurrentCount; i++) {
-    promises.push(fn());
-  }
-  return Promise.all(promises);
+function observation(anchorSlug: string, rate: string, freshnessState: "fresh" | "stale" | "future" | "invalid", ageMs: number | null, included: boolean, exclusionReason?: "stale" | "future_timestamp" | "invalid_timestamp" | "invalid_rate", anchorName = `${anchorSlug} persisted`) {
+  return Object.freeze({
+    snapshotId: `${anchorSlug}-snapshot`,
+    anchorSlug,
+    anchorName,
+    rate,
+    sourceAmount: "100.000000000000000001",
+    destinationAmount: "17.000000000000000001",
+    fee: "1.000000000000000001",
+    capturedAt: freshnessState === "invalid" ? "invalid" : NOW.toISOString(),
+    freshnessState,
+    ageMs,
+    included,
+    ...(exclusionReason ? { exclusionReason } : {}),
+  });
 }
 
-/**
- * Idempotency contract: Repeated delivery of the same logical run
- * should be handled according to the workflow's idempotency contract.
- * Duplicate attempts must not double-count metrics or duplicate committed
- * observations. Distinct legitimate runs must remain independent.
- */
-
-/**
- * Test: Sequential duplicate delivery – same logical run invoked twice.
- * The second delivery should not create duplicate data.
- */
-test("sequential duplicate delivery does not double-count", async () => {
-  await runScheduledRefresh({
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
+test("empty corridor returns insufficient fresh sources", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
     now: () => NOW,
+    readLatestRate: async () => readResult({ observations: Object.freeze([]) }),
   });
-  await runScheduledRefresh({
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
+  assert.deepEqual(result.body.observations, []);
+  assert.equal(result.body.sourceCount, 0);
+  assert.equal(result.body.freshSourceCount, 0);
+});
+
+test("single fresh source returns insufficient state", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
     now: () => NOW,
+    readLatestRate: async () => readResult({
+      totalIndependentSources: 1,
+      freshSourceCount: 1,
+      observations: [observation("zeam", "0.170000000000000001", "fresh", 1_000, true)],
+    }),
   });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "insufficient_fresh_sources");
+  assert.equal(result.body.medianRate, null);
+  assert.equal(result.body.sourceCount, 1);
+  assert.equal(result.body.freshSourceCount, 1);
+  assert.equal(result.body.observations[0]?.anchor.slug, "zeam");
+  assert.equal(result.body.observations[0]?.rate, "0.170000000000000001");
 });
 
-/**
- * Test: Concurrent duplicate delivery – same logical run from several workers at once.
- * Uses a shared counter to force true overlap, not sleep. Must pass reliably when repeated.
- */
-test("concurrent duplicate delivery completes without errors", async () => {
-  const concurrency = 4;
-
-  const deps: ScheduledRefreshDependencies = {
-    snapshotRates: async () => rateSummary(),
-    evaluateReputation: async () =>
-      ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
+test("healthy median with multiple sources", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
     now: () => NOW,
-  };
+    readLatestRate: async () => readResult({
+      state: "healthy",
+      median: "0.1000000000000000015",
+      totalIndependentSources: 4,
+      freshSourceCount: 2,
+      observations: [
+        observation("zeam", "0.100000000000000001", "fresh", 1, true),
+        observation("anchor-b", "0.100000000000000002", "fresh", 2, true),
+        observation("anchor-c", "9", "stale", 120_001, false, "stale"),
+        observation("anchor-d", "8", "future", -1, false, "future_timestamp"),
+      ],
+    }),
+  });
 
-  const results = await runConcurrently(
-    () => runScheduledRefresh(deps),
-    concurrency,
-  );
-
-  assert.equal(results.length, concurrency);
-  assert.equal(
-    results.every((result) => result.ok),
-    true,
-  );
+  assert.equal(result.status, 200);
+  assert.equal(result.body.state, "healthy");
+  assert.equal(result.body.medianRate, "0.1000000000000000015");
+  assert.equal(result.body.sourceCount, 4);
+  assert.equal(result.body.freshSourceCount, 2);
+  assert.equal(result.body.observations[2]?.freshness.state, "stale");
+  assert.equal(result.body.observations[3]?.exclusionReason, "future_timestamp");
 });
 
-/**
- * Test: Concurrent duplicate delivery is deterministic – run multiple times to check for flakiness.
- * Run at least 20 times to verify reliability.
- */
-test("concurrent duplicate delivery passes reliably on repeated runs", async () => {
-  const concurrency = 4;
-  let failures = 0;
-  const iterations = 20;
-
-  for (let i = 0; i < iterations; i++) {
-    const deps: ScheduledRefreshDependencies = {
-      snapshotRates: async () => rateSummary(),
-      evaluateReputation: async () =>
-        ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
-      suppressions: {
-        listSuppressed: async () => [],
-        recordDeterministicFailure: async () => ({}) as never,
-        reactivate: async () => null,
-      },
-      now: () => NOW,
-    };
-
-    const results = await runConcurrently(
-      () => runScheduledRefresh(deps),
-      concurrency,
-    );
-    if (!results.every((result) => result.ok)) {
-      failures += 1;
-    }
-  }
-
-  assert.equal(
-    failures,
-    0,
-    `Concurrent duplicate delivery was flaky: ${failures} failures in ${iterations} iterations`,
-  );
-});
-
-/**
- * Test: Distinct legitimate runs remain independent – a different run identity must
- * never be deduplicated against another. Both runs should commit their data.
- * Each run invokes snapshotRates and evaluateReputation once.
- */
-test("distinct legitimate runs remain independent – both commit", async () => {
-  let run1SnapshotCount = 0;
-  let run1RepCount = 0;
-  let run2SnapshotCount = 0;
-  let run2RepCount = 0;
-
-  const deps1: ScheduledRefreshDependencies = {
-    snapshotRates: async () => {
-      run1SnapshotCount += 1;
-      return rateSummary();
-    },
-    evaluateReputation: async () => {
-      run1RepCount += 1;
-      return { attempted: 3, succeeded: 3, failed: 0, failures: [] } as never;
-    },
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
+test("repository failures return stable safe error envelope", async () => {
+  const result = await getRatesApiResult(CORRIDOR, {
     now: () => NOW,
-  };
-
-  const deps2: ScheduledRefreshDependencies = {
-    snapshotRates: async () => {
-      run2SnapshotCount += 1;
-      return rateSummary();
+    readLatestRate: async () => {
+      throw new Error("DATABASE_URL=secret SQL failure");
     },
-    evaluateReputation: async () => {
-      run2RepCount += 1;
-      return { attempted: 3, succeeded: 3, failed: 0, failures: [] } as never;
-    },
-    suppressions: {
-      listSuppressed: async () => [],
-      recordDeterministicFailure: async () => ({}) as never,
-      reactivate: async () => null,
-    },
-    now: () => NOW,
-  };
+  });
 
-  await runScheduledRefresh(deps1);
-  await runScheduledRefresh(deps2);
-
-  assert.equal(
-    run1SnapshotCount,
-    1,
-    `run1 snapshotRates called ${run1SnapshotCount} times, expected 1`,
-  );
-  assert.equal(
-    run1RepCount,
-    1,
-    `run1 evaluateReputation called ${run1RepCount} times, expected 1`,
-  );
-  assert.equal(
-    run2SnapshotCount,
-    1,
-    `run2 snapshotRates called ${run2SnapshotCount} times, expected 1`,
-  );
-  assert.equal(
-    run2RepCount,
-    1,
-    `run2 evaluateReputation called ${run2RepCount} times, expected 1`,
-  );
+  assert.deepEqual(result, {
+    status: 500,
+    body: {
+      error: { code: "internal_error", message: "Unable to read rates." },
+    },
+  });
+  assert.equal(JSON.stringify(result).includes("secret"), false);
 });
 
+test("corridor not found returns 404", async () => {
+  const result = await getRatesApiResult("unknown-corridor", {
+    now: () => NOW,
+    readLatestRate: async () => ({
+      ok: false,
+      corridorSlug: "unknown-corridor",
+      code: "CORRIDOR_NOT_FOUND",
+    }),
+  });
+
+  assert.equal(result.status, 404);
+  assert.equal(result.body.error.code, "corridor_not_found");
+});

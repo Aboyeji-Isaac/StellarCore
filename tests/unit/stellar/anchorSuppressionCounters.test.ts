@@ -32,6 +32,8 @@ function makeDependencies(
 ): Readonly<{ dependencies: AnchorSyncDependencies; statuses: Map<string, string> }> {
   const statuses = new Map<string, string>([["moneygram", "LIVE"]]);
   let run = 0;
+  let order = 0n;
+  const lastOrders = new Map<string, bigint>();
 
   const dependencies: AnchorSyncDependencies = {
     discover: async (entry) => {
@@ -41,11 +43,13 @@ function makeDependencies(
       }
       return Object.freeze({ ...entry }) as DiscoveredAnchor;
     },
-    persist: async (anchor) => {
+    allocateOrder: async () => ++order,
+    persist: async (anchor, writeOrder) => {
       if (runOutcome(run).persistence === "FAIL") {
         throw new Error("simulated persistence failure");
       }
       statuses.set(anchor.slug, "LIVE");
+      lastOrders.set(anchor.slug, writeOrder);
       return {
         slug: anchor.slug,
         name: anchor.name,
@@ -56,10 +60,12 @@ function makeDependencies(
         status: "LIVE" as never,
       };
     },
-    markDown: async (slug) => {
-      if (!statuses.has(slug)) return false;
+    markDown: async (slug, writeOrder) => {
+      if (!statuses.has(slug)) return "NOT_FOUND";
+      if (writeOrder <= (lastOrders.get(slug) ?? 0n)) return "STALE";
       statuses.set(slug, "DOWN");
-      return true;
+      lastOrders.set(slug, writeOrder);
+      return "MARKED_DOWN";
     },
   };
 
@@ -111,7 +117,7 @@ test("suppression persists across repeated failed runs and each run counts itsel
     ...dependencies,
     markDown: async () => {
       markDownCalls += 1;
-      return true;
+      return "MARKED_DOWN";
     },
   };
   await runOnce(counting, [ENTRY]);
@@ -147,10 +153,11 @@ test("recovery-probe failures remain distinguishable from ordinary failed runs",
     discover: async () => {
       throw new Error("simulated discovery failure");
     },
+    allocateOrder: async () => 1n,
     persist: async () => {
       throw new Error("must not be reached");
     },
-    markDown: async () => false,
+    markDown: async () => "NOT_FOUND",
   };
   const suppressedWriteFailed: AnchorSyncDependencies = {
     ...notFound,
@@ -173,10 +180,11 @@ test("recovery-probe failures remain distinguishable from ordinary failed runs",
 
   const persistedOnlyFailed: AnchorSyncDependencies = {
     discover: async (entry) => Object.freeze({ ...entry }) as DiscoveredAnchor,
+    allocateOrder: async () => 1n,
     persist: async () => {
       throw new Error("simulated persistence failure");
     },
-    markDown: async () => true,
+    markDown: async () => "MARKED_DOWN",
   };
   const persistenceRun = await runOnce(persistedOnlyFailed, [ENTRY]);
   assert.deepEqual(

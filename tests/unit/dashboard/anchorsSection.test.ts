@@ -5,7 +5,7 @@ import { getAnchorsApiResult } from "@/lib/api/anchors";
 
 test("empty anchor directory returns successful immutable response", async () => {
   const result = await getAnchorsApiResult({
-    repository: { findAll: async () => [] },
+    repository: { findAll: async () => [], findBySlug: async () => null },
   });
 
   assert.deepEqual(result, { status: 200, body: { anchors: [], count: 0 } });
@@ -15,11 +15,15 @@ test("empty anchor directory returns successful immutable response", async () =>
 
 test("anchor serialization maps internal fields to public API format", async () => {
   const result = await getAnchorsApiResult({
-    repository: { findAll: async () => [
-      { slug: "zulu", name: "Zulu", homeDomain: "zulu.example", status: "LIVE", seps: [1, 10, 38], corridorCount: 5 },
-    ] },
+    repository: {
+      findAll: async () => [
+        { slug: "zulu", name: "Zulu", homeDomain: "zulu.example", status: "LIVE", seps: [1, 10, 38], corridorCount: 5 },
+      ],
+      findBySlug: async () => null,
+    },
   });
 
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body, {
     anchors: [{
       slug: "zulu",
@@ -37,13 +41,17 @@ test("anchor serialization maps internal fields to public API format", async () 
 
 test("anchors are deterministically ordered by slug", async () => {
   const result = await getAnchorsApiResult({
-    repository: { findAll: async () => [
-      { slug: "alpha", name: "Alpha", homeDomain: "alpha.example", status: "LIVE", seps: [1, 24], corridorCount: 3 },
-      { slug: "zulu", name: "Zulu", homeDomain: "zulu.example", status: "LIVE", seps: [1, 10, 38], corridorCount: 7 },
-      { slug: "beta", name: "Beta", homeDomain: "beta.example", status: "LIVE", seps: [6], corridorCount: 1 },
-    ] },
+    repository: {
+      findAll: async () => [
+        { slug: "alpha", name: "Alpha", homeDomain: "alpha.example", status: "LIVE", seps: [1, 24], corridorCount: 3 },
+        { slug: "zulu", name: "Zulu", homeDomain: "zulu.example", status: "LIVE", seps: [1, 10, 38], corridorCount: 7 },
+        { slug: "beta", name: "Beta", homeDomain: "beta.example", status: "LIVE", seps: [6], corridorCount: 1 },
+      ],
+      findBySlug: async () => null,
+    },
   });
 
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body.anchors.map(({ slug }) => slug), [
     "alpha",
     "beta",
@@ -57,6 +65,7 @@ test("repository failures return stable safe error envelope", async () => {
       findAll: async () => {
         throw new Error("DATABASE_URL=secret SQL failure");
       },
+      findBySlug: async () => null,
     },
   });
 

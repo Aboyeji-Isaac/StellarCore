@@ -284,7 +284,7 @@ test("public API serializers never leak internal fields when provided database r
     freshSourceCount: 2,
     observations: [
       {
-        id: "db-rate-snapshot-id",
+        snapshotId: "db-rate-snapshot-id",
         anchorSlug: "zeam",
         anchorName: "Zeam",
         rate: "5.25",
@@ -302,7 +302,7 @@ test("public API serializers never leak internal fields when provided database r
   const serializedRates = serializeRates(rawRatesRead);
   assert.equal(validateRatesPayload(serializedRates).ok, true);
   assert.equal("id" in serializedRates.corridor, false);
-  assert.equal("id" in serializedRates.observations[0]!, false);
+  assert.equal("snapshotId" in serializedRates.observations[0]!, false);
 
   // Reputation serializer strips internal columns
   const rawReputation = [

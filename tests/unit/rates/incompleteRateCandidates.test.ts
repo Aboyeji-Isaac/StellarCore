@@ -126,6 +126,7 @@ test("incomplete upstream JSON blocks a candidate without persisting a rate snap
       })(candidate),
       repository,
       now: () => NOW,
+      configurationFingerprint: "test-configuration-fingerprint",
     },
   );
 
@@ -160,6 +161,7 @@ test("structurally parsed but field-incomplete quotes fail normalization, not pe
       quote: async () => incomplete as unknown as Sep38IndicativePrice,
       repository,
       now: () => NOW,
+      configurationFingerprint: "test-configuration-fingerprint",
     });
 
     assert.deepEqual(result.failures.map(({ phase, code }) => ({ phase, code })), [{
@@ -182,6 +184,7 @@ test("one invalid candidate never suppresses a valid sibling run", async () => {
       },
       repository,
       now: () => NOW,
+      configurationFingerprint: "test-configuration-fingerprint",
     },
   );
 
