@@ -12,8 +12,12 @@ export type NormalizedRateObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-  configurationFingerprint: string;
-}>;
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//   captureRunId?: string;
+// =======
+//   configurationFingerprint: string;
+// >>>>>>> development
+// }>;
 
 export type RateFreshnessState = "fresh" | "stale" | "future" | "invalid";
 
@@ -60,14 +64,19 @@ export type PersistedRateSnapshot = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-  configurationFingerprint: string | null;
-  provenanceUnavailable: boolean;
-}>;
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//   captureRunId?: string;
+// =======
+//   configurationFingerprint: string | null;
+//   provenanceUnavailable: boolean;
+// >>>>>>> development
+// }>;
 
 export type RateSnapshotPersistenceCode =
   | "ANCHOR_NOT_FOUND"
   | "CORRIDOR_NOT_FOUND"
   | "ASSOCIATION_NOT_FOUND"
+  | "RUN_NOT_FOUND"
   | "PERSISTENCE_FAILURE"
   | "ENVIRONMENT_MISMATCH";
 
@@ -82,8 +91,7 @@ export type RateSnapshotProvenance =
 export type RateSnapshotRepository = Readonly<{
   findAnchorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
   findCorridorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
-  hasAssociation: (anchorId: string, corridorId: string) => Promise<boolean>;
-  findProvenanceBySnapshotId: (id: string) => Promise<RateSnapshotProvenance | null>;
+/
   createSnapshot: (input: Readonly<{
     anchorId: string;
     corridorId: string;
@@ -92,7 +100,11 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
-    configurationFingerprint: string;
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//     captureRunId?: string;
+// =======
+//     configurationFingerprint: string;
+// >>>>>>> development
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -100,8 +112,12 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
-    configurationFingerprint: string | null;
-    provenanceUnavailable: boolean;
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//     captureRunId?: string | null;
+// =======
+//     configurationFingerprint: string | null;
+//     provenanceUnavailable: boolean;
+// >>>>>>> development
   }>>;
 }>;
 
@@ -109,6 +125,7 @@ export type RateCandidate = Readonly<{
   anchorSlug: string;
   corridor: CorridorRegistryEntry;
   request: Sep38IndicativePriceRequest;
+  captureRunId?: string;
 }>;
 
 export type RateQuoteProvider = (
