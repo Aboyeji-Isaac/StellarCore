@@ -1,7 +1,7 @@
 import { getAnchorsApiResult } from "@/lib/api/anchors";
 import { advertisedCapabilities } from "@/lib/stellar/advertisedCapabilities";
 import { SEPS } from "@/constants/seps";
-import type { PublicAnchorStatus } from "@/types/api/anchors";
+import type { AnchorsApiResult, PublicAnchorStatus } from "@/types/api/anchors";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
@@ -19,8 +19,11 @@ function statusPresentation(status: PublicAnchorStatus) {
 }
 
 export async function AnchorsSection() {
-  const result = await getAnchorsApiResult();
+  return <AnchorsSectionView result={await getAnchorsApiResult()} />;
+}
 
+/** Pure render of an anchors API result; contract-tested against canonical fixtures. */
+export function AnchorsSectionView({ result }: Readonly<{ result: AnchorsApiResult }>) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }

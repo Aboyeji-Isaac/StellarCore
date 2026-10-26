@@ -1,9 +1,13 @@
 import { getCorridorsApiResult } from "@/lib/api/corridors";
+import type { CorridorsApiResult } from "@/types/api/corridors";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
 export async function CorridorsSection() {
-  const result = await getCorridorsApiResult();
+  return <CorridorsSectionView result={await getCorridorsApiResult()} />;
+}
 
+/** Pure render of a corridors API result; contract-tested against canonical fixtures. */
+export function CorridorsSectionView({ result }: Readonly<{ result: CorridorsApiResult }>) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
