@@ -1,5 +1,6 @@
 import * as React from "react";
 import { getRatesApiResult, type RatesApiDependencies } from "@/lib/api/rates";
+import { createRequestId } from "@/lib/api/requestId";
 import type { RateFreshnessState } from "@/types/rates";
 import type { RatesApiResult } from "@/types/api/rates";
 import { Badge } from "@/components/dashboard/Badge";
@@ -28,14 +29,27 @@ export async function RatePanel(props?: {
   dependencies?: RatesApiDependencies;
   result?: RatesApiResult;
 }) {
-  const result = props?.result ?? await getRatesApiResult(FEATURED_CORRIDOR_SLUG, props?.dependencies);
+  // Assign the correlation id here so the reference shown on failure is exactly
+  // the id in the matching structured server log entry.
+  const result = props?.result ?? await getRatesApiResult(FEATURED_CORRIDOR_SLUG, {
+    ...(props?.dependencies ?? {}),
+    requestId: createRequestId(),
+  });
   return <RatePanelView result={result} />;
 }
 
 /** Keeps the rendered freshness tied to persisted evidence in the response. */
 export function RatePanelView({ result }: { result: RatesApiResult }) {
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    const { code, message, requestId } = result.body.error;
+    return (
+      <SectionError
+        area="rates"
+        code={code}
+        message={message}
+        requestId={requestId}
+      />
+    );
   }
 
   const {
