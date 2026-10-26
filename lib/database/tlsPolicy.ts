@@ -138,6 +138,20 @@ const SSL_URL_PARAMETERS = [
 const BYPASS_MODES: ReadonlySet<string> = new Set(["disable", "no-verify", "prefer"]);
 const REQUIRE_MODES: ReadonlySet<string> = new Set(["require", "verify-ca", "allow"]);
 
+/**
+ * Relative strength of each declared posture, weakest first. When a URL
+ * declares TLS more than once (`sslmode` and `ssl`, or a repeated `sslmode`),
+ * the weakest declaration decides, so a bypass can never hide behind a
+ * stronger parameter and the outcome never depends on parameter order.
+ */
+const MODE_STRENGTH: Readonly<Record<DatabaseTlsMode, number>> = {
+  DISABLED: 0,
+  NO_VERIFY: 1,
+  UNSET: 2,
+  REQUIRE: 3,
+  VERIFY_FULL: 4,
+};
+
 /** Strips every TLS-related parameter from a PostgreSQL URL. */
 export function stripTlsParameters(databaseUrl: string): string {
   if (!databaseUrl) return databaseUrl;
@@ -173,7 +187,9 @@ export function stripTlsParameters(databaseUrl: string): string {
 
 /**
  * Classifies the TLS posture the connection URL itself declares. Returns null
- * when the URL carries no TLS parameters at all.
+ * when the URL carries no TLS parameters at all. Conflicting declarations
+ * resolve to the weakest one (see MODE_STRENGTH); the returned signal names
+ * the parameter that decided.
  */
 export function classifyUrlTlsParameters(databaseUrl: string): TlsConfigurationSignal | null {
   if (!databaseUrl) return null;
@@ -186,26 +202,23 @@ export function classifyUrlTlsParameters(databaseUrl: string): TlsConfigurationS
     return null;
   }
 
-  const sslMode = params.get("sslmode");
-  const sslFlag = params.get("ssl");
-
-  if (sslMode !== null) {
-    return {
-      mode: classifyModeValue(sslMode),
+  const declarations: TlsConfigurationSignal[] = [
+    ...params.getAll("sslmode").map((value): TlsConfigurationSignal => ({
+      mode: classifyModeValue(value),
       source: "URL_PARAMETER",
       parameter: "sslmode",
-    };
-  }
+    })),
+    ...params.getAll("ssl").map((value): TlsConfigurationSignal => ({
+      mode: classifySslFlagValue(value),
+      source: "URL_PARAMETER",
+      parameter: "ssl",
+    })),
+  ];
 
-  if (sslFlag !== null) {
-    const normalized = sslFlag.trim().toLowerCase();
-    if (normalized === "0" || normalized === "false") {
-      return { mode: "DISABLED", source: "URL_PARAMETER", parameter: "ssl" };
-    }
-    if (normalized === "no-verify") {
-      return { mode: "NO_VERIFY", source: "URL_PARAMETER", parameter: "ssl" };
-    }
-    return { mode: "VERIFY_FULL", source: "URL_PARAMETER", parameter: "ssl" };
+  if (declarations.length > 0) {
+    return declarations.reduce((weakest, candidate) =>
+      MODE_STRENGTH[candidate.mode] < MODE_STRENGTH[weakest.mode] ? candidate : weakest,
+    );
   }
 
   if (params.has("sslrootcert") || params.has("sslcert") || params.has("sslkey")) {
@@ -213,6 +226,15 @@ export function classifyUrlTlsParameters(databaseUrl: string): TlsConfigurationS
   }
 
   return null;
+}
+
+function classifySslFlagValue(value: string): DatabaseTlsMode {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "0" || normalized === "false") return "DISABLED";
+  if (normalized === "no-verify") return "NO_VERIFY";
+
+  return "VERIFY_FULL";
 }
 
 /**
@@ -340,9 +362,9 @@ export function resolveDatabaseTlsPolicy(
 function requireModeResolution(
   input: TlsPolicyEnvironmentInput,
 ): ProductionTlsResolution {
-  // The driver interprets these modes without full certificate verification.
-  // The runtime strips the URL parameter before constructing pg.Pool and
-  // supplies this explicit verified-TLS object, so we can safely upgrade them.
+  // The caller strips TLS URL parameters before constructing the driver
+  // connection. Upgrade require/verify-ca to authenticated TLS instead of
+  // letting the driver's weaker URL semantics override certificate checks.
   return {
     accepted: true,
     mode: "VERIFY_FULL",
