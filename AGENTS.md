@@ -1,4 +1,3 @@
-> Whatever action you can do yourself, Please do youself, this includes starting apps and verification
 
 # Repository Guidelines
 
