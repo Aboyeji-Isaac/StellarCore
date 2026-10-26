@@ -47,18 +47,24 @@ export async function runRateEngine(
 
     let observation;
     try {
-      observation = normalizeIndicativeRate({
+      const normalized = normalizeIndicativeRate({
         anchorSlug: candidate.anchorSlug,
         corridor: candidate.corridor,
         request: candidate.request,
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
-      // Add fingerprint from dependencies
-      observation = {
-        ...observation,
-        configurationFingerprint: dependencies.configurationFingerprint,
-      };
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//       observation = candidate.captureRunId
+//         ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
+//         : normalized;
+// =======
+//       // Add fingerprint from dependencies
+//       observation = {
+//         ...observation,
+//         configurationFingerprint: dependencies.configurationFingerprint,
+//       };
+// >>>>>>> development
     } catch (error) {
       failures.push(engineFailure(
         candidate,

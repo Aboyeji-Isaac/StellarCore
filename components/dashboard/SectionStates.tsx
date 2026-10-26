@@ -1,11 +1,31 @@
-import * as React from "react";
-export function SectionError({ message }: { message: string }) {
+
+import React from "react";
+
+export function SectionError({
+  message,
+  onRetry,
+  retryLabel = "Retry loading section",
+}: {
+  message: string;
+  onRetry?: () => void;
+  retryLabel?: string;
+}) {
   return (
     <div
       role="alert"
-      className="rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]"
     >
-      {message}
+      <span>{message}</span>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          aria-label={retryLabel}
+          className="rounded border border-[rgba(238,143,129,0.5)] bg-transparent px-3 py-1.5 text-xs font-medium text-[#ee8f81] transition hover:bg-[rgba(238,143,129,0.15)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }

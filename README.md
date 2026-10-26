@@ -184,10 +184,13 @@ the completed-outcome ratio. Settlement and slippage p50/p95 metrics use
 completed outcomes in the trailing 30 days and deterministic nearest-rank
 percentiles; they are explanatory metrics, not hidden score inputs.
 
-The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
-calculation upserts the current row and advances `computedAt`; it does not append
-historical scores. The engine is run by the authenticated scheduled-refresh
-boundary and remains independent of the public, read-only reputation API.
+The schema has one `ReputationScore` per anchor (`anchorId` is unique). A
+calculation advances `computedAt` only when it is later than the stored
+evaluation; an older write is explicitly rejected. When timestamps tie, the
+existing row wins, so the first committed result remains current. Evaluations
+update this single row and do not append historical scores. The engine is run by
+the authenticated scheduled-refresh boundary and remains independent of the
+public, read-only reputation API.
 
 `TransferOutcome` is implemented data modeling, not a production evidence feed. StellarCore has no trusted production outcome-ingestion source today and does not infer outcomes from Horizon or a successful on-chain payment. SEP-6 and SEP-24 history is customer-scoped where authentication applies; SEP-31 lifecycle access is scoped to authorized participants and partner anchors. Until a legitimate, authorized source with provenance exists, sparse reputation is the intended result and established scores are not supported by sufficient evidence.
 
@@ -462,7 +465,8 @@ registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
 `audit:config` performs a pure, deterministic check of the checked-in anchor,
-corridor, membership, and reviewed rate-source relationships. It requires no
+corridor, membership, and reviewed rate-source relationships, and verifies that
+`vercel.json` retains the single daily midnight-UTC refresh cron. It requires no
 database, network, or environment secrets. Registry bootstrap and reviewed rate
 snapshot preparation run the same preflight before operational work begins.
 Passing this audit means only that repository-controlled configuration is
@@ -552,6 +556,23 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+The anchor and corridor directory endpoints accept optional `limit` (1–100)
+and `offset` (a non-negative integer) query parameters. Invalid pagination returns
+400 with `invalid_pagination` before reading evidence. Records are ordered by
+slug before paging, and only the selected page's fields are serialized. `count`
+is the number of records returned, including zero for an offset beyond the end;
+there is no total-count, next-page, or truncation flag. Advance `offset` by
+`limit` until a short or empty page is returned.
+
+For compatibility, omitting `limit` returns all records after the optional
+offset; it does not implicitly cap the response at 100. This pagination bounds
+field serialization for limited requests, but the repository still loads and
+sorts the directory. Other evidence endpoints have no generic row or byte cap;
+the rate-history days limit bounds the requested time window, not response size.
+Generated boundary regression fixtures run with
+`npm test -- tests/unit/api/responseBounds.test.ts` and require no database or
+network access.
+
 Public evidence GET routes use the URL path and query parameters as input.
 They always return `application/json`, including errors; they do not negotiate
 representations using `Accept` (and do not return 406 for other requested media
@@ -584,7 +605,7 @@ and never serialized to clients.
 
 | HTTP | Codes |
 |---|---|
-| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug` |
+| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug`, `invalid_pagination` |
 | 404 | `anchor_not_found`, `corridor_not_found` |
 | 429 | `rate_limited` (reserved for throttling) |
 | 500 | `internal_error` |
