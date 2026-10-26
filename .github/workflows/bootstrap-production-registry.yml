@@ -54,6 +54,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       # `npm ci` runs the existing `postinstall` lifecycle script
       # (`prisma generate`), which loads `prisma.config.ts`. That config

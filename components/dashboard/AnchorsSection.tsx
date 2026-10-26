@@ -1,7 +1,9 @@
-import { getAnchorsApiResult } from "@/lib/api/anchors";
+import * as React from "react";
+import { getAnchorsApiResult, type AnchorsApiDependencies } from "@/lib/api/anchors";
+import { createRequestId } from "@/lib/api/requestId";
 import { advertisedCapabilities } from "@/lib/stellar/advertisedCapabilities";
 import { SEPS } from "@/constants/seps";
-import type { PublicAnchorStatus } from "@/types/api/anchors";
+import type { AnchorsApiResult, PublicAnchorStatus } from "@/types/api/anchors";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
@@ -18,11 +20,30 @@ function statusPresentation(status: PublicAnchorStatus) {
   }
 }
 
-export async function AnchorsSection() {
-  const result = await getAnchorsApiResult();
+export async function AnchorsSection(props?: {
+  dependencies?: AnchorsApiDependencies;
+  result?: AnchorsApiResult;
+}) {
+  // Assign the correlation id here so the reference shown on failure is exactly
+  // the id in the matching structured server log entry.
+  const result = props?.result ?? await getAnchorsApiResult({
+    ...(props?.dependencies ?? {}),
+    requestId: createRequestId(),
+  });
+  return <AnchorsSectionView result={result} />;
+}
 
+export function AnchorsSectionView({ result }: { result: AnchorsApiResult }) {
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    const { code, message, requestId } = result.body.error;
+    return (
+      <SectionError
+        area="anchors"
+        code={code}
+        message={message}
+        requestId={requestId}
+      />
+    );
   }
 
   const { anchors, count } = result.body;
@@ -46,9 +67,11 @@ export async function AnchorsSection() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-                  {anchor.name}
+                  {anchor.name?.trim() ? anchor.name : anchor.slug}
                 </h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">{anchor.homeDomain}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {anchor.homeDomain?.trim() ? anchor.homeDomain : "—"}
+                </p>
                 <p className="mt-0.5 font-mono text-[10px] text-[var(--muted)]">{anchor.slug}</p>
               </div>
               <Badge tone={syncStatus.tone} label={syncStatus.label} />

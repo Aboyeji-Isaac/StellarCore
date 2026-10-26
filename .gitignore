@@ -45,3 +45,9 @@ skills-lock.json
 
 create-issues.sh
 issues-to-create*.json
+
+# Release artifacts (#142)
+/dist-release/
+
+# Local verification reports
+/.reports/

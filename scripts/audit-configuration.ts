@@ -1,17 +1,23 @@
-async function main(): Promise<void> {
+import vercelConfiguration from "../vercel.json";
+import { auditCronCadenceConfiguration } from "@/lib/config/cronCadence";
+
+export async function main(): Promise<void> {
   try {
     const { auditCurrentStellarCoreConfiguration } = await import(
       "@/lib/config/currentStellarCoreConfiguration"
     );
-    const result = auditCurrentStellarCoreConfiguration();
+    const registryResult = auditCurrentStellarCoreConfiguration();
+    const cronResult = auditCronCadenceConfiguration(vercelConfiguration);
+    const issues = Object.freeze([...registryResult.issues, ...cronResult.issues]);
+    const ok = registryResult.ok && cronResult.ok;
 
     process.stdout.write(`${JSON.stringify({
-      ok: result.ok,
-      issueCount: result.issues.length,
-      issues: result.issues,
+      ok,
+      issueCount: issues.length,
+      issues,
     })}\n`);
 
-    if (!result.ok) process.exitCode = 1;
+    if (!ok) process.exitCode = 1;
   } catch {
     process.stdout.write(`${JSON.stringify({
       ok: false,
@@ -25,4 +31,6 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (require.main === module) {
+  void main();
+}

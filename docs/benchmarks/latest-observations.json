@@ -1,0 +1,1634 @@
+{
+  "environment": {
+    "postgres": "PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+    "settings": {
+      "effective_cache_size": "524288",
+      "jit": "on",
+      "max_parallel_workers_per_gather": "2",
+      "random_page_cost": "4",
+      "shared_buffers": "16384",
+      "work_mem": "4096"
+    },
+    "node": "v24.18.0",
+    "os": "Linux 7.1.4-102.fc43.x86_64 x64",
+    "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz x4",
+    "memoryGiB": 15.5,
+    "coldMethod": "PostgreSQL restarted before one measurement (empty shared_buffers, warm OS page cache)",
+    "runsPerVariant": 7,
+    "loadAverageAtStart": [
+      3.95,
+      6.02,
+      14.03
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "depth-100",
+      "anchors": 20,
+      "corridors": 3,
+      "depth": 100,
+      "snapshotRows": 6000,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 7.974,
+              "executionMsMin": 6.473,
+              "executionMsMax": 11.495,
+              "planningMsMedian": 1.2,
+              "roundTripMsMedian": 18.505,
+              "rowsVisited": 2020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 44,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 2020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 1,
+              "sharedReadBlocks": 43,
+              "planningMs": 7.932,
+              "executionMs": 10.166
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 8.685,
+              "executionMsMin": 8.161,
+              "executionMsMax": 9.297,
+              "planningMsMedian": 0.859,
+              "roundTripMsMedian": 10.817,
+              "rowsVisited": 2020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 82,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 2020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 39,
+              "sharedReadBlocks": 43,
+              "planningMs": 5.848,
+              "executionMs": 11.589
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.795,
+              "executionMsMin": 0.685,
+              "executionMsMax": 1.385,
+              "planningMsMedian": 0.683,
+              "roundTripMsMedian": 5.12,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 43,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 22,
+              "sharedReadBlocks": 24,
+              "planningMs": 7.107,
+              "executionMs": 4.07
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 2.961,
+              "executionMsMin": 2.569,
+              "executionMsMax": 5.117,
+              "planningMsMedian": 0.85,
+              "roundTripMsMedian": 5.892,
+              "rowsVisited": 303,
+              "heapFetches": 0,
+              "sharedHitBlocks": 7,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 303,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 6,
+              "planningMs": 5.346,
+              "executionMs": 3.552
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 4.348,
+              "executionMsMin": 3.473,
+              "executionMsMax": 5.144,
+              "planningMsMedian": 0.927,
+              "roundTripMsMedian": 9.848,
+              "rowsVisited": 303,
+              "heapFetches": 0,
+              "sharedHitBlocks": 12,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 303,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 15,
+              "sharedReadBlocks": 6,
+              "planningMs": 8.877,
+              "executionMs": 6.825
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.262,
+              "executionMsMin": 0.232,
+              "executionMsMax": 0.292,
+              "planningMsMedian": 0.632,
+              "roundTripMsMedian": 3.131,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 8,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 5,
+              "sharedReadBlocks": 6,
+              "planningMs": 7.568,
+              "executionMs": 0.916
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "depth-1000",
+      "anchors": 20,
+      "corridors": 3,
+      "depth": 1000,
+      "snapshotRows": 60000,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 41.735,
+              "executionMsMin": 39.551,
+              "executionMsMax": 45.894,
+              "planningMsMedian": 0.866,
+              "roundTripMsMedian": 32.715,
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 441,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 1,
+              "sharedReadBlocks": 440,
+              "planningMs": 9.038,
+              "executionMs": 90.093
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 41.985,
+              "executionMsMin": 38.465,
+              "executionMsMax": 57.308,
+              "planningMsMedian": 0.85,
+              "roundTripMsMedian": 40.192,
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 441,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 15,
+              "sharedReadBlocks": 440,
+              "planningMs": 5.646,
+              "executionMs": 62.631
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.786,
+              "executionMsMin": 0.734,
+              "executionMsMax": 1.007,
+              "planningMsMedian": 0.699,
+              "roundTripMsMedian": 5.626,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 63,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 39,
+              "sharedReadBlocks": 27,
+              "planningMs": 7,
+              "executionMs": 2.706
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 28.995,
+              "executionMsMin": 28.384,
+              "executionMsMax": 35.42,
+              "planningMsMedian": 0.866,
+              "roundTripMsMedian": 28.451,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 53,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 52,
+              "planningMs": 7.043,
+              "executionMs": 37.275
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 29.63,
+              "executionMsMin": 27.801,
+              "executionMsMax": 31.821,
+              "planningMsMedian": 0.857,
+              "roundTripMsMedian": 31.068,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 54,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 53,
+              "planningMs": 8.811,
+              "executionMs": 36.807
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.248,
+              "executionMsMin": 0.239,
+              "executionMsMax": 0.54,
+              "planningMsMedian": 0.584,
+              "roundTripMsMedian": 2.741,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 7,
+              "sharedReadBlocks": 7,
+              "planningMs": 6.722,
+              "executionMs": 1.021
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "depth-10000",
+      "anchors": 20,
+      "corridors": 3,
+      "depth": 10000,
+      "snapshotRows": 600000,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 489.563,
+              "executionMsMin": 404.726,
+              "executionMsMax": 623.087,
+              "planningMsMedian": 0.938,
+              "roundTripMsMedian": 391.076,
+              "rowsVisited": 200020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 4545,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 200020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 2,
+              "sharedReadBlocks": 4543,
+              "planningMs": 9.694,
+              "executionMs": 1121.623
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 480.811,
+              "executionMsMin": 441.289,
+              "executionMsMax": 548.051,
+              "planningMsMedian": 0.893,
+              "roundTripMsMedian": 346.003,
+              "rowsVisited": 200020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 4545,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 200020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 2,
+              "sharedReadBlocks": 4543,
+              "planningMs": 9.55,
+              "executionMs": 689.511
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.95,
+              "executionMsMin": 0.803,
+              "executionMsMax": 2.276,
+              "planningMsMedian": 0.786,
+              "roundTripMsMedian": 4.64,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 63,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 22,
+              "sharedReadBlocks": 44,
+              "planningMs": 19.694,
+              "executionMs": 5.224
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 314.071,
+              "executionMsMin": 300.604,
+              "executionMsMax": 539.213,
+              "planningMsMedian": 1.021,
+              "roundTripMsMedian": 306.758,
+              "rowsVisited": 30003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 503,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 30003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 502,
+              "planningMs": 9.611,
+              "executionMs": 331.968
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 312.005,
+              "executionMsMin": 288.382,
+              "executionMsMax": 426.363,
+              "planningMsMedian": 1.005,
+              "roundTripMsMedian": 312.646,
+              "rowsVisited": 30003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 504,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 30003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 503,
+              "planningMs": 5.755,
+              "executionMs": 390.758
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.27,
+              "executionMsMin": 0.238,
+              "executionMsMax": 1.12,
+              "planningMsMedian": 1.107,
+              "roundTripMsMedian": 5.843,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 5,
+              "sharedReadBlocks": 9,
+              "planningMs": 11.163,
+              "executionMs": 1.401
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "million-rows",
+      "anchors": 20,
+      "corridors": 3,
+      "depth": 16667,
+      "snapshotRows": 1000020,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 1115.886,
+              "executionMsMin": 965.239,
+              "executionMsMax": 1287.874,
+              "planningMsMedian": 1.014,
+              "roundTripMsMedian": 731.125,
+              "rowsVisited": 333360,
+              "heapFetches": 0,
+              "sharedHitBlocks": 7570,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 333360,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 1,
+              "sharedReadBlocks": 7569,
+              "planningMs": 8.388,
+              "executionMs": 1445.792
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 888.438,
+              "executionMsMin": 784.917,
+              "executionMsMax": 1000.808,
+              "planningMsMedian": 1.026,
+              "roundTripMsMedian": 624.011,
+              "rowsVisited": 333360,
+              "heapFetches": 0,
+              "sharedHitBlocks": 7570,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 333360,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 1,
+              "sharedReadBlocks": 7569,
+              "planningMs": 9.746,
+              "executionMs": 1741.058
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.932,
+              "executionMsMin": 0.862,
+              "executionMsMax": 2.925,
+              "planningMsMedian": 0.698,
+              "roundTripMsMedian": 17.002,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 83,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 41,
+              "sharedReadBlocks": 45,
+              "planningMs": 9.234,
+              "executionMs": 5.77
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 610.796,
+              "executionMsMin": 519.319,
+              "executionMsMax": 979.707,
+              "planningMsMedian": 0.935,
+              "roundTripMsMedian": 590.798,
+              "rowsVisited": 50004,
+              "heapFetches": 0,
+              "sharedHitBlocks": 837,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 50004,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 836,
+              "planningMs": 6.066,
+              "executionMs": 741.068
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 690.713,
+              "executionMsMin": 524.789,
+              "executionMsMax": 804.127,
+              "planningMsMedian": 0.965,
+              "roundTripMsMedian": 521.888,
+              "rowsVisited": 50004,
+              "heapFetches": 0,
+              "sharedHitBlocks": 838,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 50004,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 837,
+              "planningMs": 6.261,
+              "executionMs": 951.234
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.329,
+              "executionMsMin": 0.269,
+              "executionMsMax": 3.325,
+              "planningMsMedian": 0.692,
+              "roundTripMsMedian": 19.536,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 14,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 7,
+              "sharedReadBlocks": 10,
+              "planningMs": 5.542,
+              "executionMs": 1.987
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "anchors-100",
+      "anchors": 100,
+      "corridors": 3,
+      "depth": 1000,
+      "snapshotRows": 300000,
+      "queries": {
+        "rates": {
+          "resultRows": 100,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 307.294,
+              "executionMsMin": 239.406,
+              "executionMsMax": 544.8,
+              "planningMsMedian": 1.304,
+              "roundTripMsMedian": 267.245,
+              "rowsVisited": 100100,
+              "heapFetches": 0,
+              "sharedHitBlocks": 2271,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 100100,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 63,
+              "sharedReadBlocks": 2208,
+              "planningMs": 270.37,
+              "executionMs": 1906.26
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 268.673,
+              "executionMsMin": 229.12,
+              "executionMsMax": 317.801,
+              "planningMsMedian": 1.145,
+              "roundTripMsMedian": 253.628,
+              "rowsVisited": 100100,
+              "heapFetches": 0,
+              "sharedHitBlocks": 2271,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 100100,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 63,
+              "sharedReadBlocks": 2208,
+              "planningMs": 14.437,
+              "executionMs": 335.293
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 7.124,
+              "executionMsMin": 3.803,
+              "executionMsMax": 7.738,
+              "planningMsMedian": 0.878,
+              "roundTripMsMedian": 31.631,
+              "rowsVisited": 200,
+              "heapFetches": 0,
+              "sharedHitBlocks": 304,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 200,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 186,
+              "sharedReadBlocks": 121,
+              "planningMs": 7.448,
+              "executionMs": 10.011
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 30.537,
+              "executionMsMin": 27.759,
+              "executionMsMax": 34.019,
+              "planningMsMedian": 1.028,
+              "roundTripMsMedian": 29.769,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 52,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 51,
+              "planningMs": 9.719,
+              "executionMs": 46.402
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 35.226,
+              "executionMsMin": 26.762,
+              "executionMsMax": 41.805,
+              "planningMsMedian": 0.977,
+              "roundTripMsMedian": 42.155,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 53,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 52,
+              "planningMs": 9.39,
+              "executionMs": 44.12
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.288,
+              "executionMsMin": 0.28,
+              "executionMsMax": 0.314,
+              "planningMsMedian": 0.635,
+              "roundTripMsMedian": 4.916,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 7,
+              "sharedReadBlocks": 7,
+              "planningMs": 9.026,
+              "executionMs": 1.027
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "anchors-500",
+      "anchors": 500,
+      "corridors": 3,
+      "depth": 1000,
+      "snapshotRows": 1500000,
+      "queries": {
+        "rates": {
+          "resultRows": 500,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 1090.353,
+              "executionMsMin": 988.143,
+              "executionMsMax": 1934.058,
+              "planningMsMedian": 1.006,
+              "roundTripMsMedian": 774.261,
+              "rowsVisited": 500500,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11531,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 500500,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 449,
+              "sharedReadBlocks": 11082,
+              "planningMs": 18.065,
+              "executionMs": 1583.483
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 1072.708,
+              "executionMsMin": 1053.185,
+              "executionMsMax": 1204.643,
+              "planningMsMedian": 0.981,
+              "roundTripMsMedian": 744.301,
+              "rowsVisited": 500500,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11531,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 500500,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 449,
+              "sharedReadBlocks": 11082,
+              "planningMs": 6.226,
+              "executionMs": 1744.818
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 17.626,
+              "executionMsMin": 16.1,
+              "executionMsMax": 20.201,
+              "planningMsMedian": 0.68,
+              "roundTripMsMedian": 48.831,
+              "rowsVisited": 1000,
+              "heapFetches": 0,
+              "sharedHitBlocks": 2017,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 1000,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 1396,
+              "sharedReadBlocks": 624,
+              "planningMs": 7.305,
+              "executionMs": 49.961
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 3,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 13.537,
+              "executionMsMin": 12.405,
+              "executionMsMax": 15.632,
+              "planningMsMedian": 0.801,
+              "roundTripMsMedian": 12.909,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 52,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 51,
+              "planningMs": 5.907,
+              "executionMs": 18.162
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 12.384,
+              "executionMsMin": 11.918,
+              "executionMsMax": 14.428,
+              "planningMsMedian": 0.803,
+              "roundTripMsMedian": 13.193,
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "sharedHitBlocks": 53,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 3003,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 10,
+              "sharedReadBlocks": 52,
+              "planningMs": 5.307,
+              "executionMs": 14.471
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.228,
+              "executionMsMin": 0.22,
+              "executionMsMax": 0.288,
+              "planningMsMedian": 0.526,
+              "roundTripMsMedian": 4.602,
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "sharedHitBlocks": 11,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 6,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 7,
+              "sharedReadBlocks": 7,
+              "planningMs": 4.704,
+              "executionMs": 0.812
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "corridors-30",
+      "anchors": 20,
+      "corridors": 30,
+      "depth": 1000,
+      "snapshotRows": 600000,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 54.748,
+              "executionMsMin": 47.267,
+              "executionMsMax": 64.823,
+              "planningMsMedian": 1.05,
+              "roundTripMsMedian": 50.142,
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 445,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 0,
+              "sharedReadBlocks": 445,
+              "planningMs": 6.553,
+              "executionMs": 72.137
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 44.271,
+              "executionMsMin": 40.655,
+              "executionMsMax": 47.974,
+              "planningMsMedian": 0.826,
+              "roundTripMsMedian": 33.776,
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 449,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 20020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 3,
+              "sharedReadBlocks": 446,
+              "planningMs": 10.163,
+              "executionMs": 76.036
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.838,
+              "executionMsMin": 0.815,
+              "executionMsMax": 0.935,
+              "planningMsMedian": 0.599,
+              "roundTripMsMedian": 5.299,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 62,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 38,
+              "sharedReadBlocks": 27,
+              "planningMs": 6.464,
+              "executionMs": 4.839
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 30,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 118.308,
+              "executionMsMin": 109.645,
+              "executionMsMax": 195.02,
+              "planningMsMedian": 0.934,
+              "roundTripMsMedian": 88.219,
+              "rowsVisited": 30030,
+              "heapFetches": 0,
+              "sharedHitBlocks": 551,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 30030,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 69,
+              "sharedReadBlocks": 491,
+              "planningMs": 5.665,
+              "executionMs": 142.011
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 109.984,
+              "executionMsMin": 104.521,
+              "executionMsMax": 131.329,
+              "planningMsMedian": 0.935,
+              "roundTripMsMedian": 83.24,
+              "rowsVisited": 30030,
+              "heapFetches": 0,
+              "sharedHitBlocks": 551,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 30030,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 69,
+              "sharedReadBlocks": 491,
+              "planningMs": 9.058,
+              "executionMs": 165.433
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 2.068,
+              "executionMsMin": 1.488,
+              "executionMsMax": 3.817,
+              "planningMsMedian": 0.584,
+              "roundTripMsMedian": 7.808,
+              "rowsVisited": 60,
+              "heapFetches": 0,
+              "sharedHitBlocks": 92,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 60,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 56,
+              "sharedReadBlocks": 39,
+              "planningMs": 5.393,
+              "executionMs": 4.164
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "corridors-150",
+      "anchors": 20,
+      "corridors": 150,
+      "depth": 500,
+      "snapshotRows": 1500000,
+      "queries": {
+        "rates": {
+          "resultRows": 20,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 34.683,
+              "executionMsMin": 31.181,
+              "executionMsMax": 43.194,
+              "planningMsMedian": 0.963,
+              "roundTripMsMedian": 46.087,
+              "rowsVisited": 10020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 225,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 10020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 1,
+              "sharedReadBlocks": 224,
+              "planningMs": 14.846,
+              "executionMs": 39.153
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 26.282,
+              "executionMsMin": 23.403,
+              "executionMsMax": 33.833,
+              "planningMsMedian": 0.934,
+              "roundTripMsMedian": 21.948,
+              "rowsVisited": 10020,
+              "heapFetches": 0,
+              "sharedHitBlocks": 229,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 10020,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 6,
+              "sharedReadBlocks": 225,
+              "planningMs": 12.799,
+              "executionMs": 46.439
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 0.984,
+              "executionMsMin": 0.869,
+              "executionMsMax": 4.663,
+              "planningMsMedian": 0.716,
+              "roundTripMsMedian": 28.513,
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "sharedHitBlocks": 82,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 40,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 58,
+              "sharedReadBlocks": 27,
+              "planningMs": 12.222,
+              "executionMs": 7.238
+            }
+          }
+        },
+        "reputation": {
+          "resultRows": 150,
+          "legacy": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 328.752,
+              "executionMsMin": 299.452,
+              "executionMsMax": 355.622,
+              "planningMsMedian": 1.112,
+              "roundTripMsMedian": 246.835,
+              "rowsVisited": 75150,
+              "heapFetches": 0,
+              "sharedHitBlocks": 1770,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 75150,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 564,
+              "sharedReadBlocks": 1215,
+              "planningMs": 13.782,
+              "executionMs": 394.376
+            }
+          },
+          "legacy-indexed": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 397.224,
+              "executionMsMin": 337.049,
+              "executionMsMax": 617.235,
+              "planningMsMedian": 1.149,
+              "roundTripMsMedian": 312.009,
+              "rowsVisited": 75150,
+              "heapFetches": 0,
+              "sharedHitBlocks": 1770,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 75150,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Index Scan"
+              ],
+              "sharedHitBlocks": 564,
+              "sharedReadBlocks": 1215,
+              "planningMs": 9.599,
+              "executionMs": 395.672
+            }
+          },
+          "lateral": {
+            "warm": {
+              "runs": 7,
+              "executionMsMedian": 10.128,
+              "executionMsMin": 8.18,
+              "executionMsMax": 14.017,
+              "planningMsMedian": 0.603,
+              "roundTripMsMedian": 22.425,
+              "rowsVisited": 300,
+              "heapFetches": 0,
+              "sharedHitBlocks": 603,
+              "sharedReadBlocks": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "queryCount": 1
+            },
+            "cold": {
+              "rowsVisited": 300,
+              "heapFetches": 0,
+              "scanNodes": [
+                "Index Only Scan",
+                "Seq Scan"
+              ],
+              "sharedHitBlocks": 441,
+              "sharedReadBlocks": 165,
+              "planningMs": 7.034,
+              "executionMs": 21.103
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -138,9 +138,11 @@ test("token exchange integration rejects malformed, expired, mismatched, and non
 });
 
 test("unsafe discovered endpoints and challenge timeouts fail at their boundaries", async () => {
+  // Hostname hardening now rejects single-label localhost during SEP-1 URL
+  // validation, before the SEP-10 egress boundary is reached.
   await assert.rejects(
     createControlledHarness({ authEndpoint: "https://localhost/auth" }),
-    hasCode("INVALID_ENDPOINT"),
+    hasCode("INVALID_DATA"),
   );
 
   const timeoutHarness = await createControlledHarness({

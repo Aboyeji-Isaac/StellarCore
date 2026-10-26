@@ -67,5 +67,5 @@ export type LatestCorridorRateReadResult =
   | Readonly<{
       ok: false;
       corridorSlug: string;
-      code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "READ_FAILURE";
+      code: "CORRIDOR_NOT_FOUND" | "INVALID_EVALUATION_TIME" | "READ_FAILURE" | "DATABASE_UNAVAILABLE";
     }>;

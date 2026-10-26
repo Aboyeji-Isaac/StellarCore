@@ -55,7 +55,10 @@ function main() {
   const result = spawnSync(
     process.execPath,
     ["--import", "tsx", "--test", ...flags, ...testFiles],
-    { stdio: "inherit" },
+    {
+      stdio: "inherit",
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV ?? "test" },
+    },
   );
 
   process.exit(result.status ?? (result.signal ? 1 : 0));

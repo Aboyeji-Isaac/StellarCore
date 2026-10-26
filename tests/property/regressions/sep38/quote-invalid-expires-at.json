@@ -1,0 +1,10 @@
+{
+  "id": "q1",
+  "expires_at": "not-a-date",
+  "total_price": "1.5",
+  "price": "1.5",
+  "sell_asset": "iso4217:USD",
+  "sell_amount": "1",
+  "buy_asset": "iso4217:BRL",
+  "buy_amount": "5.2"
+}

@@ -15,6 +15,7 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
+    configurationFingerprint?: string;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
@@ -46,12 +47,24 @@ export async function runRateEngine(
 
     let observation;
     try {
-      observation = normalizeIndicativeRate({
+      const normalized = normalizeIndicativeRate({
         anchorSlug: candidate.anchorSlug,
         corridor: candidate.corridor,
+        request: candidate.request,
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//       observation = candidate.captureRunId
+//         ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
+//         : normalized;
+// =======
+//       // Add fingerprint from dependencies
+//       observation = {
+//         ...observation,
+//         configurationFingerprint: dependencies.configurationFingerprint,
+//       };
+// >>>>>>> development
     } catch (error) {
       failures.push(engineFailure(
         candidate,

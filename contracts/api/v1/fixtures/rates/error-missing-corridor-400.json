@@ -1,0 +1,14 @@
+{
+  "name": "rates.error_400_missing",
+  "domain": "rates",
+  "endpoint": "GET /api/rates",
+  "method": "GET",
+  "expectedStatus": 400,
+  "description": "Bad request error when corridor parameter is missing",
+  "body": {
+    "error": {
+      "code": "missing_corridor",
+      "message": "A corridor slug is required."
+    }
+  }
+}

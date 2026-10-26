@@ -1,0 +1,43 @@
+name: Audit raw SQL boundaries
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "scripts/**"
+      - "tests/unit/security/rawSqlBoundaries.test.ts"
+      - "package.json"
+      - ".github/workflows/audit-raw-sql.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit raw SQL boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Audit repository raw SQL usage
+        run: npm run audit:sql
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+
+      - name: Run adversarial parameterization tests
+        run: npx tsx --test tests/unit/security/rawSqlBoundaries.test.ts
