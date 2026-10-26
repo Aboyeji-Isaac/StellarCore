@@ -24,13 +24,13 @@ test("scheduled refresh ingests rates before evaluating reputation and returns a
   }));
 
   assert.deepEqual(order, ["rates", "reputation:2026-08-31T16:00:00.000Z"]);
-  assert.deepEqual(result, {
-    ok: true,
-    startedAt: STARTED_AT.toISOString(),
-    completedAt: COMPLETED_AT.toISOString(),
-    rates: { attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] },
-    reputation: { attempted: 3, succeeded: 3, failed: 0, failures: [] },
-  });
+  assert.equal(result.ok, true);
+  assert.equal(result.startedAt, STARTED_AT.toISOString());
+  assert.equal(result.completedAt, COMPLETED_AT.toISOString());
+  assert.equal(result.attempt, 1);
+  assert.ok(typeof result.runId === "string" && result.runId.length > 0);
+  assert.deepEqual(result.rates, { attempted: 1, succeeded: 1, failed: 0, skipped: 0, failures: [] });
+  assert.deepEqual(result.reputation, { attempted: 3, succeeded: 3, failed: 0, failures: [] });
   assert.equal(Object.isFrozen(result), true);
   assert.doesNotThrow(() => JSON.stringify(result));
 });

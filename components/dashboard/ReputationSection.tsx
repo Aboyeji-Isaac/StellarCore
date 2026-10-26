@@ -1,5 +1,9 @@
 import { getReputationApiResult } from "@/lib/api/reputation";
-import type { PublicReputationScoreBand, PublicReputationState } from "@/types/api/reputation";
+import type {
+  PublicReputationScoreBand,
+  PublicReputationState,
+  ReputationApiListResult,
+} from "@/types/api/reputation";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
@@ -38,8 +42,11 @@ function formatMs(value: number | null): string {
 }
 
 export async function ReputationSection() {
-  const result = await getReputationApiResult();
+  return <ReputationSectionView result={await getReputationApiResult()} />;
+}
 
+/** Pure render of a reputation list API result; contract-tested against canonical fixtures. */
+export function ReputationSectionView({ result }: Readonly<{ result: ReputationApiListResult }>) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
