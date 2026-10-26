@@ -1,40 +1,41 @@
-name: PR Participant Guard
-
-# Temporarily disabled for automatic PR events while the check is being reworked.
-# It can still be run manually for a specific pull request.
-on:
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: Pull request number to inspect
-        required: true
-        type: number
-
-permissions:
-  contents: read
-  issues: read
-  pull-requests: read
-
-jobs:
-  participant-guard:
-    name: PR Participant Guard
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out trusted default-branch code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Inspect participation through the GitHub API
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-        run: node scripts/security/check-pr-participants.mjs
+# name: PR Participant Guard
+#
+# # Temporarily disabled for automatic PR events while the check is being reworked.
+# # It can still be run manually for a specific pull request.
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       pr_number:
+#         description: Pull request number to inspect
+#         required: true
+#         type: number
+#
+# permissions:
+#   contents: read
+#   issues: read
+#   pull-requests: read
+#
+# jobs:
+#   participant-guard:
+#     name: PR Participant Guard
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 10
+#     steps:
+#       - name: Check out trusted default-branch code
+#         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.event.repository.default_branch }}
+#           persist-credentials: false
+#
+#       - name: Set up Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 22
+#
+#       - name: Inspect participation through the GitHub API
+#         env:
+#           GITHUB_TOKEN: ${{ github.token }}
+#           GITHUB_REPOSITORY: ${{ github.repository }}
+#           PR_NUMBER: ${{ inputs.pr_number }}
+#         run: node scripts/security/check-pr-participants.mjs
+#
