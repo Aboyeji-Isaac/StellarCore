@@ -53,9 +53,11 @@ export function AnchorsSectionView({ result }: { result: AnchorsApiResult }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-                  {anchor.name}
+                  {anchor.name?.trim() ? anchor.name : anchor.slug}
                 </h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">{anchor.homeDomain}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {anchor.homeDomain?.trim() ? anchor.homeDomain : "—"}
+                </p>
                 <p className="mt-0.5 font-mono text-[10px] text-[var(--muted)]">{anchor.slug}</p>
               </div>
               <Badge tone={syncStatus.tone} label={syncStatus.label} />
