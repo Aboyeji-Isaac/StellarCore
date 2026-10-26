@@ -16,6 +16,9 @@
 # Default owner: repository maintainer reviews any change not matched below.
 * @Aboyeji-Isaac
 
+# Project memory: only the repository owner may author changes.
+/DynamicMem.md @Aboyeji-Isaac
+
 # Registry definitions — reviewed source of anchor, corridor, membership,
 # and live-rate-source relationships (see `npm run audit:config`).
 /constants/ @Aboyeji-Isaac
