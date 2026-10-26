@@ -1,9 +1,16 @@
-import { getRatesApiResult } from "@/lib/api/rates";
+import * as React from "react";
+import { getRatesApiResult, type RatesApiDependencies } from "@/lib/api/rates";
 import type { RateFreshnessState } from "@/types/rates";
+import type { RatesApiResult } from "@/types/api/rates";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
 const FEATURED_CORRIDOR_SLUG = "usdc-us-brl-br";
+
+function isValidEvidenceTime(value: string): boolean {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
 
 function freshnessTone(state: RateFreshnessState) {
   switch (state) {
@@ -17,9 +24,16 @@ function freshnessTone(state: RateFreshnessState) {
   }
 }
 
-export async function RatePanel() {
-  const result = await getRatesApiResult(FEATURED_CORRIDOR_SLUG);
+export async function RatePanel(props?: {
+  dependencies?: RatesApiDependencies;
+  result?: RatesApiResult;
+}) {
+  const result = props?.result ?? await getRatesApiResult(FEATURED_CORRIDOR_SLUG, props?.dependencies);
+  return <RatePanelView result={result} />;
+}
 
+/** Keeps the rendered freshness tied to persisted evidence in the response. */
+export function RatePanelView({ result }: { result: RatesApiResult }) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
@@ -38,6 +52,11 @@ export async function RatePanel() {
   const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"} across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"}`;
   const observationLabel = `${sourceCount} latest persisted anchor ${sourceCount === 1 ? "observation" : "observations"}`;
   const medianEvidenceLabel = `${freshSourceCount} fresh independent ${freshSourceCount === 1 ? "observation" : "observations"} of ${medianRequirement.minimumFreshIndependentSources} required`;
+  const latestCapturedAt = observations
+    .map(({ capturedAt }) => capturedAt)
+    .filter(isValidEvidenceTime)
+    .sort()
+    .at(-1);
 
   return (
     <div className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-6">
@@ -49,6 +68,11 @@ export async function RatePanel() {
           </h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
             Evaluated {new Date(evaluatedAt).toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]" data-testid="rate-evidence-freshness">
+            {latestCapturedAt
+              ? `Latest observation captured ${new Date(latestCapturedAt).toLocaleString()}`
+              : "Freshness unavailable — no valid observation time"}
           </p>
         </div>
         <Badge tone={state === "healthy" ? "positive" : "warning"} label={state.replace(/_/g, " ")} />
@@ -122,7 +146,9 @@ export async function RatePanel() {
                   <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
                   <td className="px-3 py-2 text-[var(--muted)]">
-                    {new Date(observation.capturedAt).toLocaleString()}
+                    {isValidEvidenceTime(observation.capturedAt)
+                      ? new Date(observation.capturedAt).toLocaleString()
+                      : "Unavailable"}
                   </td>
                   <td className="px-3 py-2">
                     <Badge tone={freshnessTone(observation.freshness.state)} label={observation.freshness.state} />

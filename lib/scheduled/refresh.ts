@@ -103,6 +103,7 @@ function toScheduledRates(summary: SafeLiveRateRunSummary): ScheduledRefreshResu
     skipped: summary.skipped,
     suppressed: summary.suppressed ?? 0,
     failures: Object.freeze(summary.failures.map((failure) => Object.freeze({ ...failure }))),
+    skippedSources: Object.freeze(summary.skippedSources.map((source) => Object.freeze({ ...source }))),
   });
 }
 
@@ -118,5 +119,6 @@ function preparationFailure(): ScheduledRefreshResult["rates"] {
     skipped: 0,
     suppressed: 0,
     failures: Object.freeze([failure]),
+    skippedSources: Object.freeze([]),
   });
 }

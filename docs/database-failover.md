@@ -70,3 +70,4 @@ Isolated integration tests in `tests/integration/db/postgresFailover.integration
 3. Commit unconfirmed safety for transactions interrupted mid-commit.
 4. Deadline enforcement during network blackholes.
 5. Connection storm prevention under burst concurrency.
+6. Reconnect behavior after transient failover: broken established connection fails bounded, recovers, and avoids indefinite reuse without touching production (#350).

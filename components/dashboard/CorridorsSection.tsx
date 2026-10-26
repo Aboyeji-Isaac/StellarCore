@@ -1,9 +1,17 @@
-import { getCorridorsApiResult } from "@/lib/api/corridors";
+import * as React from "react";
+import { getCorridorsApiResult, type CorridorsApiDependencies } from "@/lib/api/corridors";
+import type { CorridorsApiResult } from "@/types/api/corridors";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
-export async function CorridorsSection() {
-  const result = await getCorridorsApiResult();
+export async function CorridorsSection(props?: {
+  dependencies?: CorridorsApiDependencies;
+  result?: CorridorsApiResult;
+}) {
+  const result = props?.result ?? await getCorridorsApiResult(props?.dependencies);
+  return <CorridorsSectionView result={result} />;
+}
 
+export function CorridorsSectionView({ result }: { result: CorridorsApiResult }) {
   if (result.status !== 200) {
     return <SectionError message={result.body.error.message} />;
   }
