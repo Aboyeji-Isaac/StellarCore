@@ -108,6 +108,7 @@ test("duplicate candidate identity skips re-ingesting the same reviewed source i
       sellAmount: "100",
       context: "sep31",
     }),
+    configurationDigest: "d".repeat(64),
   });
 
   const result = await runRateEngine([quote, quote], {
@@ -143,6 +144,10 @@ function repository(): RateSnapshotRepository {
     findAnchorBySlug: async (slug) => ({ id: slug }),
     findCorridorBySlug: async (slug) => ({ id: slug }),
     hasAssociation: async () => true,
-    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input }),
+    createSnapshot: async (input) => ({
+      id: `snapshot-${++count}`,
+      provenanceId: `provenance-${count}`,
+      ...input,
+    }),
   };
 }
