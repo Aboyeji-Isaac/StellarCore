@@ -1,9 +1,14 @@
 name: PR Participant Guard
 
-# Temporarily disabled while the participant check is being reworked.
-# Keep the workflow available for manual runs and future re-enablement.
+# Temporarily disabled for automatic PR events while the check is being reworked.
+# It can still be run manually for a specific pull request.
 on:
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to inspect
+        required: true
+        type: number
 
 permissions:
   contents: read
