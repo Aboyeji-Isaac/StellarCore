@@ -35,6 +35,8 @@ const MAX_ANCHOR_SLUG_LENGTH = 100;
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id published with failures and recorded in the failure log. */
+  requestId?: string;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -49,7 +51,7 @@ export async function getAnchorsApiResult(
 ): Promise<AnchorsApiResult> {
   const parsed = parsePagination(pagination);
   if (!parsed.ok) {
-    return publicApiErrorResult("invalid_pagination", parsed.message);
+    return publicApiErrorResult("invalid_pagination", parsed.message, dependencies.requestId);
   }
 
   try {
@@ -65,6 +67,7 @@ export async function getAnchorsApiResult(
     return publicApiErrorResult(
       "internal_error",
       "Unable to load anchors.",
+      dependencies.requestId,
     );
   }
 }
@@ -80,6 +83,7 @@ export async function getAnchorApiResult(
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
+      dependencies.requestId,
     );
   }
 
@@ -92,6 +96,7 @@ export async function getAnchorApiResult(
       return publicApiErrorResult(
         "anchor_not_found",
         "Anchor not found.",
+        dependencies.requestId,
       );
     }
 
@@ -106,6 +111,7 @@ export async function getAnchorApiResult(
     return publicApiErrorResult(
       "internal_error",
       "Unable to load anchors.",
+      dependencies.requestId,
     );
   }
 }
@@ -183,5 +189,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }

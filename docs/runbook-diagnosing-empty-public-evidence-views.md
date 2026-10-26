@@ -84,7 +84,11 @@ pm run suppression:reactivate mutates suppression state. Neither is a default di
 **Purpose:** Find DB errors, preparation failures, serialization errors, or rate limiter blocks.
 
 **Where to look:**
-- **API errors:** lib/api/errors.ts logs [stellarcore:public-api] <operation> failed (<code>)
+- **API errors:** lib/api/errors.ts writes one structured line per failure:
+  `[stellarcore:public-api] {"event":"public_api_error","operation":…,"code":…,"requestId":…}`.
+  The `requestId` is the same value returned in the `X-Request-Id` response
+  header and in `error.requestId`, so a user-reported reference can be grepped
+  directly.
 - **Instrumentation:** instrumentation.ts logs untime_config_fingerprint JSON and TLS bypass warnings
 
 **Read-only examples:**

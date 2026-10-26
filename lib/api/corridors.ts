@@ -36,11 +36,15 @@ const MAX_CORRIDOR_SLUG_LENGTH = 100;
 export type CorridorsApiDependencies = Readonly<{
   repository?: CorridorDirectoryRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id published with failures and recorded in the failure log. */
+  requestId?: string;
 }>;
 
 export type CorridorApiDependencies = Readonly<{
   repository?: CorridorDetailRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id published with failures and recorded in the failure log. */
+  requestId?: string;
 }>;
 
 export function isValidCorridorSlug(slug: string): boolean {
@@ -56,7 +60,7 @@ export async function getCorridorsApiResult(
   const parsed = parsePagination(pagination);
 
   if (!parsed.ok) {
-    return publicApiErrorResult("invalid_pagination", parsed.message);
+    return publicApiErrorResult("invalid_pagination", parsed.message, dependencies.requestId);
   }
 
   try {
@@ -75,6 +79,7 @@ export async function getCorridorsApiResult(
     return publicApiErrorResult(
       "internal_error",
       "Unable to load corridors.",
+      dependencies.requestId,
     );
   }
 }
@@ -90,6 +95,7 @@ export async function getCorridorApiResult(
     return publicApiErrorResult(
       "invalid_corridor_slug",
       "A valid corridor slug is required.",
+      dependencies.requestId,
     );
   }
 
@@ -103,6 +109,7 @@ export async function getCorridorApiResult(
       return publicApiErrorResult(
         "corridor_not_found",
         "Corridor not found.",
+        dependencies.requestId,
       );
     }
 
@@ -118,6 +125,7 @@ export async function getCorridorApiResult(
     return publicApiErrorResult(
       "internal_error",
       "Unable to load corridor.",
+      dependencies.requestId,
     );
   }
 }
@@ -191,5 +199,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }

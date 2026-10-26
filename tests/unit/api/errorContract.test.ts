@@ -81,9 +81,12 @@ test("representative public routes use the same validation envelope", async () =
   for (let index = 0; index < cases.length; index += 1) {
     const response = cases[index]!;
     assert.equal(response.status, 400);
-    const body = await response.json() as { error: { code: string; message: string } };
+    const body = await response.json() as {
+      error: { code: string; message: string; requestId?: string };
+    };
     assert.deepEqual(Object.keys(body), ["error"]);
-    assert.deepEqual(Object.keys(body.error).sort(), ["code", "message"]);
+    assert.deepEqual(Object.keys(body.error).sort(), ["code", "message", "requestId"]);
+    assert.equal(body.error.requestId, response.headers.get("x-request-id"));
     assert.equal(body.error.code, expected[index]);
   }
 });
@@ -126,6 +129,13 @@ test("consolePublicApiErrorReporter handles missing optional diagnostic context 
     calls.push(args);
   };
 
+  const LOG_PREFIX = "[stellarcore:public-api] ";
+  const entry = (index: number) => {
+    const line = String(calls[index]?.[0]);
+    assert.equal(line.startsWith(LOG_PREFIX), true);
+    return JSON.parse(line.slice(LOG_PREFIX.length)) as Record<string, unknown>;
+  };
+
   try {
     const err = new Error("Sample internal failure");
 
@@ -134,7 +144,11 @@ test("consolePublicApiErrorReporter handles missing optional diagnostic context 
       consolePublicApiErrorReporter(err, undefined);
     });
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.[0], "[stellarcore:public-api] unknown failed (internal_error)");
+    assert.deepEqual(entry(0), {
+      event: "public_api_error",
+      operation: "unknown",
+      code: "internal_error",
+    });
     assert.equal(calls[0]?.[1], err);
 
     // Case 2: context is empty object (all optional diagnostic fields omitted)
@@ -142,7 +156,11 @@ test("consolePublicApiErrorReporter handles missing optional diagnostic context 
       consolePublicApiErrorReporter(err, {});
     });
     assert.equal(calls.length, 2);
-    assert.equal(calls[1]?.[0], "[stellarcore:public-api] unknown failed (internal_error)");
+    assert.deepEqual(entry(1), {
+      event: "public_api_error",
+      operation: "unknown",
+      code: "internal_error",
+    });
     assert.equal(calls[1]?.[1], err);
 
     // Case 3: context missing code only
@@ -150,21 +168,47 @@ test("consolePublicApiErrorReporter handles missing optional diagnostic context 
       consolePublicApiErrorReporter(err, { operation: "rates.read" });
     });
     assert.equal(calls.length, 3);
-    assert.equal(calls[2]?.[0], "[stellarcore:public-api] rates.read failed (internal_error)");
+    assert.deepEqual(entry(2), {
+      event: "public_api_error",
+      operation: "rates.read",
+      code: "internal_error",
+    });
 
     // Case 4: context missing operation only
     assert.doesNotThrow(() => {
       consolePublicApiErrorReporter(err, { code: "rate_limited" });
     });
     assert.equal(calls.length, 4);
-    assert.equal(calls[3]?.[0], "[stellarcore:public-api] unknown failed (rate_limited)");
+    assert.deepEqual(entry(3), {
+      event: "public_api_error",
+      operation: "unknown",
+      code: "rate_limited",
+    });
 
-    // Case 5: context with full diagnostic fields
+    // Case 5: context with full diagnostic fields, including a valid id
     assert.doesNotThrow(() => {
-      consolePublicApiErrorReporter(err, { operation: "anchors.list", code: "internal_error", requestId: "req-123" });
+      consolePublicApiErrorReporter(err, { operation: "anchors.list", code: "internal_error", requestId: "req-12345678" });
     });
     assert.equal(calls.length, 5);
-    assert.equal(calls[4]?.[0], "[stellarcore:public-api] anchors.list failed (internal_error)");
+    assert.deepEqual(entry(4), {
+      event: "public_api_error",
+      operation: "anchors.list",
+      code: "internal_error",
+      requestId: "req-12345678",
+    });
+
+    // Case 6: an invalid id is never written to the log line
+    assert.doesNotThrow(() => {
+      consolePublicApiErrorReporter(err, {
+        operation: "anchors.list",
+        code: "internal_error",
+        requestId: "postgresql://admin:secret@private-db.internal/core",
+      });
+    });
+    assert.equal(calls.length, 6);
+    const unlogged = entry(5);
+    assert.equal("requestId" in unlogged, false);
+    assert.equal(String(calls[5]?.[0]).includes("secret"), false);
   } finally {
     console.error = originalError;
   }

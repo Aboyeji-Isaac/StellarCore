@@ -32,6 +32,8 @@ export type ReputationApiDependencies = Readonly<{
   staleEvidenceStore?: StaleEvidenceStore;
   now?: () => Date;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id published with failures and recorded in the failure log. */
+  requestId?: string;
 }>;
 
 export async function getReputationApiResult(
@@ -57,7 +59,11 @@ export async function getReputationApiResult(
       }
     }
     reportError(dependencies, error, "reputation.list");
-    return publicApiErrorResult("internal_error", "Unable to load reputation.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load reputation.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -71,6 +77,7 @@ export async function getAnchorReputationApiResult(
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
+      dependencies.requestId,
     );
   }
 
@@ -81,7 +88,11 @@ export async function getAnchorReputationApiResult(
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
     const record = await repository.findBySlug(normalizedSlug);
     if (!record) {
-      return publicApiErrorResult("anchor_not_found", "Anchor not found.");
+      return publicApiErrorResult(
+        "anchor_not_found",
+        "Anchor not found.",
+        dependencies.requestId,
+      );
     }
     const body = Object.freeze({ reputation: serializeReputation(record) });
     await saveLastKnownGoodEvidence(store, key, body, reputationSourceTimes([body.reputation]), now);
@@ -101,7 +112,11 @@ export async function getAnchorReputationApiResult(
       }
     }
     reportError(dependencies, error, "reputation.detail");
-    return publicApiErrorResult("internal_error", "Unable to load reputation.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load reputation.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -187,5 +202,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }
