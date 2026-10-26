@@ -53,9 +53,17 @@ export async function runRateEngine(
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
-      observation = candidate.captureRunId
-        ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
-        : normalized;
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//       observation = candidate.captureRunId
+//         ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
+//         : normalized;
+// =======
+//       // Add fingerprint from dependencies
+//       observation = {
+//         ...observation,
+//         configurationFingerprint: dependencies.configurationFingerprint,
+//       };
+// >>>>>>> development
     } catch (error) {
       failures.push(engineFailure(
         candidate,

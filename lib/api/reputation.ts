@@ -23,7 +23,6 @@ import type {
   PublicReputationScoreBand,
   PublicReputationState,
   ReputationApiDetailResult,
-  ReputationApiErrorResponse,
   ReputationApiListResult,
 } from "@/types/api/reputation";
 

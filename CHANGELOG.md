@@ -11,6 +11,10 @@ with your pull request.
 
 ### Added
 
+- Visibility-aware dashboard refresh: the dashboard re-reads its panels at most
+  once per minute while the page is visible, pauses polling entirely while the
+  tab is hidden, and resumes per the documented interval when the page becomes
+  visible again (#443).
 - Evidence-based anchor availability transitions: discovery failures are
   classified (transient / deterministic / unknown) and a destructive status
   change requires consecutive-failure or sustained-window evidence, so one
@@ -48,6 +52,8 @@ with your pull request.
 
 ### Fixed
 
+- Public directory pagination now rejects `offset` values that overflow the
+  safe integer range instead of silently serving an empty page (#444).
 - Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
 
 ## [Prior work] — 2026-09-25

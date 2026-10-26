@@ -273,6 +273,9 @@ async function addHistory(
      CROSS JOIN generate_series(1, ${count}) AS k`;
   // Index-only scans need a current visibility map and the planner needs
   // statistics; without both this would measure an unrepresentative plan.
+  // PostgreSQL VACUUM cannot execute inside a prepared transaction.
+  // Reviewed exception: fixed SQL with no external or interpolated input.
+  // eslint-disable-next-line no-restricted-syntax
   await db.$executeRawUnsafe("VACUUM (ANALYZE) rate_snapshots");
 }
 
@@ -286,12 +289,11 @@ type PlanNode = {
 
 async function snapshotRowsVisited(
   db: Awaited<typeof import("@/lib/dbClient")>["db"],
-  query: { text: string; values: unknown[] },
+  query: ReturnType<typeof latestObservationsQuery>,
 ): Promise<number> {
-  const rows = await db.$queryRawUnsafe<Array<{ "QUERY PLAN": Array<{ Plan: PlanNode }> }>>(
-    `EXPLAIN (ANALYZE, FORMAT JSON) ${query.text}`,
-    ...query.values,
-  );
+  const rows = await db.$queryRaw<
+    Array<{ "QUERY PLAN": Array<{ Plan: PlanNode }> }>
+  >(Prisma.sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query}`);
   let visited = 0;
   const walk = (node: PlanNode) => {
     if (node["Relation Name"] === "rate_snapshots") {
