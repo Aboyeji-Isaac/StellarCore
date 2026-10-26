@@ -29,7 +29,7 @@ test("scheduled refresh ingests rates before evaluating reputation and returns a
     ok: true,
     startedAt: STARTED_AT.toISOString(),
     completedAt: COMPLETED_AT.toISOString(),
-    rates: { attempted: 1, succeeded: 1, failed: 0, skipped: 0, suppressed: 0, failures: [] },
+    rates: { attempted: 1, succeeded: 1, failed: 0, skipped: 0, suppressed: 0, failures: [], skippedSources: [] },
     reputation: { attempted: 3, succeeded: 3, failed: 0, failures: [] },
   });
   assert.equal(Object.isFrozen(result), true);
@@ -148,6 +148,7 @@ test("a rate preparation failure is safely serialized and does not prevent reput
     skipped: 0,
     suppressed: 0,
     failures: [{ phase: "PREPARATION", code: "LIVE_RATE_PREPARATION_FAILURE" }],
+    skippedSources: [],
   });
   assert.equal(JSON.stringify(result).includes("should-not-leak"), false);
 });

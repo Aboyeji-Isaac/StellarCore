@@ -81,7 +81,9 @@ export function CorridorRateEvidence({ rates }: Props) {
               <tbody>
                 {rates.observations.map((observation) => (
                   <tr key={observation.anchor.slug} className="border-t border-[var(--ghost)] align-top">
-                    <td className="px-3 py-3 text-[var(--white)]">{observation.anchor.name}</td>
+                    <td className="px-3 py-3 text-[var(--white)]">
+                      {observation.anchor.name?.trim() ? observation.anchor.name : observation.anchor.slug}
+                    </td>
                     <td className="px-3 py-3 text-[var(--white)]">{observation.rate}</td>
                     <td className="px-3 py-3 text-[var(--muted)]">
                       {new Date(observation.capturedAt).toLocaleString()}

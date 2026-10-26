@@ -1,6 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { readPublicErrorBody, type PublicErrorBodyFields } from "@/lib/api/publicErrorBody";
+import { resolveApiUrl } from "@/lib/api/resolveApiUrl";
+import { createPanelRequestState } from "@/lib/ui/panelRequestState";
+import { SectionError } from "@/components/dashboard/SectionStates";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -29,38 +33,40 @@ export function CorridorRateHistoryChart({
   initialHistory,
 }: Props) {
   const chartId = useId();
-  const [history, setHistory] = useState<PublicRateHistoryResponse>(initialHistory);
+  const [requests] = useState(() => createPanelRequestState(
+    initialHistory,
+    "Unable to load rate history.",
+  ));
+  const { data: history, loading, error } = useSyncExternalStore(
+    requests.subscribe,
+    requests.getSnapshot,
+    requests.getSnapshot,
+  );
+  useEffect(() => () => requests.cancel(), [requests]);
   const [selectedDays, setSelectedDays] = useState<number>(initialHistory.windowDays);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  // Only the safe public fields of a failed refresh are retained; raw exception
+  // text and server diagnostics are never rendered.
+  const [failure, setFailure] = useState<PublicErrorBodyFields | null>(null);
 
   async function handleTimeframeChange(days: number) {
-    if (days === selectedDays || loading) return;
+    if (days === selectedDays) return;
     setSelectedDays(days);
-    setLoading(true);
-    setError(null);
     setHoveredPointIndex(null);
 
-    try {
+    await requests.refresh(async () => {
       const response = await fetch(
-        `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
+        resolveApiUrl(`/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`),
       );
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error?.message ?? "Unable to load rate history.",
-        );
+        const errorData: unknown = await response.json().catch(() => null);
+        setFailure(readPublicErrorBody(errorData));
+        throw new Error("Unable to load rate history.");
       }
+      setFailure(null);
       const data: PublicRateHistoryResponse = await response.json();
-      setHistory(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load rate history.",
-      );
-    } finally {
-      setLoading(false);
-    }
+      return data;
+    });
   }
 
   const validPoints = history.points
@@ -155,6 +161,7 @@ export function CorridorRateHistoryChart({
   return (
     <section
       aria-labelledby="rate-history-heading"
+      aria-busy={loading}
       className="mt-10"
       data-testid="corridor-rate-history-section"
     >
@@ -181,7 +188,6 @@ export function CorridorRateHistoryChart({
                 key={option.days}
                 type="button"
                 onClick={() => handleTimeframeChange(option.days)}
-                disabled={loading}
                 aria-pressed={selectedDays === option.days}
                 className={`rounded px-3 py-1 font-medium transition-colors ${
                   selectedDays === option.days
@@ -220,12 +226,14 @@ export function CorridorRateHistoryChart({
           ) : null}
         </div>
 
-        {error ? (
-          <div
-            role="alert"
-            className="my-6 rounded border border-[rgba(238,143,129,0.35)] p-4 text-sm text-[#ee8f81]"
-          >
-            {error}
+        {failure || error ? (
+          <div className="my-6">
+            <SectionError
+              area="rate-history"
+              code={failure?.code}
+              message={failure?.message ?? "Unable to load rate history."}
+              requestId={failure?.requestId}
+            />
           </div>
         ) : validPoints.length === 0 ? (
           <div className="py-12 text-center text-sm text-[var(--muted)]">

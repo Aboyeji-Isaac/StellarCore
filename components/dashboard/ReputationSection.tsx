@@ -1,5 +1,7 @@
-import { getReputationApiResult } from "@/lib/api/reputation";
-import type { PublicReputationScoreBand, PublicReputationState } from "@/types/api/reputation";
+import * as React from "react";
+import { getReputationApiResult, type ReputationApiDependencies } from "@/lib/api/reputation";
+import { createRequestId } from "@/lib/api/requestId";
+import type { PublicReputationScoreBand, PublicReputationState, ReputationApiListResult } from "@/types/api/reputation";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
@@ -37,11 +39,30 @@ function formatMs(value: number | null): string {
   return value === null ? "—" : `${value} ms`;
 }
 
-export async function ReputationSection() {
-  const result = await getReputationApiResult();
+export async function ReputationSection(props?: {
+  dependencies?: ReputationApiDependencies;
+  result?: ReputationApiListResult;
+}) {
+  // Assign the correlation id here so the reference shown on failure is exactly
+  // the id in the matching structured server log entry.
+  const result = props?.result ?? await getReputationApiResult({
+    ...(props?.dependencies ?? {}),
+    requestId: createRequestId(),
+  });
+  return <ReputationSectionView result={result} />;
+}
 
+export function ReputationSectionView({ result }: { result: ReputationApiListResult }) {
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    const { code, message, requestId } = result.body.error;
+    return (
+      <SectionError
+        area="reputation"
+        code={code}
+        message={message}
+        requestId={requestId}
+      />
+    );
   }
 
   const { reputation, count } = result.body;
@@ -59,7 +80,7 @@ export async function ReputationSection() {
         >
           <div className="flex items-start justify-between gap-3">
             <h3 className="text-lg text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-              {entry.anchor.name}
+              {entry.anchor.name?.trim() ? entry.anchor.name : entry.anchor.slug}
             </h3>
             <Badge tone={stateTone(entry.state)} label={stateCopy(entry.state)} />
           </div>

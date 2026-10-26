@@ -1,11 +1,33 @@
-import { getCorridorsApiResult } from "@/lib/api/corridors";
+import * as React from "react";
+import { getCorridorsApiResult, type CorridorsApiDependencies } from "@/lib/api/corridors";
+import { createRequestId } from "@/lib/api/requestId";
+import type { CorridorsApiResult } from "@/types/api/corridors";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
 
-export async function CorridorsSection() {
-  const result = await getCorridorsApiResult();
+export async function CorridorsSection(props?: {
+  dependencies?: CorridorsApiDependencies;
+  result?: CorridorsApiResult;
+}) {
+  // Assign the correlation id here so the reference shown on failure is exactly
+  // the id in the matching structured server log entry.
+  const result = props?.result ?? await getCorridorsApiResult({
+    ...(props?.dependencies ?? {}),
+    requestId: createRequestId(),
+  });
+  return <CorridorsSectionView result={result} />;
+}
 
+export function CorridorsSectionView({ result }: { result: CorridorsApiResult }) {
   if (result.status !== 200) {
-    return <SectionError message={result.body.error.message} />;
+    const { code, message, requestId } = result.body.error;
+    return (
+      <SectionError
+        area="corridors"
+        code={code}
+        message={message}
+        requestId={requestId}
+      />
+    );
   }
 
   const { corridors, count } = result.body;
