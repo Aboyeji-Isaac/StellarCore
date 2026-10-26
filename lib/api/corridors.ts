@@ -6,9 +6,11 @@ import {
   type CorridorDirectoryRepository,
 } from "@/lib/api/corridorRepository";
 import {
+  NO_PAGINATION,
   NO_PAGINATION_QUERY,
   paginate,
   parsePagination,
+  type Pagination,
   type PaginationQuery,
 } from "@/lib/api/pagination";
 import { transferCapable } from "@/lib/stellar/anchors";
@@ -57,12 +59,8 @@ export async function getCorridorsApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const body = serializeCorridors(await repository.findAll());
-    const corridors = paginate(body.corridors, parsed.pagination);
-    return Object.freeze({
-      status: 200,
-      body: Object.freeze({ corridors, count: corridors.length }),
-    });
+    const body = serializeCorridors(await repository.findAll(), parsed.pagination);
+    return Object.freeze({ status: 200, body });
   } catch (error) {
     reportError(dependencies, error, "corridors.list");
     return publicApiErrorResult("internal_error", "Unable to load corridors.");
@@ -101,9 +99,11 @@ export async function getCorridorApiResult(
 
 export function serializeCorridors(
   records: readonly CorridorDirectoryRecord[],
+  pagination: Pagination = NO_PAGINATION,
 ): PublicCorridorsResponse {
-  const corridors = Object.freeze([...records]
-    .sort((left, right) => left.slug.localeCompare(right.slug))
+  // Sort records by the existing public order, then serialize only this page.
+  const ordered = [...records].sort((left, right) => left.slug.localeCompare(right.slug));
+  const corridors = Object.freeze(paginate(ordered, pagination)
     .map((record) => Object.freeze({
       slug: record.slug,
       sourceAsset: record.assetCodeFrom,
