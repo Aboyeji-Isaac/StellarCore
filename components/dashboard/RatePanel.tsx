@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { getRatesApiResult, type RatesApiDependencies } from "@/lib/api/rates";
 import { createRequestId } from "@/lib/api/requestId";
@@ -35,6 +36,7 @@ export async function RatePanel(props?: {
     ...(props?.dependencies ?? {}),
     requestId: createRequestId(),
   });
+
   return <RatePanelView result={result} />;
 }
 
@@ -42,6 +44,7 @@ export async function RatePanel(props?: {
 export function RatePanelView({ result }: { result: RatesApiResult }) {
   if (result.status !== 200) {
     const { code, message, requestId } = result.body.error;
+
     return (
       <SectionError
         area="rates"
@@ -63,9 +66,21 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
     observations,
     evaluatedAt,
   } = result.body;
-  const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"} across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"}`;
-  const observationLabel = `${sourceCount} latest persisted anchor ${sourceCount === 1 ? "observation" : "observations"}`;
-  const medianEvidenceLabel = `${freshSourceCount} fresh independent ${freshSourceCount === 1 ? "observation" : "observations"} of ${medianRequirement.minimumFreshIndependentSources} required`;
+
+  const candidateLabel = `${reviewedCandidateConfiguration.candidateCount} configured ${
+    reviewedCandidateConfiguration.candidateCount === 1 ? "candidate" : "candidates"
+  } across ${reviewedCandidateConfiguration.uniqueAnchorCount} ${
+    reviewedCandidateConfiguration.uniqueAnchorCount === 1 ? "anchor" : "anchors"
+  }`;
+
+  const observationLabel = `${sourceCount} latest persisted anchor ${
+    sourceCount === 1 ? "observation" : "observations"
+  }`;
+
+  const medianEvidenceLabel = `${freshSourceCount} fresh independent ${
+    freshSourceCount === 1 ? "observation" : "observations"
+  } of ${medianRequirement.minimumFreshIndependentSources} required`;
+
   const latestCapturedAt = observations
     .map(({ capturedAt }) => capturedAt)
     .filter(isValidEvidenceTime)
@@ -76,60 +91,108 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
     <div className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-xl text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
-            {corridor.sourceAsset} ({corridor.sourceCountry}) → {corridor.destinationAsset} (
-            {corridor.destinationCountry})
+          <h3
+            className="text-xl text-[var(--white)]"
+            style={{ fontFamily: "var(--display)" }}
+          >
+            {corridor.sourceAsset} ({corridor.sourceCountry}) →{" "}
+            {corridor.destinationAsset} ({corridor.destinationCountry})
           </h3>
+
           <p className="mt-1 text-xs text-[var(--muted)]">
             Evaluated {new Date(evaluatedAt).toLocaleString()}
           </p>
-          <p className="mt-1 text-xs text-[var(--muted)]" data-testid="rate-evidence-freshness">
+
+          <p
+            className="mt-1 text-xs text-[var(--muted)]"
+            data-testid="rate-evidence-freshness"
+          >
             {latestCapturedAt
-              ? `Latest observation captured ${new Date(latestCapturedAt).toLocaleString()}`
+              ? `Latest observation captured ${new Date(
+                  latestCapturedAt
+                ).toLocaleString()}`
               : "Freshness unavailable — no valid observation time"}
           </p>
         </div>
-        <Badge tone={state === "healthy" ? "positive" : "warning"} label={state.replace(/_/g, " ")} />
+
+        <Badge
+          tone={state === "healthy" ? "positive" : "warning"}
+          label={state.replace(/_/g, " ")}
+        />
       </div>
 
       <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-[var(--ghost)] pt-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median rate</dt>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">
+            Median rate
+          </dt>
+
           <dd
-            className={medianRate === null
-              ? "mt-1 text-lg text-[var(--white)]"
-              : "mt-1 text-2xl text-[var(--white)]"}
+            className={
+              medianRate === null
+                ? "mt-1 text-lg text-[var(--white)]"
+                : "mt-1 text-2xl text-[var(--white)]"
+            }
             style={{ fontFamily: "var(--display)" }}
           >
             {medianRate === null ? "Median unavailable" : medianRate}
           </dd>
+
           {medianRate === null ? (
-            <dd className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{medianEvidenceLabel}</dd>
+            <dd className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+              {medianEvidenceLabel}
+            </dd>
           ) : null}
         </div>
+
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Configuration</dt>
-          <dd className="mt-1 text-[var(--white)]">Reviewed candidates known to StellarCore</dd>
-          <dd className="mt-1 text-[var(--muted)]">{candidateLabel}</dd>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">
+            Configuration
+          </dt>
+
+          <dd className="mt-1 text-[var(--white)]">
+            Reviewed candidates known to StellarCore
+          </dd>
+
+          <dd className="mt-1 text-[var(--muted)]">
+            {candidateLabel}
+          </dd>
         </div>
+
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Observations</dt>
-          <dd className="mt-1 text-[var(--white)]">Latest persisted observations</dd>
-          <dd className="mt-1 text-[var(--muted)]">{observationLabel}</dd>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">
+            Observations
+          </dt>
+
+          <dd className="mt-1 text-[var(--white)]">
+            Latest persisted observations
+          </dd>
+
+          <dd className="mt-1 text-[var(--muted)]">
+            {observationLabel}
+          </dd>
         </div>
+
         <div>
-          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median evidence</dt>
-          <dd className="mt-1 text-[var(--white)]">{medianEvidenceLabel}</dd>
+          <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">
+            Median evidence
+          </dt>
+
+          <dd className="mt-1 text-[var(--white)]">
+            {medianEvidenceLabel}
+          </dd>
         </div>
       </dl>
 
       <p className="mt-4 text-xs text-[var(--muted)]">
-        Configuration is not proof that a source is operational or currently returning a price.
+        Configuration is not proof that a source is operational or currently
+        returning a price.
       </p>
 
       {state === "insufficient_fresh_sources" && (
         <p className="mt-2 text-sm text-[var(--muted)]">
-          No median is published until the fresh independent-observation requirement is met.
+          No median is published until the fresh independent-observation
+          requirement is met.
         </p>
       )}
 
@@ -150,6 +213,7 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
                 <th className="px-3 py-2 font-medium">Eligible</th>
               </tr>
             </thead>
+
             <tbody>
               {observations.map((observation) => (
                 <tr
@@ -157,22 +221,45 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
                   className="border-b border-[var(--ghost)] align-top last:border-0"
                 >
                   <td className="px-3 py-2 text-[var(--white)]">
-                    {observation.anchor.name?.trim() ? observation.anchor.name : observation.anchor.slug}
+                    {observation.anchor.name?.trim()
+                      ? observation.anchor.name
+                      : observation.anchor.slug}
                   </td>
-                  <td className="px-3 py-2 text-[var(--white)]">{observation.rate}</td>
-                  <td className="px-3 py-2 text-[var(--muted)]">{observation.fee}</td>
+
+                  <td className="px-3 py-2 text-[var(--white)]">
+                    {observation.rate}
+                  </td>
+
+                  <td className="px-3 py-2 text-[var(--muted)]">
+                    {observation.fee}
+                  </td>
+
                   <td className="px-3 py-2 text-[var(--muted)]">
                     {isValidEvidenceTime(observation.capturedAt)
-                      ? new Date(observation.capturedAt).toLocaleString()
+                      ? new Date(
+                          observation.capturedAt
+                        ).toLocaleString()
                       : "Unavailable"}
                   </td>
+
                   <td className="px-3 py-2">
-                    <Badge tone={freshnessTone(observation.freshness.state)} label={observation.freshness.state} />
+                    <Badge
+                      tone={freshnessTone(observation.freshness.state)}
+                      label={observation.freshness.state}
+                    />
                   </td>
+
                   <td className="px-3 py-2 text-[var(--muted)]">
                     {observation.eligibleForMedian
                       ? "Yes"
-                      : `No${observation.exclusionReason ? ` — ${observation.exclusionReason.replace(/_/g, " ")}` : ""}`}
+                      : `No${
+                          observation.exclusionReason
+                            ? ` — ${observation.exclusionReason.replace(
+                                /_/g,
+                                " "
+                              )}`
+                            : ""
+                        }`}
                   </td>
                 </tr>
               ))}
