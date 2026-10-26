@@ -15,6 +15,7 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
+    configurationFingerprint?: string;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();

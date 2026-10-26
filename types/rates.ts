@@ -1,3 +1,4 @@
+
 import type { CorridorRegistryEntry } from "@/types/corridor";
 import type {
   Sep38IndicativePrice,
@@ -12,12 +13,9 @@ export type NormalizedRateObservation = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-// <<<<<<< feat/link-rate-snapshots-to-capture-run
-//   captureRunId?: string;
-// =======
-//   configurationFingerprint: string;
-// >>>>>>> development
-// }>;
+  configurationFingerprint?: string;
+  captureRunId?: string;
+}>;
 
 export type RateFreshnessState = "fresh" | "stale" | "future" | "invalid";
 
@@ -64,13 +62,10 @@ export type PersistedRateSnapshot = Readonly<{
   destinationAmount: string;
   fee: string;
   capturedAt: Date;
-// <<<<<<< feat/link-rate-snapshots-to-capture-run
-//   captureRunId?: string;
-// =======
-//   configurationFingerprint: string | null;
-//   provenanceUnavailable: boolean;
-// >>>>>>> development
-// }>;
+  configurationFingerprint?: string | null;
+  provenanceUnavailable?: boolean;
+  captureRunId?: string | null;
+}>;
 
 export type RateSnapshotPersistenceCode =
   | "ANCHOR_NOT_FOUND"
@@ -84,14 +79,35 @@ export type RateSnapshotPersistenceResult =
   | Readonly<{ ok: true; snapshot: PersistedRateSnapshot }>
   | Readonly<{ ok: false; code: RateSnapshotPersistenceCode }>;
 
-export type RateSnapshotProvenance = 
+export type RateSnapshotProvenance =
   | Readonly<{ available: false }>
-  | Readonly<{ available: true; configurationFingerprint: string }>;
+  | Readonly<{
+      available: true;
+      configurationFingerprint: string;
+    }>;
 
 export type RateSnapshotRepository = Readonly<{
-  findAnchorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
-  findCorridorBySlug: (slug: string) => Promise<Readonly<{ id: string }> | null>;
-/
+  findAnchorBySlug: (
+    slug: string,
+  ) => Promise<Readonly<{ id: string }> | null>;
+
+  findCorridorBySlug: (
+    slug: string,
+  ) => Promise<Readonly<{ id: string }> | null>;
+
+  hasAssociation: (
+    anchorId: string,
+    corridorId: string,
+  ) => Promise<boolean>;
+
+  findRunById?: (
+    id: string,
+  ) => Promise<Readonly<{ id: string }> | null>;
+
+  findProvenanceBySnapshotId?: (
+    id: string,
+  ) => Promise<RateSnapshotProvenance | null>;
+
   createSnapshot: (input: Readonly<{
     anchorId: string;
     corridorId: string;
@@ -100,11 +116,8 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
-// <<<<<<< feat/link-rate-snapshots-to-capture-run
-//     captureRunId?: string;
-// =======
-//     configurationFingerprint: string;
-// >>>>>>> development
+    configurationFingerprint?: string | null;
+    captureRunId?: string;
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -112,12 +125,9 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
-// <<<<<<< feat/link-rate-snapshots-to-capture-run
-//     captureRunId?: string | null;
-// =======
-//     configurationFingerprint: string | null;
-//     provenanceUnavailable: boolean;
-// >>>>>>> development
+    configurationFingerprint?: string | null;
+    provenanceUnavailable?: boolean;
+    captureRunId?: string | null;
   }>>;
 }>;
 

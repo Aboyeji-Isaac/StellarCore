@@ -55,10 +55,6 @@ export async function withDatabaseDeadline<T>(
           ),
         );
       }, timeoutMs);
-
-      if (timerId.unref) {
-        timerId.unref();
-      }
     }
   });
 

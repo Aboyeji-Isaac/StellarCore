@@ -108,13 +108,21 @@ function refusal(
 }
 
 function normalizeBranch(value: string): string | null {
-  if (value === "production" || value === "refs/heads/production") {
-    return "production";
+  if (value.startsWith("refs/heads/")) {
+    const branch = value.slice("refs/heads/".length);
+    return isValidBranchName(branch) ? branch : null;
   }
-  if (value === "main" || value === "refs/heads/main") {
-    return "main";
+  if (value.startsWith("refs/")) {
+    return null;
   }
-  return null;
+  return isValidBranchName(value) ? value : null;
+}
+
+function isValidBranchName(value: string): boolean {
+  if (!value || value.startsWith("/") || value.endsWith("/") || value.includes("//")) {
+    return false;
+  }
+  return /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(value);
 }
 
 function parsePullRequestRef(value: string): number | null {

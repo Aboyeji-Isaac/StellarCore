@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { resolveApiUrl } from "@/lib/api/resolveApiUrl";
 import { createPanelRequestState } from "@/lib/ui/panelRequestState";
 import type {
   PublicRateHistoryPoint,
@@ -50,7 +51,7 @@ export function CorridorRateHistoryChart({
 
     await requests.refresh(async () => {
       const response = await fetch(
-        `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
+        resolveApiUrl(`/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`),
       );
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);

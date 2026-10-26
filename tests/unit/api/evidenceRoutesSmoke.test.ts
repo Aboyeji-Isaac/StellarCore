@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { GET as ratesGet } from "@/app/api/rates/route";
-import { GET as rateHistoryGet } from "@/app/api/rates/history/route";
-import { GET as reputationListGet } from "@/app/api/reputation/route";
-import { GET as reputationDetailGet } from "@/app/api/reputation/[slug]/route";
 import { getRatesApiResult } from "@/lib/api/rates";
 import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
 import {

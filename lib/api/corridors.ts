@@ -1,3 +1,4 @@
+
 import {
   PRISMA_CORRIDOR_DIRECTORY_REPOSITORY,
   type CorridorDetailRecord,
@@ -13,6 +14,7 @@ import {
   type Pagination,
   type PaginationQuery,
 } from "@/lib/api/pagination";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import { transferCapable } from "@/lib/stellar/anchors";
 import {
   consolePublicApiErrorReporter,
@@ -52,6 +54,7 @@ export async function getCorridorsApiResult(
   pagination: PaginationQuery = NO_PAGINATION_QUERY,
 ): Promise<CorridorsApiResult> {
   const parsed = parsePagination(pagination);
+
   if (!parsed.ok) {
     return publicApiErrorResult("invalid_pagination", parsed.message);
   }
@@ -59,11 +62,20 @@ export async function getCorridorsApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const body = serializeCorridors(await repository.findAll(), parsed.pagination);
+
+    const body = serializeCorridors(
+      await repository.findAll(),
+      parsed.pagination,
+    );
+
     return Object.freeze({ status: 200, body });
   } catch (error) {
     reportError(dependencies, error, "corridors.list");
-    return publicApiErrorResult("internal_error", "Unable to load corridors.");
+
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load corridors.",
+    );
   }
 }
 
@@ -71,7 +83,10 @@ export async function getCorridorApiResult(
   slug: string,
   dependencies: CorridorApiDependencies = {},
 ): Promise<CorridorApiResult> {
-  if (!isValidCorridorSlug(slug)) {
+  const decoded = safeDecodePathSegment(slug);
+  const normalizedSlug = decoded.ok ? decoded.value : slug;
+
+  if (!isValidCorridorSlug(normalizedSlug)) {
     return publicApiErrorResult(
       "invalid_corridor_slug",
       "A valid corridor slug is required.",
@@ -81,19 +96,29 @@ export async function getCorridorApiResult(
   try {
     const repository = dependencies.repository
       ?? PRISMA_CORRIDOR_DIRECTORY_REPOSITORY;
-    const corridor = await repository.findBySlug(slug);
+
+    const corridor = await repository.findBySlug(normalizedSlug);
 
     if (!corridor) {
-      return publicApiErrorResult("corridor_not_found", "Corridor not found.");
+      return publicApiErrorResult(
+        "corridor_not_found",
+        "Corridor not found.",
+      );
     }
 
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ corridor: serializeCorridorDetail(corridor) }),
+      body: Object.freeze({
+        corridor: serializeCorridorDetail(corridor),
+      }),
     });
   } catch (error) {
     reportError(dependencies, error, "corridors.detail");
-    return publicApiErrorResult("internal_error", "Unable to load corridor.");
+
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load corridor.",
+    );
   }
 }
 
@@ -102,36 +127,50 @@ export function serializeCorridors(
   pagination: Pagination = NO_PAGINATION,
 ): PublicCorridorsResponse {
   // Sort records by the existing public order, then serialize only this page.
-  const ordered = [...records].sort((left, right) => left.slug.localeCompare(right.slug));
-  const corridors = Object.freeze(paginate(ordered, pagination)
-    .map((record) => Object.freeze({
-      slug: record.slug,
-      sourceAsset: record.assetCodeFrom,
-      sourceCountry: record.countryFrom,
-      destinationAsset: record.assetCodeTo,
-      destinationCountry: record.countryTo,
-      anchorCount: record.anchorCount,
-    }) satisfies PublicCorridor));
+  const ordered = [...records].sort(
+    (left, right) => left.slug.localeCompare(right.slug),
+  );
 
-  return Object.freeze({ corridors, count: corridors.length });
+  const corridors = Object.freeze(
+    paginate(ordered, pagination).map((record) =>
+      Object.freeze({
+        slug: record.slug,
+        sourceAsset: record.assetCodeFrom,
+        sourceCountry: record.countryFrom,
+        destinationAsset: record.assetCodeTo,
+        destinationCountry: record.countryTo,
+        anchorCount: record.anchorCount,
+      }) satisfies PublicCorridor,
+    ),
+  );
+
+  return Object.freeze({
+    corridors,
+    count: corridors.length,
+  });
 }
 
 export function serializeCorridorDetail(
   record: CorridorDetailRecord,
 ): PublicCorridorDetail {
-  const anchors = Object.freeze([...record.anchors]
-    .sort((left, right) => left.slug.localeCompare(right.slug))
-    .map((anchor) => {
-      const seps = Object.freeze([...anchor.seps].sort((left, right) => left - right));
-      return Object.freeze({
-        slug: anchor.slug,
-        name: anchor.name,
-        homeDomain: anchor.homeDomain,
-        status: anchor.status,
-        seps,
-        isTransferCapable: transferCapable(seps),
-      }) satisfies PublicCorridorAnchor;
-    }));
+  const anchors = Object.freeze(
+    [...record.anchors]
+      .sort((left, right) => left.slug.localeCompare(right.slug))
+      .map((anchor) => {
+        const seps = Object.freeze(
+          [...anchor.seps].sort((left, right) => left - right),
+        );
+
+        return Object.freeze({
+          slug: anchor.slug,
+          name: anchor.name,
+          homeDomain: anchor.homeDomain,
+          status: anchor.status,
+          seps,
+          isTransferCapable: transferCapable(seps),
+        }) satisfies PublicCorridorAnchor;
+      }),
+  );
 
   return Object.freeze({
     slug: record.slug,
