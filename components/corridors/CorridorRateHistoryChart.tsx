@@ -1,6 +1,15 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useReducer, useRef, useState } from "react";
+import {
+  createRateHistoryLoader,
+  type RateHistoryLoader,
+} from "@/lib/rates/rateHistoryRequests";
+import {
+  describeDataAge,
+  initialRateHistoryPanelState,
+  rateHistoryPanelReducer,
+} from "@/lib/rates/rateHistoryPanelState";
 import type {
   PublicRateHistoryPoint,
   PublicRateHistoryResponse,
@@ -29,38 +38,44 @@ export function CorridorRateHistoryChart({
   initialHistory,
 }: Props) {
   const chartId = useId();
-  const [history, setHistory] = useState<PublicRateHistoryResponse>(initialHistory);
-  const [selectedDays, setSelectedDays] = useState<number>(initialHistory.windowDays);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [panel, dispatch] = useReducer(
+    rateHistoryPanelReducer,
+    initialHistory,
+    initialRateHistoryPanelState,
+  );
+  // `history` is always the latest successful response; a failed refresh retains it.
+  const { displayed: history, selectedDays, loading, failure } = panel;
+  const displayedDays = history.windowDays;
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const loaderRef = useRef<RateHistoryLoader | null>(null);
 
-  async function handleTimeframeChange(days: number) {
-    if (days === selectedDays || loading) return;
-    setSelectedDays(days);
-    setLoading(true);
-    setError(null);
-    setHoveredPointIndex(null);
-
-    try {
-      const response = await fetch(
-        `/api/rates/history?corridor=${encodeURIComponent(corridorSlug)}&days=${days}`,
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error?.message ?? "Unable to load rate history.",
-        );
+  useEffect(() => {
+    const loader = createRateHistoryLoader({
+      corridorSlug,
+      callbacks: {
+        onSuccess: (data) => {
+          dispatch({ type: "refresh_succeeded", history: data });
+        },
+        onError: (message, days) => {
+          dispatch({ type: "refresh_failed", message, days, failedAt: new Date().toISOString() });
+        },
+      },
+    });
+    loaderRef.current = loader;
+    return () => {
+      loader.dispose();
+      if (loaderRef.current === loader) {
+        loaderRef.current = null;
       }
-      const data: PublicRateHistoryResponse = await response.json();
-      setHistory(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to load rate history.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    };
+  }, [corridorSlug]);
+
+  function handleTimeframeChange(days: number) {
+    if (days === selectedDays) return;
+    dispatch({ type: "refresh_started", days });
+    setHoveredPointIndex(null);
+    // The loader aborts any in-flight request, so only the latest selection can update the chart.
+    void loaderRef.current?.load(days);
   }
 
   const validPoints = history.points
@@ -86,7 +101,7 @@ export function CorridorRateHistoryChart({
     );
 
   const evaluatedAtTime = new Date(history.evaluatedAt).getTime();
-  const minWindowTime = evaluatedAtTime - selectedDays * 24 * 60 * 60 * 1000;
+  const minWindowTime = evaluatedAtTime - displayedDays * 24 * 60 * 60 * 1000;
   const minTime = validPoints.length > 0
     ? Math.min(minWindowTime, validPoints[0]!.time)
     : minWindowTime;
@@ -181,7 +196,6 @@ export function CorridorRateHistoryChart({
                 key={option.days}
                 type="button"
                 onClick={() => handleTimeframeChange(option.days)}
-                disabled={loading}
                 aria-pressed={selectedDays === option.days}
                 className={`rounded px-3 py-1 font-medium transition-colors ${
                   selectedDays === option.days
@@ -196,7 +210,10 @@ export function CorridorRateHistoryChart({
         </div>
       </div>
 
-      <div className="mt-5 rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5">
+      <div
+        aria-busy={loading}
+        className="mt-5 rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--ghost)] text-xs text-[var(--muted)]">
           <div className="flex items-center gap-4">
             <span>
@@ -215,21 +232,40 @@ export function CorridorRateHistoryChart({
               Gaps preserved honestly
             </span>
           </div>
-          {loading ? (
-            <span className="text-[var(--muted)]">Loading rates...</span>
-          ) : null}
+          <div className="flex items-center gap-3">
+            <span data-testid="rate-history-displayed-window">
+              Showing {displayedDays}-day window · evaluated{" "}
+              <time dateTime={history.evaluatedAt}>
+                {new Date(history.evaluatedAt).toLocaleString()}
+              </time>
+            </span>
+            {loading ? (
+              <span className="text-[var(--muted)]">Loading {selectedDays}-day window...</span>
+            ) : null}
+          </div>
         </div>
 
-        {error ? (
+        {failure ? (
           <div
             role="alert"
-            className="my-6 rounded border border-[rgba(238,143,129,0.35)] p-4 text-sm text-[#ee8f81]"
+            data-testid="rate-history-refresh-failure"
+            className="mt-4 rounded border border-[rgba(238,143,129,0.35)] p-4 text-sm text-[#ee8f81]"
           >
-            {error}
+            <p>
+              Could not refresh the {failure.requestedDays}-day history: {failure.message}
+            </p>
+            <p className="mt-1 text-xs">
+              Still showing the last successful {displayedDays}-day history, evaluated{" "}
+              {new Date(history.evaluatedAt).toLocaleString()} (
+              {describeDataAge(history.evaluatedAt, new Date(failure.failedAt))} when the refresh failed).
+              Select a window to try again.
+            </p>
           </div>
-        ) : validPoints.length === 0 ? (
+        ) : null}
+
+        {validPoints.length === 0 ? (
           <div className="py-12 text-center text-sm text-[var(--muted)]">
-            <p>No historical rate snapshots recorded for the {selectedDays}-day window.</p>
+            <p>No historical rate snapshots recorded for the {displayedDays}-day window.</p>
             <p className="mt-1 text-xs text-[var(--muted)]">
               Rates are plotted only when independent anchors quote on this corridor.
             </p>
@@ -238,7 +274,7 @@ export function CorridorRateHistoryChart({
           <div className="mt-4">
             <figure className="relative">
               <svg
-                aria-label={`Historical rate chart for ${corridorSlug} over the past ${selectedDays} days`}
+                aria-label={`Historical rate chart for ${corridorSlug} over the past ${displayedDays} days`}
                 role="img"
                 viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
                 className="w-full h-auto overflow-visible select-none"
@@ -378,7 +414,7 @@ export function CorridorRateHistoryChart({
                 })}
               </svg>
               <figcaption className="sr-only">
-                Chart showing {validPoints.length} median rate snapshots for {corridorSlug} over {selectedDays} days.
+                Chart showing {validPoints.length} median rate snapshots for {corridorSlug} over {displayedDays} days.
               </figcaption>
             </figure>
 
