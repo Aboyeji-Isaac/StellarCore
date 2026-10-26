@@ -5,6 +5,7 @@ import * as ratesRoute from "@/app/api/rates/route";
 import * as rateHistoryRoute from "@/app/api/rates/history/route";
 import * as reputationRoute from "@/app/api/reputation/route";
 import * as reputationDetailRoute from "@/app/api/reputation/[slug]/route";
+import { respondUnlessRequestAborted } from "@/lib/api/http";
 
 test("evidence API handlers return 499 when client disconnects before invocation", async () => {
   const controller = new AbortController();
@@ -117,4 +118,45 @@ test("normal requests without disconnect proceed with standard validation and st
   assert.equal(response.headers.get("cache-control"), "no-store");
   const json = await response.json() as { error: { code: string } };
   assert.equal(json.error.code, "missing_corridor");
+});
+
+test("in-flight work that completes after disconnect cannot return success", async () => {
+  const controller = new AbortController();
+  let releaseWork!: () => void;
+  const work = new Promise<void>((resolve) => {
+    releaseWork = resolve;
+  });
+  const request = new Request("http://localhost/api/evidence", {
+    signal: controller.signal,
+  });
+
+  const responsePromise = respondUnlessRequestAborted(request, async () => {
+    await work;
+    return Response.json({ success: true });
+  });
+  controller.abort();
+  releaseWork();
+
+  const response = await responsePromise;
+  assert.equal(response.status, 499);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(await response.text(), "");
+});
+
+test("in-flight abort rejection becomes an empty disconnect response", async () => {
+  const controller = new AbortController();
+  const request = new Request("http://localhost/api/evidence", {
+    signal: controller.signal,
+  });
+
+  const responsePromise = respondUnlessRequestAborted(request, async () => {
+    await Promise.resolve();
+    controller.abort();
+    throw new Error("request aborted");
+  });
+
+  const response = await responsePromise;
+  assert.equal(response.status, 499);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(await response.text(), "");
 });

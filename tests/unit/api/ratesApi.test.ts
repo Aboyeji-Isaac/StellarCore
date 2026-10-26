@@ -96,6 +96,26 @@ test("service maps unknown corridors and read failures to safe errors", async ()
   assert.equal(JSON.stringify(failed).includes("secret"), false);
 });
 
+test("aborted reads do not report client disconnects as internal errors", async () => {
+  const controller = new AbortController();
+  let rejectRead!: (error: Error) => void;
+  let reportedErrors = 0;
+  const pending = getRatesApiResult(CORRIDOR, {
+    signal: controller.signal,
+    reportError: () => {
+      reportedErrors += 1;
+    },
+    readLatestRate: () => new Promise((_resolve, reject) => {
+      rejectRead = reject;
+    }),
+  });
+
+  controller.abort();
+  rejectRead(new Error("database read interrupted"));
+  await assert.rejects(pending);
+  assert.equal(reportedErrors, 0);
+});
+
 test("one source is a successful insufficient response with string decimals", async () => {
   let usedEvaluationTime: Date | undefined;
   const result = await getRatesApiResult(CORRIDOR, {
