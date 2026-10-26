@@ -1,29 +1,18 @@
 name: PR Participant Guard
 
+# Temporarily disabled while the participant check is being reworked.
+# Keep the workflow available for manual runs and future re-enablement.
 on:
-  pull_request_target:
-    branches: [development, main]
-    types: [opened, reopened, synchronize, ready_for_review, edited, review_requested, review_request_removed]
-  issue_comment:
-    types: [created, edited, deleted]
-  pull_request_review:
-    types: [submitted, edited, dismissed]
-  pull_request_review_comment:
-    types: [created, edited, deleted]
+  workflow_dispatch:
 
 permissions:
   contents: read
   issues: read
   pull-requests: read
 
-concurrency:
-  group: pr-participant-guard-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   participant-guard:
     name: PR Participant Guard
-    if: github.event_name != 'issue_comment' || github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -42,5 +31,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         run: node scripts/security/check-pr-participants.mjs
