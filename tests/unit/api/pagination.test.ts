@@ -89,7 +89,10 @@ test("both list routes read limit and offset from the request URL and keep cachi
       `${path} route must pass the request query parameters`,
     );
     assert.match(source, /publicApiJsonResponse/);
-    assert.match(source, /getRateLimiter\(\)\.check\(request, Date\.now\(\)\)/);
+    assert.match(
+      source,
+      /getRateLimiter\(\)\.check\(request, Date\.now\(\), requestId\)/,
+    );
     assert.doesNotMatch(source, /export async function (POST|PUT|PATCH|DELETE)/);
   }
 });
