@@ -33,7 +33,12 @@ const REQUEST = Object.freeze({
 });
 
 function candidate(anchorSlug: string): RateCandidate {
-  return Object.freeze({ anchorSlug, corridor: CORRIDOR, request: REQUEST });
+  return Object.freeze({
+    anchorSlug,
+    corridor: CORRIDOR,
+    request: REQUEST,
+    configurationDigest: "c".repeat(64),
+  });
 }
 
 /** Structurally valid SEP-38 payloads that parse as JSON but miss required fields. */
@@ -92,7 +97,11 @@ function makeRepository() {
         corridorId: input.corridorId,
         rate: input.rate,
       }));
-      return { id: `snapshot-${persisted.length}`, ...input };
+      return {
+        id: `snapshot-${persisted.length}`,
+        provenanceId: `provenance-${persisted.length}`,
+        ...input,
+      };
     },
   };
   return Object.freeze({ repository, persisted });
