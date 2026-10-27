@@ -132,7 +132,7 @@ export function RatePanelView({
             className={
               medianRate === null
                 ? "mt-1 text-lg text-[var(--white)]"
-                : "mt-1 text-2xl text-[var(--white)]"
+                : "mt-1 text-2xl text-[var(--white)] break-words"
             }
             style={{ fontFamily: "var(--display)" }}
           >
@@ -227,11 +227,11 @@ export function RatePanelView({
                       : observation.anchor.slug}
                   </td>
 
-                  <td className="px-3 py-2 text-[var(--white)]">
+                  <td className="break-all px-3 py-2 text-[var(--white)]">
                     {observation.rate}
                   </td>
 
-                  <td className="px-3 py-2 text-[var(--muted)]">
+                  <td className="break-all px-3 py-2 text-[var(--muted)]">
                     {observation.fee}
                   </td>
 

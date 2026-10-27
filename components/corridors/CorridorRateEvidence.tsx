@@ -28,7 +28,7 @@ export function CorridorRateEvidence({ rates }: Props) {
         <dl className="grid gap-5 sm:grid-cols-3">
           <div>
             <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Median rate</dt>
-            <dd className="mt-1 text-2xl text-[var(--white)]" style={{ fontFamily: "var(--display)" }}>
+            <dd className="mt-1 text-2xl text-[var(--white)] break-words" style={{ fontFamily: "var(--display)" }}>
               {rates.medianRate ?? "Median unavailable"}
             </dd>
           </div>
@@ -82,7 +82,7 @@ export function CorridorRateEvidence({ rates }: Props) {
                 {rates.observations.map((observation) => (
                   <tr key={observation.anchor.slug} className="border-t border-[var(--ghost)] align-top">
                     <td className="px-3 py-3 text-[var(--white)]">{observation.anchor.name}</td>
-                    <td className="px-3 py-3 text-[var(--white)]">{observation.rate}</td>
+                    <td className="px-3 py-3 text-[var(--white)] break-all">{observation.rate}</td>
                     <td className="px-3 py-3 text-[var(--muted)]">
                       {new Date(observation.capturedAt).toLocaleString()}
                     </td>
