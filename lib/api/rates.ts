@@ -35,7 +35,7 @@ export type RatesApiDependencies = Readonly<{
 }>;
 
 export async function getRatesApiResult(
-  corridorParameter: string | null,
+  corridorParameter: string | readonly string[] | null,
   dependencies: RatesApiDependencies = {},
 ): Promise<RatesApiResult> {
   const validation = validateCorridorParameter(corridorParameter);
@@ -155,7 +155,7 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
 }
 
 function validateCorridorParameter(
-  value: string | null,
+  value: string | readonly string[] | null,
 ):
   | Readonly<{ ok: true; corridorSlug: string }>
   | Readonly<{ ok: false; result: RatesApiResult }> {
@@ -163,6 +163,13 @@ function validateCorridorParameter(
     return Object.freeze({
       ok: false,
       result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
+    });
+  }
+
+  if (typeof value !== "string") {
+    return Object.freeze({
+      ok: false,
+      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
     });
   }
 

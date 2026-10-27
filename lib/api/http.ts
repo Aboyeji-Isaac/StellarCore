@@ -1,7 +1,11 @@
+
 import { publicApiErrorResult } from "@/lib/api/errors";
 import type { PublicApiErrorCode } from "@/types/api/errors";
 
-export type PublicApiHttpResult = Readonly<{ status: number; body: unknown }>;
+export type PublicApiHttpResult = Readonly<{
+  status: number;
+  body: unknown;
+}>;
 
 export function clientDisconnectedResponse(): Response {
   return new Response(null, {
@@ -14,13 +18,21 @@ export async function respondUnlessRequestAborted(
   request: Request,
   operation: () => Promise<Response>,
 ): Promise<Response> {
-  if (request.signal.aborted) return clientDisconnectedResponse();
+  if (request.signal.aborted) {
+    return clientDisconnectedResponse();
+  }
 
   try {
     const response = await operation();
-    return request.signal.aborted ? clientDisconnectedResponse() : response;
+
+    return request.signal.aborted
+      ? clientDisconnectedResponse()
+      : response;
   } catch (error) {
-    if (request.signal.aborted) return clientDisconnectedResponse();
+    if (request.signal.aborted) {
+      return clientDisconnectedResponse();
+    }
+
     throw error;
   }
 }
@@ -36,6 +48,7 @@ export function publicApiJsonResponse(
     if (isError && key.toLowerCase() === "cache-control") {
       continue;
     }
+
     mergedHeaders[key] = value;
   }
 
@@ -53,12 +66,32 @@ export function publicApiJsonResponse(
   });
 }
 
+export function readQueryParameter(
+  parameters: URLSearchParams,
+  name: string,
+): string | readonly string[] | null {
+  const values = parameters.getAll(name);
+
+  if (values.length === 0) {
+    return null;
+  }
+
+  if (values.length === 1) {
+    return values[0]!;
+  }
+
+  return Object.freeze(values);
+}
+
 export function publicApiErrorResponse<Code extends PublicApiErrorCode>(
   code: Code,
   message: string,
   headers: Readonly<Record<string, string>> = {},
 ): Response {
-  return publicApiJsonResponse(publicApiErrorResult(code, message), headers);
+  return publicApiJsonResponse(
+    publicApiErrorResult(code, message),
+    headers,
+  );
 }
 
 export function publicApiUnexpectedErrorResponse(
@@ -66,5 +99,9 @@ export function publicApiUnexpectedErrorResponse(
   message: string = "An unexpected error occurred.",
   headers: Readonly<Record<string, string>> = {},
 ): Response {
-  return publicApiErrorResponse("internal_error", message, headers);
+  return publicApiErrorResponse(
+    "internal_error",
+    message,
+    headers,
+  );
 }

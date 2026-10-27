@@ -40,8 +40,8 @@ export type RateHistoryApiDependencies = Readonly<{
 }>;
 
 export async function getRateHistoryApiResult(
-  corridorParameter: string | null,
-  daysParameter: string | null = null,
+  corridorParameter: string | readonly string[] | null,
+  daysParameter: string | readonly string[] | null = null,
   dependencies: RateHistoryApiDependencies = {},
 ): Promise<RateHistoryApiResult> {
   const corridorValidation = validateCorridorParameter(corridorParameter);
@@ -172,7 +172,7 @@ export function serializeRateHistory(
 }
 
 function validateCorridorParameter(
-  value: string | null,
+  value: string | readonly string[] | null,
 ):
   | Readonly<{ ok: true; corridorSlug: string }>
   | Readonly<{ ok: false; result: RateHistoryApiResult }> {
@@ -180,6 +180,13 @@ function validateCorridorParameter(
     return Object.freeze({
       ok: false,
       result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
+    });
+  }
+
+  if (typeof value !== "string") {
+    return Object.freeze({
+      ok: false,
+      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
     });
   }
 
@@ -197,12 +204,22 @@ function validateCorridorParameter(
 }
 
 function validateDaysParameter(
-  value: string | null,
+  value: string | readonly string[] | null,
 ):
   | Readonly<{ ok: true; days: number }>
   | Readonly<{ ok: false; result: RateHistoryApiResult }> {
   if (value === null || value === "") {
     return Object.freeze({ ok: true, days: DEFAULT_DAYS });
+  }
+
+  if (typeof value !== "string") {
+    return Object.freeze({
+      ok: false,
+      result: publicApiErrorResult(
+        "invalid_days",
+        `The days parameter must be an integer between ${MIN_DAYS} and ${MAX_DAYS}.`,
+      ),
+    });
   }
 
   if (!/^\d+$/.test(value)) {
