@@ -1,0 +1,32 @@
+{
+  "name": "reputation.detail.established_200",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation/:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Reputation detail with established score, band, evidence outcomeCount, and metrics",
+  "body": {
+    "reputation": {
+      "anchor": {
+        "slug": "zeam",
+        "name": "Zeam"
+      },
+      "state": "established",
+      "score": 95,
+      "scoreBand": "green",
+      "evidence": {
+        "outcomeCount": 30
+      },
+      "metrics": {
+        "fillRate7d": 0.98,
+        "fillRate30d": 0.95,
+        "fillRate90d": 0.94,
+        "settleP50Ms": 1200,
+        "settleP95Ms": 4500,
+        "slippageP50": 0.001,
+        "slippageP95": 0.015
+      },
+      "computedAt": "2026-08-28T12:00:00.000Z"
+    }
+  }
+}

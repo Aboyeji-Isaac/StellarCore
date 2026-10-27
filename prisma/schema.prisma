@@ -46,6 +46,13 @@ enum ReputationState {
   @@map("reputation_state")
 }
 
+enum ScheduledSourceSuppressionState {
+  ACTIVE
+  SUPPRESSED
+
+  @@map("scheduled_source_suppression_state")
+}
+
 model Anchor {
   id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug              String       @unique
@@ -55,6 +62,7 @@ model Anchor {
   seps              Int[]        @default([])
   isTransferCapable Boolean      @default(false) @map("is_transfer_capable")
   status            AnchorStatus @default(UNKNOWN)
+  lastSyncOrder     BigInt       @default(0) @map("last_sync_order")
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -108,6 +116,8 @@ model RateSnapshot {
   anchor   Anchor   @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  provenance RateSnapshotProvenance?
+
   @@index([corridorId, capturedAt(sort: Desc)], map: "rate_snapshots_corridor_id_captured_at_idx")
   @@index([anchorId, capturedAt(sort: Desc)], map: "rate_snapshots_anchor_id_captured_at_idx")
   /// Covering index for findLatestObservations
@@ -124,6 +134,37 @@ model RateSnapshot {
   /// scan replaces the bitmap heap scan over the anchor's whole history.
   @@index([anchorId, corridorId, capturedAt(sort: Desc), id(sort: Desc)], map: "rate_snapshots_anchor_corridor_latest_idx")
   @@map("rate_snapshots")
+}
+
+/// Immutable capture-time provenance for one rate snapshot (#113): the
+/// capture run, reviewed source type, anchor/corridor identity, reviewed
+/// configuration digest (#331), and request-shape version recorded when the
+/// observation was captured — never reconstructed later from the current
+/// registry. Legacy snapshots written before this table have no row; their
+/// lineage is truthfully reported as unavailable, not backfilled.
+///
+/// Evidence vs identifiers: configurationDigest/captureRunId/sourceType/
+/// requestShapeVersion/anchorSlug/corridorSlug are identifiers; capturedAt
+/// and recordedAt are evidence timestamps. No credentials, authorization
+/// headers, raw payloads, or URLs are ever stored here. captureRunId is a
+/// plain string without a foreign key so the Wave 9 refresh-run ledger can
+/// adopt this boundary without a competing run table.
+model RateSnapshotProvenance {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshotId          String   @unique @map("snapshot_id") @db.Uuid
+  captureRunId        String   @map("capture_run_id")
+  sourceType          String   @map("source_type")
+  anchorSlug          String   @map("anchor_slug")
+  corridorSlug        String   @map("corridor_slug")
+  configurationDigest String   @map("configuration_digest")
+  requestShapeVersion String   @map("request_shape_version")
+  capturedAt          DateTime @map("captured_at") @db.Timestamptz(6)
+  recordedAt          DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+
+  snapshot RateSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([captureRunId], map: "rate_snapshot_provenance_capture_run_id_idx")
+  @@map("rate_snapshot_provenance")
 }
 
 model TransferOutcome {
@@ -162,4 +203,29 @@ model ReputationScore {
   anchor Anchor @relation(fields: [anchorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("reputation_scores")
+}
+
+
+/// Durable reviewed state for deterministic scheduled-source failures (#234).
+/// Slug identity is stored directly so an invalid/missing registry reference can
+/// still be suppressed and audited without requiring a resolvable foreign key.
+model ScheduledSourceSuppression {
+  id                  String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anchorSlug          String                          @map("anchor_slug")
+  corridorSlug        String                          @map("corridor_slug")
+  state               ScheduledSourceSuppressionState @default(ACTIVE)
+  reason              String
+  failureCode         String                          @map("failure_code")
+  failurePhase        String                          @map("failure_phase")
+  consecutiveFailures Int                             @default(0) @map("consecutive_failures")
+  firstFailedAt       DateTime                        @map("first_failed_at") @db.Timestamptz(6)
+  lastFailedAt        DateTime                        @map("last_failed_at") @db.Timestamptz(6)
+  suppressedAt        DateTime?                       @map("suppressed_at") @db.Timestamptz(6)
+  reactivatedAt       DateTime?                       @map("reactivated_at") @db.Timestamptz(6)
+  reactivationReason  String?                         @map("reactivation_reason")
+  updatedAt           DateTime                        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([anchorSlug, corridorSlug], map: "scheduled_source_suppressions_source_key")
+  @@index([state], map: "scheduled_source_suppressions_state_idx")
+  @@map("scheduled_source_suppressions")
 }

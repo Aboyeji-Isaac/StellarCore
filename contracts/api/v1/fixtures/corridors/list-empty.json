@@ -1,0 +1,12 @@
+{
+  "name": "corridors.list.empty",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Empty corridor directory response",
+  "body": {
+    "corridors": [],
+    "count": 0
+  }
+}

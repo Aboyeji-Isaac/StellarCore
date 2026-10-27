@@ -1,0 +1,64 @@
+{
+  "name": "rates.insufficient.success",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Insufficient fresh sources response with null median rate and exclusion reasons",
+  "body": {
+    "corridor": {
+      "slug": "usdc-us-brl-br",
+      "sourceAsset": "USDC",
+      "sourceCountry": "US",
+      "destinationAsset": "BRL",
+      "destinationCountry": "BR"
+    },
+    "evaluatedAt": "2026-08-28T12:00:00.000Z",
+    "state": "insufficient_fresh_sources",
+    "medianRate": null,
+    "sourceCount": 2,
+    "freshSourceCount": 1,
+    "reviewedCandidateConfiguration": {
+      "candidateCount": 1,
+      "uniqueAnchorCount": 1
+    },
+    "medianRequirement": {
+      "minimumFreshIndependentSources": 2
+    },
+    "observations": [
+      {
+        "anchor": {
+          "slug": "cowrie",
+          "name": "Cowrie"
+        },
+        "rate": "5.240000000000000000",
+        "sourceAmount": "100.000000000000000000",
+        "destinationAmount": "524.000000000000000000",
+        "fee": "1.000000000000000000",
+        "capturedAt": "2026-08-28T11:59:50.000Z",
+        "freshness": {
+          "state": "fresh",
+          "ageMs": 10000
+        },
+        "eligibleForMedian": true
+      },
+      {
+        "anchor": {
+          "slug": "zeam",
+          "name": "Zeam"
+        },
+        "rate": "5.100000000000000000",
+        "sourceAmount": "100.000000000000000000",
+        "destinationAmount": "510.000000000000000000",
+        "fee": "1.500000000000000000",
+        "capturedAt": "2026-08-28T11:55:00.000Z",
+        "freshness": {
+          "state": "stale",
+          "ageMs": 300000
+        },
+        "eligibleForMedian": false,
+        "exclusionReason": "stale"
+      }
+    ]
+  }
+}

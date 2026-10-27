@@ -1,4 +1,5 @@
 import type { CorridorRegistryEntry } from "@/types/corridor";
+import type { RateSnapshotProvenanceInput } from "@/types/rateProvenance";
 import type {
   Sep38IndicativePrice,
   Sep38IndicativePriceRequest,
@@ -65,7 +66,8 @@ export type RateSnapshotPersistenceCode =
   | "ANCHOR_NOT_FOUND"
   | "CORRIDOR_NOT_FOUND"
   | "ASSOCIATION_NOT_FOUND"
-  | "PERSISTENCE_FAILURE";
+  | "PERSISTENCE_FAILURE"
+  | "ENVIRONMENT_MISMATCH";
 
 export type RateSnapshotPersistenceResult =
   | Readonly<{ ok: true; snapshot: PersistedRateSnapshot }>
@@ -83,6 +85,8 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: string;
     fee: string;
     capturedAt: Date;
+    /** Capture-time provenance written in the same transaction (#113). */
+    provenance: RateSnapshotProvenanceInput;
   }>) => Promise<Readonly<{
     id: string;
     rate: { toString(): string } | string;
@@ -90,6 +94,7 @@ export type RateSnapshotRepository = Readonly<{
     destinationAmount: { toString(): string } | string;
     fee: { toString(): string } | string;
     capturedAt: Date;
+    provenanceId: string;
   }>>;
 }>;
 
@@ -97,6 +102,12 @@ export type RateCandidate = Readonly<{
   anchorSlug: string;
   corridor: CorridorRegistryEntry;
   request: Sep38IndicativePriceRequest;
+  /**
+   * Deterministic digest of the reviewed source configuration this candidate
+   * was built from (#331). Persisted as capture-time provenance (#113); never
+   * recomputed from the current registry after the fact.
+   */
+  configurationDigest: string;
 }>;
 
 export type RateQuoteProvider = (
@@ -117,6 +128,8 @@ export type RateEngineSkippedSource = Readonly<{
 }>;
 
 export type RateEngineResult = Readonly<{
+  /** Capture-run identity shared by every snapshot persisted in this run. */
+  captureRunId: string;
   totalCandidates: number;
   totalAttempted: number;
   succeeded: number;

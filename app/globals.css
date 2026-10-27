@@ -234,6 +234,7 @@ footer > span { opacity: .58; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .landing-page, .landing-page a { cursor: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .ticker-track { transform: none !important; }
   .ticker-window { overflow-x: auto; }

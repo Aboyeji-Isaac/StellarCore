@@ -1,0 +1,14 @@
+{
+  "name": "corridors.detail.error_500",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors/:slug",
+  "method": "GET",
+  "expectedStatus": 500,
+  "description": "Safe internal error for corridor detail loading failure",
+  "body": {
+    "error": {
+      "code": "internal_error",
+      "message": "Unable to load corridor."
+    }
+  }
+}

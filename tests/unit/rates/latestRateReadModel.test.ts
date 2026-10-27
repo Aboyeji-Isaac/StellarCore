@@ -35,6 +35,10 @@ test("missing corridor and empty history return safe typed states", async () => 
   assert.equal(empty.ok && empty.state, "insufficient_fresh_sources");
   assert.equal(empty.ok && empty.median, null);
   assert.equal(empty.ok && empty.totalIndependentSources, 0);
+  assert.equal(empty.ok && empty.freshSourceCount, 0);
+  assert.equal(empty.ok && empty.evaluatedAt, NOW.toISOString());
+  assert.deepEqual(empty.ok && empty.observations, []);
+  assert.deepEqual(empty.ok && empty.exclusions, []);
 });
 
 test("one fresh anchor remains one independent source and has no median", async () => {
@@ -172,3 +176,26 @@ function row(
 function ago(milliseconds: number): Date {
   return new Date(NOW.getTime() - milliseconds);
 }
+
+
+test("suppressed sources cannot count toward aggregate freshness or median", async () => {
+  const result = await readLatestCorridorRate(CORRIDOR, {
+    evaluatedAt: NOW,
+    repository: repository([
+      row("suppressed", "s1", "1", ago(1)),
+      row("healthy", "h1", "3", ago(1)),
+    ]),
+    listSuppressed: async () => [{
+      anchorSlug: "suppressed",
+      corridorSlug: CORRIDOR,
+    }],
+  });
+
+  assert.equal(result.ok && result.totalIndependentSources, 1);
+  assert.equal(result.ok && result.freshSourceCount, 1);
+  assert.equal(result.ok && result.median, null);
+  assert.deepEqual(
+    result.ok && result.observations.map(({ anchorSlug }) => anchorSlug),
+    ["healthy"],
+  );
+});

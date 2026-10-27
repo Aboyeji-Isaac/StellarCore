@@ -1,0 +1,14 @@
+{
+  "name": "rates.error_404",
+  "domain": "rates",
+  "endpoint": "GET /api/rates?corridor=:slug",
+  "method": "GET",
+  "expectedStatus": 404,
+  "description": "Not found error when corridor does not exist",
+  "body": {
+    "error": {
+      "code": "corridor_not_found",
+      "message": "Corridor not found."
+    }
+  }
+}

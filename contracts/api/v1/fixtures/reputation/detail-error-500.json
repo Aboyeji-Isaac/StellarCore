@@ -1,0 +1,14 @@
+{
+  "name": "reputation.detail.error_500",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation/:slug",
+  "method": "GET",
+  "expectedStatus": 500,
+  "description": "Safe internal error for anchor reputation loading failure",
+  "body": {
+    "error": {
+      "code": "internal_error",
+      "message": "Unable to load reputation."
+    }
+  }
+}

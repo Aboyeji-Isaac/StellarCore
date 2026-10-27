@@ -1,0 +1,14 @@
+{
+  "name": "corridors.detail.error_404",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors/:slug",
+  "method": "GET",
+  "expectedStatus": 404,
+  "description": "Not found error for unknown corridor slug",
+  "body": {
+    "error": {
+      "code": "corridor_not_found",
+      "message": "Corridor not found."
+    }
+  }
+}
