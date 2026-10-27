@@ -1,10 +1,15 @@
+
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { serializeRates } from "@/lib/api/rates";
-import type { LatestCorridorRate } from "@/types/latestRates";
-import { serializeRateHistory } from "@/lib/api/rateHistory";
-import type { CorridorRateHistory } from "@/types/rateHistory";
+import {
+  serializeRates,
+  type LatestCorridorRate,
+} from "@/lib/api/rates";
+import {
+  serializeRateHistory,
+  type CorridorRateHistory,
+} from "@/lib/api/rateHistory";
 import { serializeReputation } from "@/lib/api/reputation";
 import type { ReputationApiAnchorRecord } from "@/lib/api/reputationRepository";
 
@@ -16,17 +21,23 @@ const CANONICAL_DATE = new Date(CANONICAL_TIMESTAMP);
 // ---------------------------------------------------------------------------
 
 test("serializeRates preserves capturedAt ISO-8601 strings verbatim", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP)],
-  }));
+  const body = serializeRates(
+    readResult({
+      observations: [observation("zeam", CANONICAL_TIMESTAMP)],
+    }),
+  );
+
   assert.equal(body.observations[0]?.capturedAt, CANONICAL_TIMESTAMP);
   assert.equal(body.evaluatedAt, CANONICAL_TIMESTAMP);
 });
 
 test("serializeRateHistory preserves timestamp ISO-8601 strings verbatim", () => {
-  const body = serializeRateHistory(readHistoryResult({
-    points: [point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP)],
-  }));
+  const body = serializeRateHistory(
+    readHistoryResult({
+      points: [point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP)],
+    }),
+  );
+
   assert.equal(body.points[0]?.timestamp, CANONICAL_TIMESTAMP);
   assert.equal(body.evaluatedAt, CANONICAL_TIMESTAMP);
 });
@@ -50,7 +61,9 @@ test("serializeReputation converts computedAt Date to ISO-8601 string", () => {
       computedAt: CANONICAL_DATE,
     }),
   });
+
   const value = serializeReputation(record);
+
   assert.equal(value.computedAt, CANONICAL_TIMESTAMP);
   assert.equal(typeof value.computedAt, "string");
 });
@@ -61,13 +74,18 @@ test("serializeReputation keeps computedAt null when unevaluated", () => {
     name: "MoneyGram",
     reputationScore: null,
   });
+
   const value = serializeReputation(record);
+
   assert.equal(value.computedAt, null);
 });
 
 test("stale evidence validates canonical timestamps via isCanonicalTimestamp", () => {
   assert.equal(Date.parse(CANONICAL_TIMESTAMP), CANONICAL_DATE.getTime());
-  assert.equal(new Date(Date.parse(CANONICAL_TIMESTAMP)).toISOString(), CANONICAL_TIMESTAMP);
+  assert.equal(
+    new Date(Date.parse(CANONICAL_TIMESTAMP)).toISOString(),
+    CANONICAL_TIMESTAMP,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -75,55 +93,137 @@ test("stale evidence validates canonical timestamps via isCanonicalTimestamp", (
 // ---------------------------------------------------------------------------
 
 test("serializeRates preserves rate decimal strings exactly", () => {
-  const body = serializeRates(readResult({
-    median: "0.1000000000000000015",
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.100000000000000001")],
-  }));
+  const body = serializeRates(
+    readResult({
+      median: "0.1000000000000000015",
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.100000000000000001",
+        ),
+      ],
+    }),
+  );
+
   assert.equal(body.medianRate, "0.1000000000000000015");
-  assert.equal(body.observations[0]?.rate, "0.100000000000000001");
+  assert.equal(
+    body.observations[0]?.rate,
+    "0.100000000000000001",
+  );
 });
 
 test("serializeRates preserves sourceAmount decimal strings exactly", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.17", "100.000000000000000001")],
-  }));
-  assert.equal(body.observations[0]?.sourceAmount, "100.000000000000000001");
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.17",
+          "100.000000000000000001",
+        ),
+      ],
+    }),
+  );
+
+  assert.equal(
+    body.observations[0]?.sourceAmount,
+    "100.000000000000000001",
+  );
 });
 
 test("serializeRates preserves destinationAmount decimal strings exactly", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.17", "100.000000000000000001", "17.000000000000000001")],
-  }));
-  assert.equal(body.observations[0]?.destinationAmount, "17.000000000000000001");
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.17",
+          "100.000000000000000001",
+          "17.000000000000000001",
+        ),
+      ],
+    }),
+  );
+
+  assert.equal(
+    body.observations[0]?.destinationAmount,
+    "17.000000000000000001",
+  );
 });
 
 test("serializeRates preserves fee decimal strings exactly", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.17", "100.000000000000000001", "17.000000000000000001", "1.000000000000000001")],
-  }));
-  assert.equal(body.observations[0]?.fee, "1.000000000000000001");
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.17",
+          "100.000000000000000001",
+          "17.000000000000000001",
+          "1.000000000000000001",
+        ),
+      ],
+    }),
+  );
+
+  assert.equal(
+    body.observations[0]?.fee,
+    "1.000000000000000001",
+  );
 });
 
 test("serializeRateHistory preserves rate decimal strings exactly", () => {
-  const body = serializeRateHistory(readHistoryResult({
-    points: [point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP, "5.20")],
-  }));
+  const body = serializeRateHistory(
+    readHistoryResult({
+      points: [
+        point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP, "5.20"),
+      ],
+    }),
+  );
+
   assert.equal(body.points[0]?.observations[0]?.rate, "5.20");
 });
 
 test("serializeRateHistory preserves medianRate decimal strings exactly", () => {
-  const body = serializeRateHistory(readHistoryResult({
-    points: [point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP, "5.20", "5.250000000000000000")],
-  }));
-  assert.equal(body.points[0]?.medianRate, "5.250000000000000000");
+  const body = serializeRateHistory(
+    readHistoryResult({
+      points: [
+        point(
+          CANONICAL_TIMESTAMP,
+          CANONICAL_TIMESTAMP,
+          "5.20",
+          "5.250000000000000000",
+        ),
+      ],
+    }),
+  );
+
+  assert.equal(
+    body.points[0]?.medianRate,
+    "5.250000000000000000",
+  );
 });
 
 test("JSON round-trip preserves decimal string precision", () => {
-  const body = serializeRates(readResult({
-    median: "0.1000000000000000015",
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.100000000000000001")],
-  }));
+  const body = serializeRates(
+    readResult({
+      median: "0.1000000000000000015",
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.100000000000000001",
+        ),
+      ],
+    }),
+  );
+
   const serialized = JSON.stringify(body);
+
   assert.equal(serialized.includes("0.1000000000000000015"), true);
   assert.equal(serialized.includes("0.100000000000000001"), true);
   assert.equal(serialized.includes("bigint"), false);
@@ -135,20 +235,45 @@ test("JSON round-trip preserves decimal string precision", () => {
 
 test("serializeRates handles null medianRate explicitly", () => {
   const body = serializeRates(readResult({ median: null }));
+
   assert.equal(body.medianRate, null);
 });
 
 test("serializeRates handles null ageMs explicitly", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.17", undefined, undefined, undefined, undefined, null)],
-  }));
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.17",
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          null,
+        ),
+      ],
+    }),
+  );
+
   assert.equal(body.observations[0]?.freshness.ageMs, null);
 });
 
 test("serializeRateHistory handles null medianRate explicitly", () => {
-  const body = serializeRateHistory(readHistoryResult({
-    points: [point(CANONICAL_TIMESTAMP, CANONICAL_TIMESTAMP, "5.20", null)],
-  }));
+  const body = serializeRateHistory(
+    readHistoryResult({
+      points: [
+        point(
+          CANONICAL_TIMESTAMP,
+          CANONICAL_TIMESTAMP,
+          "5.20",
+          null,
+        ),
+      ],
+    }),
+  );
+
   assert.equal(body.points[0]?.medianRate, null);
 });
 
@@ -171,7 +296,9 @@ test("serializeReputation handles null score explicitly", () => {
       computedAt: CANONICAL_DATE,
     }),
   });
+
   const value = serializeReputation(record);
+
   assert.equal(value.score, null);
   assert.equal(value.scoreBand, null);
   assert.equal(value.metrics?.fillRate7d, null);
@@ -182,33 +309,64 @@ test("serializeReputation handles null score explicitly", () => {
 // ---------------------------------------------------------------------------
 
 test("invalid timestamps never throw in JSON serialization", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", "invalid", "0.17")],
-  }));
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation("zeam", "invalid", "0.17"),
+      ],
+    }),
+  );
+
   assert.doesNotThrow(() => JSON.stringify(body));
   assert.equal(body.observations[0]?.capturedAt, "invalid");
 });
 
 test("decimal comparisons avoid floating-point equality assumptions", () => {
-  const body = serializeRates(readResult({
-    median: "0.1000000000000000015",
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "0.100000000000000001")],
-  }));
+  const body = serializeRates(
+    readResult({
+      median: "0.1000000000000000015",
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "0.100000000000000001",
+        ),
+      ],
+    }),
+  );
+
   // Assert via string equality, never via Number(body.rate) === expected.
   // Decimal strings that differ textually may lose precision when coerced to Number.
   assert.equal(body.medianRate, "0.1000000000000000015");
-  assert.equal(body.observations[0]?.rate, "0.100000000000000001");
   assert.equal(
-    (body.medianRate as string) !== (body.observations[0]?.rate as string),
+    body.observations[0]?.rate,
+    "0.100000000000000001",
+  );
+
+  assert.equal(
+    (body.medianRate as string) !==
+      (body.observations[0]?.rate as string),
     true,
     "textually distinct decimal strings must remain distinct as strings",
   );
 });
 
 test("decimal strings with trailing zeros preserve exact wire precision", () => {
-  const body = serializeRates(readResult({
-    observations: [observation("zeam", CANONICAL_TIMESTAMP, "1.0000", "100.0000", "100.0000", "0.0000")],
-  }));
+  const body = serializeRates(
+    readResult({
+      observations: [
+        observation(
+          "zeam",
+          CANONICAL_TIMESTAMP,
+          "1.0000",
+          "100.0000",
+          "100.0000",
+          "0.0000",
+        ),
+      ],
+    }),
+  );
+
   assert.equal(body.observations[0]?.rate, "1.0000");
   assert.equal(body.observations[0]?.sourceAmount, "100.0000");
   assert.equal(body.observations[0]?.destinationAmount, "100.0000");
@@ -252,7 +410,11 @@ function observation(
   freshnessState: "fresh" | "stale" | "future" | "invalid" = "fresh",
   ageMs: number | null = 1_000,
   included = true,
-  exclusionReason?: "stale" | "future_timestamp" | "invalid_timestamp" | "invalid_rate",
+  exclusionReason?:
+    | "stale"
+    | "future_timestamp"
+    | "invalid_timestamp"
+    | "invalid_rate",
   anchorName = `${anchorSlug} persisted`,
 ) {
   return Object.freeze({
