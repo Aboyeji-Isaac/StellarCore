@@ -31,6 +31,7 @@ export type RatesApiDependencies = Readonly<{
   now?: () => Date;
   staleEvidenceStore?: StaleEvidenceStore;
   reportError?: PublicApiErrorReporter;
+  signal?: AbortSignal;
 }>;
 
 export async function getRatesApiResult(
@@ -49,6 +50,9 @@ export async function getRatesApiResult(
   try {
     result = await read(validation.corridorSlug, { evaluatedAt });
   } catch (error) {
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     if (isTransientDatabaseFailure(error)) {
       const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
       if (stale) {
@@ -61,6 +65,10 @@ export async function getRatesApiResult(
     }
     reportError(dependencies, error, "rates.read");
     return publicApiErrorResult("internal_error", "Unable to read rates.");
+  }
+
+  if (dependencies.signal?.aborted) {
+    throw dependencies.signal.reason ?? new Error("The operation was aborted");
   }
 
   if (!result.ok) {

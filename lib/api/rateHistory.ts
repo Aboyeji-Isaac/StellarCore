@@ -36,6 +36,7 @@ export type RateHistoryApiDependencies = Readonly<{
   now?: () => Date;
   staleEvidenceStore?: StaleEvidenceStore;
   reportError?: PublicApiErrorReporter;
+  signal?: AbortSignal;
 }>;
 
 export async function getRateHistoryApiResult(
@@ -61,6 +62,9 @@ export async function getRateHistoryApiResult(
       days: daysValidation.days,
     });
   } catch (error) {
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     if (isTransientDatabaseFailure(error)) {
       const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
       if (stale) {
@@ -73,6 +77,10 @@ export async function getRateHistoryApiResult(
     }
     reportError(dependencies, error, "rate-history.read");
     return publicApiErrorResult("internal_error", "Unable to read rate history.");
+  }
+
+  if (dependencies.signal?.aborted) {
+    throw dependencies.signal.reason ?? new Error("The operation was aborted");
   }
 
   if (!result.ok) {

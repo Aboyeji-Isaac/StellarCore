@@ -724,6 +724,7 @@ Errors use stable codes:
 |---|---|---|
 | 400 | `missing_corridor` | The corridor query parameter is absent or empty. |
 | 400 | `invalid_corridor` | The corridor slug is malformed or too long. |
+| 400 | `invalid_query` | A query parameter is repeated or unsupported. |
 | 404 | `corridor_not_found` | No persisted corridor matches the slug. |
 | 500 | `internal_error` | The persisted-rate read failed safely. |
 
