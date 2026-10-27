@@ -1,3 +1,4 @@
+
 # StellarCore architecture
 
 This document describes the behavior implemented in the current repository.
@@ -17,17 +18,17 @@ The main data path is:
 
 ```text
 reviewed registries
-        │
-        ├── manual bootstrap ──> anchor/corridor database records
-        │
-        └── scheduled refresh ──> SEP-38 rate snapshots
-                                      │
-                                      └──> reputation evaluation
-                                                │
-database read models <──────────────────────────┘
-        │
-        ├── public JSON APIs
-        └── server-rendered dashboard
+       │
+       ├── manual bootstrap ──> anchor/corridor database records
+       │
+       └── scheduled refresh ──> SEP-38 rate snapshots
+                                     │
+                                     └──> reputation evaluation
+                                               │
+database read models <────────────────────────┘
+       │
+       ├── public JSON APIs
+       └── server-rendered dashboard
 ```
 
 ## Sync engine
@@ -115,14 +116,20 @@ API present the same persisted evidence and uncertainty semantics.
 persisted evidence graph. It loads a bounded snapshot of anchors, corridors,
 reviewed memberships, rate snapshots, transfer outcomes, and reputation rows
 using `findMany` selects only, then evaluates cross-table semantic invariants
-that database constraints cannot fully express.
+that PostgreSQL constraints cannot fully express. These include missing
+reviewed memberships, impossible anchor/corridor relationships, incompatible
+timestamps, invalid score/evidence combinations, and duplicate corridor
+identities.
 
-The pure evaluator emits bounded, deterministic findings keyed by stable record
-identifiers, violation codes, and non-destructive remediation guidance. It does
-not include raw evidence payloads in reports and does not write, update, delete,
-or open a transaction. Database constraints and write-boundary validation remain
-the first line of defense; this audit detects drift after migrations, imports,
-or operational mistakes.
+The pure `evaluateEvidenceIntegrity` step reports bounded, deterministic
+findings keyed by stable record identifiers and violation codes, with
+per-class, non-destructive remediation guidance. It never loads raw payloads
+into the report, never mutates its input, and never writes, updates, deletes,
+or opens a transaction. The JSON boundary is safe for CI and operator logs.
+
+Database constraints and boundary validation remain the first line of write
+protection; this audit detects drift after migrations, imports, or operational
+mistakes.
 
 ## Scheduled refresh and operations
 

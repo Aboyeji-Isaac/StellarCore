@@ -41,6 +41,7 @@ test("controlled evidence composes through calculation and current-score persist
         id: "current-score",
         anchorSlug: calculation.anchorSlug,
         computedAt: new Date(calculation.computedAt),
+        writeStatus: "written",
       });
     },
   });

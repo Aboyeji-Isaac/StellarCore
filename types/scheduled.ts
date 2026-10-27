@@ -10,6 +10,12 @@ export type ScheduledReputationFailure = Readonly<{
   code: string;
 }>;
 
+export type ScheduledRateSkippedSource = Readonly<{
+  anchorSlug: string;
+  corridorSlug: string;
+  reason: "DUPLICATE_CANDIDATE";
+}>;
+
 export type ScheduledRefreshResult = Readonly<{
   ok: boolean;
   startedAt: string;
@@ -21,6 +27,7 @@ export type ScheduledRefreshResult = Readonly<{
     skipped: number;
     suppressed?: number;
     failures: readonly ScheduledRateFailure[];
+    skippedSources?: readonly ScheduledRateSkippedSource[];
   }>;
   reputation: Readonly<{
     attempted: number;

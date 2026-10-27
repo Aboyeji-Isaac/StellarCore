@@ -14,6 +14,8 @@
  *   leak memory after the window passes.
  */
 
+import { isValidRequestId, REQUEST_ID_HEADER } from "@/lib/api/requestId";
+
 export const PUBLIC_RATE_LIMIT = 100;
 export const PUBLIC_RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -32,7 +34,12 @@ export type RateLimitDecision = Readonly<{
 }>;
 
 export type RateLimiter = Readonly<{
-  check: (request: Request, now: number) => Promise<RateLimitDecision>;
+  /**
+   * `requestId` is the correlation id resolved for this request. When supplied,
+   * it is echoed in the `429` body and the `X-Request-Id` header so a rejected
+   * request can be matched to its log entry like any other failure.
+   */
+  check: (request: Request, now: number, requestId?: string) => Promise<RateLimitDecision>;
 }>;
 
 export function createRateLimiter(
@@ -48,7 +55,7 @@ export function createRateLimiter(
    * of tracking per-key windows.
    */
   return {
-    async check(request: Request, now: number): Promise<RateLimitDecision> {
+    async check(request: Request, now: number, requestId?: string): Promise<RateLimitDecision> {
       const window = Math.floor(now / windowMs);
 
       if (activeWindow === undefined || window !== activeWindow) {
@@ -59,12 +66,26 @@ export function createRateLimiter(
       const clientKey = clientIp(request);
       const count = requestCounts.get(clientKey) ?? 0;
       if (count >= limit) {
+        const correlationId = isValidRequestId(requestId) ? requestId : undefined;
         return Object.freeze({
           allowed: false,
-          response: Response.json(RATE_LIMIT_ERROR_BODY, {
-            status: 429,
-            headers: Object.freeze({ "Cache-Control": "no-store" }),
-          }),
+          response: Response.json(
+            correlationId
+              ? Object.freeze({
+                  error: Object.freeze({
+                    ...RATE_LIMIT_ERROR_BODY.error,
+                    requestId: correlationId,
+                  }),
+                })
+              : RATE_LIMIT_ERROR_BODY,
+            {
+              status: 429,
+              headers: Object.freeze({
+                "Cache-Control": "no-store",
+                ...(correlationId ? { [REQUEST_ID_HEADER]: correlationId } : {}),
+              }),
+            },
+          ),
         });
       }
 

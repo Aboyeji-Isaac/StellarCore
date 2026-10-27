@@ -60,6 +60,8 @@ test("malformed, zero, negative, and oversized values are rejected before reposi
     { limit: null, offset: "1.5" },
     { limit: null, offset: "abc" },
     { limit: null, offset: " " },
+    { limit: null, offset: "99999999999999999999" },
+    { limit: null, offset: "9".repeat(4_096) },
   ] as const;
 
   for (const query of invalid) {
@@ -87,7 +89,10 @@ test("both list routes read limit and offset from the request URL and keep cachi
       `${path} route must pass the request query parameters`,
     );
     assert.match(source, /publicApiJsonResponse/);
-    assert.match(source, /getRateLimiter\(\)\.check\(request, Date\.now\(\)\)/);
+    assert.match(
+      source,
+      /getRateLimiter\(\)\.check\(request, Date\.now\(\), requestId\)/,
+    );
     assert.doesNotMatch(source, /export async function (POST|PUT|PATCH|DELETE)/);
   }
 });
