@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
+
 import {
   snapshotReviewedLiveRates,
   type SnapshotReviewedLiveRatesDependencies,
@@ -14,6 +16,7 @@ test("failed configuration audit short-circuits before live candidate preparatio
     assertConfiguration: () => {
       throw new Error("safe configuration failure");
     },
+    listSuppressed: async () => [],
     buildCandidates: async () => {
       buildCalls += 1;
       return [];
@@ -34,6 +37,10 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
   const expected = summary();
   const result = await snapshotReviewedLiveRates({
     assertConfiguration: () => events.push("audit"),
+    listSuppressed: async () => {
+      events.push("suppressions");
+      return [];
+    },
     buildCandidates: async () => {
       events.push("prepare");
       return [];
@@ -44,7 +51,7 @@ test("valid configuration preserves reviewed snapshot execution flow", async () 
     },
   });
 
-  assert.deepEqual(events, ["audit", "prepare", "execute:0"]);
+  assert.deepEqual(events, ["audit", "suppressions", "prepare", "execute:0"]);
   assert.equal(result, expected);
 });
 
@@ -61,3 +68,38 @@ function summary(): SafeLiveRateRunSummary {
     skippedSources: Object.freeze([]),
   });
 }
+
+
+test("durably suppressed sources are removed before candidate preparation", async () => {
+  const first = REVIEWED_LIVE_RATE_SOURCES[0];
+  assert.ok(first);
+
+  let preparedSourceKeys: string[] = [];
+  let executed = -1;
+
+  const result = await snapshotReviewedLiveRates({
+    assertConfiguration: () => {},
+    listSuppressed: async () => [{
+      anchorSlug: first.anchorSlug,
+      corridorSlug: first.corridorSlug,
+    }],
+    buildCandidates: async (sources = []) => {
+      preparedSourceKeys = sources.map(
+        ({ anchorSlug, corridorSlug }) => `${anchorSlug}:${corridorSlug}`,
+      );
+      return [];
+    },
+    executeCandidates: async (candidates) => {
+      executed = candidates.length;
+      return summary();
+    },
+  });
+
+  assert.equal(
+    preparedSourceKeys.includes(`${first.anchorSlug}:${first.corridorSlug}`),
+    false,
+  );
+  assert.equal(executed, 0);
+  assert.equal(result.suppressed, 1);
+  assert.equal(result.succeeded, 0);
+});

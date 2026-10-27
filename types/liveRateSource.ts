@@ -22,6 +22,8 @@ export type SafeLiveRateRunSummary = Readonly<{
   succeeded: number;
   failed: number;
   skipped: number;
+  /** Reviewed sources excluded by durable poison-input suppression. */
+  suppressed?: number;
   snapshotsPersisted: number;
   snapshots: readonly Readonly<{
     id: string;

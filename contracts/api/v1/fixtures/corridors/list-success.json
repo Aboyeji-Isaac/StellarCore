@@ -1,0 +1,29 @@
+{
+  "name": "corridors.list.success",
+  "domain": "corridors",
+  "endpoint": "GET /api/corridors",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Canonical list of corridors with anchor counts and country codes",
+  "body": {
+    "corridors": [
+      {
+        "slug": "ngnt-ng-ngn-ng",
+        "sourceAsset": "NGNT",
+        "sourceCountry": "NG",
+        "destinationAsset": "NGN",
+        "destinationCountry": "NG",
+        "anchorCount": 1
+      },
+      {
+        "slug": "usdc-us-brl-br",
+        "sourceAsset": "USDC",
+        "sourceCountry": "US",
+        "destinationAsset": "BRL",
+        "destinationCountry": "BR",
+        "anchorCount": 2
+      }
+    ],
+    "count": 2
+  }
+}

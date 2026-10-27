@@ -40,18 +40,21 @@ export type PublicAnchorResponse = Readonly<{
 export type AnchorsApiErrorCode =
   | "invalid_anchor_slug"
   | "anchor_not_found"
+  | "invalid_pagination"
   | "internal_error";
 
 export type AnchorsApiErrorResponse = Readonly<{
   error: Readonly<{
     code: AnchorsApiErrorCode;
     message: string;
+    /** Optional, additive request-correlation id (see `lib/api/requestId.ts`). */
+    requestId?: string;
   }>;
 }>;
 
 export type AnchorsApiResult =
   | Readonly<{ status: 200; body: PublicAnchorsResponse }>
-  | Readonly<{ status: 500; body: AnchorsApiErrorResponse }>;
+  | Readonly<{ status: 400 | 500; body: AnchorsApiErrorResponse }>;
 
 export type AnchorApiResult =
   | Readonly<{ status: 200; body: PublicAnchorResponse }>

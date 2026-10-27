@@ -1,0 +1,8 @@
+NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
+[DOCUMENTATION]
+ORG_NAME = "Property Anchor"
+[[CURRENCIES]]
+code = "USDC"
+[[CURRENCIES]]
+code = "USDC"
+status = "live"

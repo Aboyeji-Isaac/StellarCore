@@ -28,8 +28,8 @@ test("controlled quote to normalization to persistence to median composition sta
       buyAsset: NGN,
       totalPrice: candidate.anchorSlug === "anchor-a" ? "1600" : "1610",
       price: candidate.anchorSlug === "anchor-a" ? "1600" : "1610",
-      sellAmount: "1",
-      buyAmount: candidate.anchorSlug === "anchor-a" ? "1600" : "1610",
+      sellAmount: candidate.anchorSlug === "anchor-a" ? "1600" : "1610",
+      buyAmount: "1",
       fee: { total: "0", asset: NGN, details: [] },
     }),
     repository,
@@ -52,6 +52,6 @@ function source(anchorSlug: string): RateCandidate {
   return {
     anchorSlug,
     corridor: { slug: "usdc-us-ngn-ng", assetCodeFrom: "USDC", countryFrom: "US", assetCodeTo: "NGN", countryTo: "NG" },
-    request: { sellAsset: USDC, buyAsset: NGN, sellAmount: "1", context: "sep31" },
+    request: { sellAsset: USDC, buyAsset: NGN, buyAmount: "1", context: "sep31" },
   };
 }

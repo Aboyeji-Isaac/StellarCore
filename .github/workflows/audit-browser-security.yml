@@ -1,0 +1,94 @@
+name: Audit browser security headers
+
+on:
+  pull_request:
+    paths:
+      - "middleware.ts"
+      - "app/layout.tsx"
+      - "lib/security/browserHeaders.ts"
+      - "next.config.ts"
+      - "tests/unit/security/browserHeaders.test.ts"
+      - "tests/unit/middleware/cspMiddleware.test.ts"
+      - "docs/browser-security.md"
+      - "package.json"
+      - ".github/workflows/audit-browser-security.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit browser security headers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+
+      - name: Run CSP regression tests
+        run: npm run test:csp
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build
+
+      - name: Verify production response headers and nonce rendering
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3010 > /tmp/stellarcore-next.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -sS -o /dev/null http://127.0.0.1:3010/; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -sS -D /tmp/page-headers-1 -o /tmp/page-1.html http://127.0.0.1:3010/
+          curl -sS -D /tmp/page-headers-2 -o /tmp/page-2.html http://127.0.0.1:3010/
+
+          CSP1=$(tr -d '\r' < /tmp/page-headers-1 | sed -n 's/^content-security-policy: //Ip')
+          CSP2=$(tr -d '\r' < /tmp/page-headers-2 | sed -n 's/^content-security-policy: //Ip')
+          NONCE1=$(printf '%s' "$CSP1" | sed -n "s/.*'nonce-\([^']*\)'.*/\1/p")
+          NONCE2=$(printf '%s' "$CSP2" | sed -n "s/.*'nonce-\([^']*\)'.*/\1/p")
+
+          test -n "$NONCE1"
+          test -n "$NONCE2"
+          test "$NONCE1" != "$NONCE2"
+          grep -Fq "nonce=\"$NONCE1\"" /tmp/page-1.html
+          grep -Fq "STELLARCORE" /tmp/page-1.html
+
+          grep -qi '^x-content-type-options: nosniff' /tmp/page-headers-1
+          grep -qi '^x-frame-options: DENY' /tmp/page-headers-1
+          grep -qi '^strict-transport-security: max-age=63072000; includeSubDomains; preload' /tmp/page-headers-1
+          printf '%s' "$CSP1" | grep -Fq "frame-ancestors 'none'"
+          ! printf '%s' "$CSP1" | grep -Fq "'unsafe-inline'"
+          ! printf '%s' "$CSP1" | grep -Fq "'unsafe-eval'"
+
+          curl -sS -D /tmp/api-headers -o /tmp/api-body http://127.0.0.1:3010/api/csp-smoke || true
+          ! grep -qi '^content-security-policy:' /tmp/api-headers

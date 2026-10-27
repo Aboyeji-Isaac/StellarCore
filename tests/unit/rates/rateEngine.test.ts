@@ -12,11 +12,12 @@ const USDC = "stellar:USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4K
 const USD = "iso4217:USD" as const;
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 
-function candidate(anchorSlug: string): RateCandidate {
+function candidate(anchorSlug: string, captureRunId?: string): RateCandidate {
   return Object.freeze({
     anchorSlug,
     corridor: Object.freeze({ slug: "usdc-us-usd-us", assetCodeFrom: "USDC", countryFrom: "US", assetCodeTo: "USD", countryTo: "US" }),
     request: Object.freeze({ sellAsset: USDC, buyAsset: USD, sellAmount: "100", context: "sep31" }),
+    ...(captureRunId ? { captureRunId } : {}),
   });
 }
 
@@ -68,6 +69,37 @@ test("quote and normalization failures are isolated and safely classified", asyn
     { anchorSlug: "normalize-fails", phase: "NORMALIZATION", code: "INVALID_RATE" },
   ]);
   assert.equal(JSON.stringify(result).includes("secret"), false);
+});
+
+test("failed candidates do not create successful snapshot rows", async () => {
+  const store = repository();
+  const result = await runRateEngine(
+    [candidate("quote-fails"), candidate("normalize-fails")],
+    {
+      quote: async (source) => {
+        if (source.anchorSlug === "quote-fails") throw new Error("quote timeout");
+        return quote({ price: "0" });
+      },
+      repository: store,
+      now: () => NOW,
+    },
+  );
+  assert.equal(result.succeeded, 0);
+  assert.equal(result.snapshotsPersisted, 0);
+  assert.equal(result.snapshots.length, 0);
+  assert.equal(result.failures.length, 2);
+});
+
+test("links captureRunId to persisted snapshots and propagates to repository", async () => {
+  const store = repository();
+  const runId = "capture_run_789";
+  const result = await runRateEngine([candidate("moneygram", runId)], {
+    quote: async () => quote(),
+    repository: store,
+    now: () => NOW,
+  });
+  assert.equal(result.succeeded, 1);
+  assert.equal(result.snapshots[0]?.captureRunId, runId);
 });
 
 test("persistence failure does not prevent a later source from succeeding", async () => {

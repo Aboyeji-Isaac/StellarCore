@@ -48,12 +48,60 @@ test("repeated legitimate observations append historical snapshots", async () =>
   assert.equal(state.rows.length, 2);
 });
 
+test("persists and links captureRunId when valid", async () => {
+  const state = repository();
+  state.validRuns.add("run_valid_123");
+
+  const observationWithRun: NormalizedRateObservation = Object.freeze({
+    ...OBSERVATION,
+    captureRunId: "run_valid_123",
+  });
+
+  const result = await persistRateSnapshot(observationWithRun, state.value);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.snapshot.captureRunId, "run_valid_123");
+  }
+  assert.equal(state.rows[0]?.captureRunId, "run_valid_123");
+  assert.ok(state.lookups.includes("run:run_valid_123"));
+});
+
+test("enforces referential integrity by rejecting missing capture run", async () => {
+  const state = repository();
+  state.validRuns.add("run_valid_123");
+
+  const observationWithMissingRun: NormalizedRateObservation = Object.freeze({
+    ...OBSERVATION,
+    captureRunId: "run_nonexistent_404",
+  });
+
+  const result = await persistRateSnapshot(observationWithMissingRun, state.value);
+  assert.deepEqual(result, { ok: false, code: "RUN_NOT_FOUND" });
+  assert.equal(state.rows.length, 0);
+});
+
+test("database constraint failures remain bounded persistence failures", async () => {
+  const state = repository();
+  state.value = {
+    ...state.value,
+    createSnapshot: async () => {
+      throw new Error("check constraint leaked supplied evidence=secret");
+    },
+  };
+
+  const result = await persistRateSnapshot(OBSERVATION, state.value);
+  assert.deepEqual(result, { ok: false, code: "PERSISTENCE_FAILURE" });
+  assert.doesNotMatch(JSON.stringify(result), /constraint|evidence|secret/);
+});
+
 function repository() {
   const rows: Array<Record<string, unknown>> = [];
   const lookups: string[] = [];
+  const validRuns = new Set<string>();
   const state = {
     rows,
     lookups,
+    validRuns,
     anchorExists: true,
     corridorExists: true,
     associated: true,
@@ -71,6 +119,10 @@ function repository() {
     hasAssociation: async (anchorId, corridorId) => {
       lookups.push(`association:${anchorId}:${corridorId}`);
       return state.associated;
+    },
+    findRunById: async (runId) => {
+      lookups.push(`run:${runId}`);
+      return state.validRuns.has(runId) ? { id: runId } : null;
     },
     createSnapshot: async (input) => {
       rows.push(input);

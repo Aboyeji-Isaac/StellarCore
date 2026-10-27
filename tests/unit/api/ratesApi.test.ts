@@ -4,6 +4,7 @@ import test from "node:test";
 import { GET, dynamic } from "@/app/api/rates/route";
 import { MIN_FRESH_SOURCES } from "@/constants/rates";
 import { getRatesApiResult, serializeRates } from "@/lib/api/rates";
+import { isValidRequestId } from "@/lib/api/requestId";
 import type { LatestCorridorRate } from "@/types/latestRates";
 
 const CORRIDOR = "usdc-us-brl-br";
@@ -12,12 +13,14 @@ const NOW = new Date("2026-08-28T12:00:00.000Z");
 test("route rejects missing and malformed corridor parameters safely", async () => {
   const missing = await GET(new Request("http://localhost/api/rates"));
   assert.equal(missing.status, 400);
-  assert.deepEqual(await missing.json(), {
-    error: {
-      code: "missing_corridor",
-      message: "A corridor slug is required.",
-    },
-  });
+  const missingBody = await missing.json() as {
+    error: { code: string; message: string; requestId?: string };
+  };
+  assert.equal(missingBody.error.code, "missing_corridor");
+  assert.equal(missingBody.error.message, "A corridor slug is required.");
+  // The correlation id is additive and must match the response header (#369).
+  assert.equal(missingBody.error.requestId, missing.headers.get("x-request-id"));
+  assert.equal(isValidRequestId(missingBody.error.requestId), true);
 
   for (const value of ["../rates", " USDC ", "a".repeat(101)]) {
     const response = await GET(new Request(
@@ -28,8 +31,13 @@ test("route rejects missing and malformed corridor parameters safely", async () 
   }
 });
 
-test("route is request-dynamic and explicitly prevents freshness caching", async () => {
+test("route is request-dynamic, exports GET only, and explicitly prevents freshness caching", async () => {
   assert.equal(dynamic, "force-dynamic");
+  assert.equal(typeof GET, "function");
+  const route = await import("@/app/api/rates/route");
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]) {
+    assert.equal(method in route, false);
+  }
   const response = await GET(new Request("http://localhost/api/rates?corridor=bad--slug"));
   assert.equal(response.headers.get("cache-control"), "no-store");
 });

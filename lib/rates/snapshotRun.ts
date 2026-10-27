@@ -1,3 +1,4 @@
+import { REVIEWED_LIVE_RATE_SOURCES } from "@/constants/liveRateSources";
 import { assertCurrentStellarCoreConfiguration } from "@/lib/config/currentStellarCoreConfiguration";
 import {
   buildReviewedLiveRateCandidates,
@@ -5,29 +6,56 @@ import {
   formatLiveRateRunSummary,
 } from "@/lib/rates/liveRateSource";
 import { runRateEngine } from "@/lib/rates/rateEngine";
+import { computeRuntimeConfigFingerprint, resolveDeploymentRevision } from "@/lib/config/runtimeConfigFingerprint";
+import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
+import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
 import type {
   PreparedLiveRateCandidate,
+  ReviewedLiveRateSource,
   SafeLiveRateRunSummary,
 } from "@/types/liveRateSource";
+import type { ScheduledSourceIdentity } from "@/types/suppression";
 
 export type SnapshotReviewedLiveRatesDependencies = Readonly<{
   assertConfiguration: () => void;
-  buildCandidates: () => Promise<readonly PreparedLiveRateCandidate[]>;
+  buildCandidates: (
+    sources?: readonly ReviewedLiveRateSource[],
+  ) => Promise<readonly PreparedLiveRateCandidate[]>;
   executeCandidates: (
     candidates: readonly PreparedLiveRateCandidate[],
   ) => Promise<SafeLiveRateRunSummary>;
+  listSuppressed?: () => Promise<readonly ScheduledSourceIdentity[]>;
 }>;
 
 /**
  * Runs the reviewed production rate-source boundary once. This is intentionally
  * shared by the CLI and the authenticated scheduler so they cannot drift.
+ *
+ * Durably suppressed sources are excluded before candidates are executed so
+ * they never consume scheduler capacity and never count toward freshness.
  */
 export async function snapshotReviewedLiveRates(
   dependencies: SnapshotReviewedLiveRatesDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<SafeLiveRateRunSummary> {
   dependencies.assertConfiguration();
-  return dependencies.executeCandidates(await dependencies.buildCandidates());
+
+  const suppressions = await (
+    dependencies.listSuppressed ??
+    (async () => Object.freeze([] as ScheduledSourceIdentity[]))
+  )();
+  const suppressedKeys = new Set(
+    suppressions.map((suppression) => `${suppression.anchorSlug}:${suppression.corridorSlug}`),
+  );
+  const eligibleSources = REVIEWED_LIVE_RATE_SOURCES.filter(
+    (source) => !suppressedKeys.has(`${source.anchorSlug}:${source.corridorSlug}`),
+  );
+  const suppressed = REVIEWED_LIVE_RATE_SOURCES.length - eligibleSources.length;
+  const candidates = await dependencies.buildCandidates(eligibleSources);
+  const summary = await dependencies.executeCandidates(candidates);
+
+  if (suppressed === 0) return summary;
+  return Object.freeze({ ...summary, suppressed });
 }
 
 const DEFAULT_DEPENDENCIES = Object.freeze({
@@ -37,6 +65,8 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
+      configurationFingerprint: computeRuntimeConfigFingerprint(getRuntimeConfig(), resolveDeploymentRevision()),
     }),
   ),
+  listSuppressed: PRISMA_SUPPRESSION_REPOSITORY.listSuppressed,
 }) satisfies SnapshotReviewedLiveRatesDependencies;
