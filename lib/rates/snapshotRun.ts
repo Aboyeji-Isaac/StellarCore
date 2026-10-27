@@ -6,6 +6,8 @@ import {
   formatLiveRateRunSummary,
 } from "@/lib/rates/liveRateSource";
 import { runRateEngine } from "@/lib/rates/rateEngine";
+import { computeRuntimeConfigFingerprint, resolveDeploymentRevision } from "@/lib/config/runtimeConfigFingerprint";
+import { getRuntimeConfig } from "@/lib/config/runtimeConfig";
 import { PRISMA_RATE_SNAPSHOT_REPOSITORY } from "@/lib/rates/snapshot";
 import { PRISMA_SUPPRESSION_REPOSITORY } from "@/lib/scheduled/suppressionRepository";
 import type {
@@ -63,6 +65,7 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
     await runRateEngine(candidates, {
       quote: fetchReviewedIndicativeRate,
       repository: PRISMA_RATE_SNAPSHOT_REPOSITORY,
+      configurationFingerprint: computeRuntimeConfigFingerprint(getRuntimeConfig(), resolveDeploymentRevision()),
     }),
   ),
   listSuppressed: PRISMA_SUPPRESSION_REPOSITORY.listSuppressed,

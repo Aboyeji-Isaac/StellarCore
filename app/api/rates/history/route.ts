@@ -1,12 +1,14 @@
 import { publicApiJsonResponse } from "@/lib/api/http";
 import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
 import { getRateLimiter } from "@/lib/api/rateLimiter";
+import { REQUEST_ID_HEADER, resolveRequestId } from "@/lib/api/requestId";
 import { staleEvidenceHeaders } from "@/lib/api/staleEvidence";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  const decision = await getRateLimiter().check(request, Date.now());
+  const requestId = resolveRequestId(request);
+  const decision = await getRateLimiter().check(request, Date.now(), requestId);
   if (!decision.allowed) return decision.response;
 
   const evaluatedAt = new Date();
@@ -15,10 +17,11 @@ export async function GET(request: Request): Promise<Response> {
   const days = url.searchParams.get("days");
   const result = await getRateHistoryApiResult(corridor, days, {
     now: () => evaluatedAt,
+    requestId,
   });
 
-  return publicApiJsonResponse(
-    result,
-    staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
-  );
+  return publicApiJsonResponse(result, {
+    ...staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
+    [REQUEST_ID_HEADER]: requestId,
+  });
 }

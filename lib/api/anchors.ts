@@ -1,3 +1,4 @@
+
 import {
   PRISMA_ANCHOR_DIRECTORY_REPOSITORY,
   type AnchorDetailRecord,
@@ -5,11 +6,14 @@ import {
   type AnchorDirectoryRepository,
 } from "@/lib/api/anchorRepository";
 import {
+  NO_PAGINATION,
   NO_PAGINATION_QUERY,
   paginate,
   parsePagination,
+  type Pagination,
   type PaginationQuery,
 } from "@/lib/api/pagination";
+import { safeDecodePathSegment } from "@/lib/api/paths";
 import { transferCapable } from "@/lib/stellar/anchors";
 import {
   consolePublicApiErrorReporter,
@@ -31,6 +35,8 @@ const MAX_ANCHOR_SLUG_LENGTH = 100;
 export type AnchorsApiDependencies = Readonly<{
   repository?: AnchorDirectoryRepository;
   reportError?: PublicApiErrorReporter;
+  /** Correlation id published with failures and recorded in the failure log. */
+  requestId?: string;
 }>;
 
 export function isValidAnchorSlug(slug: string): boolean {
@@ -45,21 +51,24 @@ export async function getAnchorsApiResult(
 ): Promise<AnchorsApiResult> {
   const parsed = parsePagination(pagination);
   if (!parsed.ok) {
-    return publicApiErrorResult("invalid_pagination", parsed.message);
+    return publicApiErrorResult("invalid_pagination", parsed.message, dependencies.requestId);
   }
 
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
-    const body = serializeAnchors(await repository.findAll());
-    const anchors = paginate(body.anchors, parsed.pagination);
-    return Object.freeze({
-      status: 200,
-      body: Object.freeze({ anchors, count: anchors.length }),
-    });
+    const body = serializeAnchors(
+      await repository.findAll(),
+      parsed.pagination,
+    );
+    return Object.freeze({ status: 200, body });
   } catch (error) {
     reportError(dependencies, error, "anchors.list");
-    return publicApiErrorResult("internal_error", "Unable to load anchors.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load anchors.",
+      dependencies.requestId,
+    );
   }
 }
 
@@ -67,38 +76,59 @@ export async function getAnchorApiResult(
   slug: string,
   dependencies: AnchorsApiDependencies = {},
 ): Promise<AnchorApiResult> {
-  if (!isValidAnchorSlug(slug)) {
+  const decoded = safeDecodePathSegment(slug);
+  const normalizedSlug = decoded.ok ? decoded.value : slug;
+
+  if (!isValidAnchorSlug(normalizedSlug)) {
     return publicApiErrorResult(
       "invalid_anchor_slug",
       "A valid anchor slug is required.",
+      dependencies.requestId,
     );
   }
 
   try {
     const repository = dependencies.repository
       ?? PRISMA_ANCHOR_DIRECTORY_REPOSITORY;
-    const anchor = await repository.findBySlug(slug);
+    const anchor = await repository.findBySlug(normalizedSlug);
+
     if (!anchor) {
-      return publicApiErrorResult("anchor_not_found", "Anchor not found.");
+      return publicApiErrorResult(
+        "anchor_not_found",
+        "Anchor not found.",
+        dependencies.requestId,
+      );
     }
 
     return Object.freeze({
       status: 200,
-      body: Object.freeze({ anchor: serializeAnchorDetail(anchor) }),
+      body: Object.freeze({
+        anchor: serializeAnchorDetail(anchor),
+      }),
     });
   } catch (error) {
     reportError(dependencies, error, "anchors.detail");
-    return publicApiErrorResult("internal_error", "Unable to load anchors.");
+    return publicApiErrorResult(
+      "internal_error",
+      "Unable to load anchors.",
+      dependencies.requestId,
+    );
   }
 }
 
 export function serializeAnchors(
   records: readonly AnchorDirectoryRecord[],
+  pagination: Pagination = NO_PAGINATION,
 ): PublicAnchorsResponse {
-  const anchors = Object.freeze([...records]
-    .sort((left, right) => left.slug.localeCompare(right.slug))
-    .map((record) => {
+  // Sort records by the existing public order, then serialize only this page.
+  const ordered = [...records].sort(
+    (left, right) => left.slug.localeCompare(right.slug),
+  );
+
+  const anchors = Object.freeze(
+    paginate(ordered, pagination).map((record) => {
       const seps = sortedSeps(record.seps);
+
       return Object.freeze({
         slug: record.slug,
         name: record.name,
@@ -108,24 +138,33 @@ export function serializeAnchors(
         isTransferCapable: transferCapable(seps),
         corridorCount: record.corridorCount,
       }) satisfies PublicAnchorSummary;
-    }));
+    }),
+  );
 
-  return Object.freeze({ anchors, count: anchors.length });
+  return Object.freeze({
+    anchors,
+    count: anchors.length,
+  });
 }
 
 export function serializeAnchorDetail(
   record: AnchorDetailRecord,
 ): PublicAnchorDetail {
   const seps = sortedSeps(record.seps);
-  const corridors = Object.freeze([...record.corridors]
-    .sort((left, right) => left.slug.localeCompare(right.slug))
-    .map((corridor) => Object.freeze({
-      slug: corridor.slug,
-      sourceAsset: corridor.assetCodeFrom,
-      sourceCountry: corridor.countryFrom,
-      destinationAsset: corridor.assetCodeTo,
-      destinationCountry: corridor.countryTo,
-    }) satisfies PublicAnchorCorridor));
+
+  const corridors = Object.freeze(
+    [...record.corridors]
+      .sort((left, right) => left.slug.localeCompare(right.slug))
+      .map((corridor) =>
+        Object.freeze({
+          slug: corridor.slug,
+          sourceAsset: corridor.assetCodeFrom,
+          sourceCountry: corridor.countryFrom,
+          destinationAsset: corridor.assetCodeTo,
+          destinationCountry: corridor.countryTo,
+        }) satisfies PublicAnchorCorridor,
+      ),
+  );
 
   return Object.freeze({
     slug: record.slug,
@@ -150,5 +189,6 @@ function reportError(
   (dependencies.reportError ?? consolePublicApiErrorReporter)(error, {
     operation,
     code: "internal_error",
+    requestId: dependencies.requestId,
   });
 }
