@@ -12,6 +12,7 @@ import {
   type CorridorDetailRecord,
   type CorridorDetailRepository,
 } from "@/lib/api/corridorRepository";
+import { isValidRequestId } from "@/lib/api/requestId";
 
 const CANONICAL_SLUGS = Object.freeze([
   "usdc-us-usd-us",
@@ -163,7 +164,14 @@ test("route rejects decoded malformed params with the contract 400 and no-store"
     );
 
     assert.equal(response.status, 400, slug);
-    assert.deepEqual(await response.json(), INVALID_CORRIDOR_SLUG_BODY, slug);
+    const body = await response.json() as {
+      error: { code: string; message: string; requestId?: string };
+    };
+    assert.equal(body.error.code, INVALID_CORRIDOR_SLUG_BODY.error.code, slug);
+    assert.equal(body.error.message, INVALID_CORRIDOR_SLUG_BODY.error.message, slug);
+    // The additive correlation id must agree with the response header (#369).
+    assert.equal(body.error.requestId, response.headers.get("x-request-id"), slug);
+    assert.equal(isValidRequestId(body.error.requestId), true, slug);
     assert.equal(response.headers.get("cache-control"), "no-store", slug);
   }
 });

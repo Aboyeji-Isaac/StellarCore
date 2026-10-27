@@ -15,12 +15,7 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
-    /**
-     * Deterministic fingerprint of the reviewed rate-source configuration
-     * used for this run. Persisted with every snapshot so captured evidence
-     * can be traced back to the configuration that produced it.
-     */
-    configurationFingerprint: string;
+Run npm run test:e2e    configurationFingerprint?: string;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
@@ -52,18 +47,24 @@ export async function runRateEngine(
 
     let observation;
     try {
-      observation = normalizeIndicativeRate({
+      const normalized = normalizeIndicativeRate({
         anchorSlug: candidate.anchorSlug,
         corridor: candidate.corridor,
         request: candidate.request,
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
-      // Add fingerprint from dependencies
-      observation = {
-        ...observation,
-        configurationFingerprint: dependencies.configurationFingerprint,
-      };
+// <<<<<<< feat/link-rate-snapshots-to-capture-run
+//       observation = candidate.captureRunId
+//         ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
+//         : normalized;
+// =======
+//       // Add fingerprint from dependencies
+//       observation = {
+//         ...observation,
+//         configurationFingerprint: dependencies.configurationFingerprint,
+//       };
+// >>>>>>> development
     } catch (error) {
       failures.push(engineFailure(
         candidate,

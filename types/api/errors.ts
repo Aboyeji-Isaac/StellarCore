@@ -30,8 +30,22 @@ export const PUBLIC_API_ERROR_STATUS_BY_CODE = {
 } as const satisfies Readonly<Record<PublicApiErrorCode, PublicApiErrorStatus>>;
 
 export type PublicApiErrorEnvelope<Code extends PublicApiErrorCode = PublicApiErrorCode> = Readonly<{
-  error: Readonly<{ code: Code; message: string }>;
+  error: Readonly<{
+    code: Code;
+    message: string;
+    /**
+     * Correlation id for this failure. Present only when the route resolved a
+     * valid id; it is additive, so clients that ignore it keep working, and it
+     * never contains internal diagnostics.
+     */
+    requestId?: string;
+  }>;
 }>;
+
+export function isPublicApiErrorCode(value: unknown): value is PublicApiErrorCode {
+  return typeof value === "string"
+    && (PUBLIC_API_ERROR_CODES as readonly string[]).includes(value);
+}
 
 export type PublicApiErrorResult<Code extends PublicApiErrorCode = PublicApiErrorCode> = Readonly<{
   status: (typeof PUBLIC_API_ERROR_STATUS_BY_CODE)[Code];

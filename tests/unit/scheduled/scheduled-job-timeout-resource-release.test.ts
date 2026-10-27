@@ -724,8 +724,12 @@ test("a transaction timeout in the scheduled evidence read fails closed, is not 
     ) {
       transactionOptions.push(options);
       const tx = {
-        async $executeRaw() {
-          transactionQueries.push("SET TRANSACTION READ ONLY");
+        async $executeRaw(sql: unknown) {
+          transactionQueries.push(String(sql));
+          return 0;
+        },
+        async $executeRawUnsafe(sql: string) {
+          transactionQueries.push(sql);
           return 0;
         },
         async $queryRaw() {
@@ -809,6 +813,9 @@ test("a lock timeout inside the scheduled evidence read is retried a bounded num
       attempts += 1;
       const tx = {
         async $executeRaw() {
+          return 0;
+        },
+        async $executeRawUnsafe() {
           return 0;
         },
         async $queryRaw() {

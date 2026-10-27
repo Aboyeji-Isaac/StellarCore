@@ -26,6 +26,19 @@ globals.prisma = {
 };
 globals.pool = {};
 
+/**
+ * Each request now carries its own correlation id (#369). Body comparisons in
+ * this suite are about query validation, so the per-request id is removed
+ * before comparing a response with the baseline response.
+ */
+function withoutRequestId(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const error = (value as { error?: unknown }).error;
+  if (typeof error !== "object" || error === null) return value;
+  const { requestId: _requestId, ...rest } = error as Record<string, unknown>;
+  return { ...value, error: rest };
+}
+
 test("public evidence GET routes ignore media headers and bodies while retaining query validation", async (t) => {
   try {
     const [anchors, anchor, corridors, corridor, rates, history, reputation, score] = await Promise.all([
@@ -82,7 +95,7 @@ test("public evidence GET routes ignore media headers and bodies while retaining
             assert.equal(response.status, baseline.status);
             assert.match(response.headers.get("content-type") ?? "", /^application\/json\b/);
             assert.equal(response.headers.get("cache-control"), "no-store");
-            assert.deepEqual(await response.json(), expected);
+            assert.deepEqual(withoutRequestId(await response.json()), withoutRequestId(expected));
             assert.deepEqual(databaseReads.splice(0), expectedReads);
           }
         }

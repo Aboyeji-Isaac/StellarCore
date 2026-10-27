@@ -10,6 +10,7 @@ import * as rateHistoryRoute from "@/app/api/rates/history/route";
 import * as reputationDetailRoute from "@/app/api/reputation/[slug]/route";
 import * as reputationListRoute from "@/app/api/reputation/route";
 
+import { isValidRequestId } from "@/lib/api/requestId";
 import {
   getAnchorApiResult,
   getAnchorsApiResult,
@@ -446,8 +447,15 @@ test("public HTTP routes produce exact canonical error response payloads and hea
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("content-type"), "application/json");
 
-  const body = (await response.json()) as { error: { code: string; message: string } };
-  assert.deepEqual(body, {
+  const body = (await response.json()) as {
+    error: { code: string; message: string; requestId?: string };
+  };
+  // The correlation id is additive and per-request: the canonical payload is
+  // unchanged, and the id in the body must match the response header (#369).
+  assert.equal(body.error.requestId, response.headers.get("x-request-id"));
+  assert.equal(isValidRequestId(body.error.requestId), true);
+  const { requestId: _requestId, ...canonicalError } = body.error;
+  assert.deepEqual({ error: canonicalError }, {
     error: {
       code: "missing_corridor",
       message: "A corridor slug is required.",

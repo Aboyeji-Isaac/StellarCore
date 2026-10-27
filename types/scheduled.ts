@@ -27,7 +27,7 @@ export type ScheduledRefreshResult = Readonly<{
     skipped: number;
     suppressed?: number;
     failures: readonly ScheduledRateFailure[];
-    skippedSources: readonly ScheduledRateSkippedSource[];
+    skippedSources?: readonly ScheduledRateSkippedSource[];
   }>;
   reputation: Readonly<{
     attempted: number;

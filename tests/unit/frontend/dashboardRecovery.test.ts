@@ -337,7 +337,7 @@ test("async server components simulate unavailable-then-available sequence deter
           freshSourceCount: 2,
           observations: [
             {
-              snapshotId: "zeam-snapshot",
+              snapshotId: "snapshot-1",
               anchorSlug: "zeam",
               anchorName: "Zeam",
               rate: "5.50",
