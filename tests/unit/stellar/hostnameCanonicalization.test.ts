@@ -1,3 +1,4 @@
+
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -12,7 +13,10 @@ test("canonicalizeHostname: normalizes lowercase and strips trailing dots", () =
   assert.equal(canonicalizeHostname("EXAMPLE.COM"), "example.com");
   assert.equal(canonicalizeHostname("example.com."), "example.com");
   assert.equal(canonicalizeHostname("EXAMPLE.COM..."), "example.com");
-  assert.equal(canonicalizeHostname("SUB.DOMAIN.EXAMPLE.ORG."), "sub.domain.example.org");
+  assert.equal(
+    canonicalizeHostname("SUB.DOMAIN.EXAMPLE.ORG."),
+    "sub.domain.example.org",
+  );
 });
 
 test("canonicalizeHostname: handles IDNA / punycode correctly", () => {
@@ -22,7 +26,10 @@ test("canonicalizeHostname: handles IDNA / punycode correctly", () => {
 
   // Punycode directly resolves to identical canonical representation
   assert.equal(canonicalizeHostname("xn--mnchen-3ya.de"), "xn--mnchen-3ya.de");
-  assert.equal(areHostnamesEquivalent("MÜNCHEN.DE.", "xn--mnchen-3ya.de"), true);
+  assert.equal(
+    areHostnamesEquivalent("MÜNCHEN.DE.", "xn--mnchen-3ya.de"),
+    true,
+  );
 });
 
 test("canonicalizeHostname: rejects invalid or ambiguous hostnames", () => {
@@ -69,11 +76,16 @@ test("canonicalizeHostname: enforces label and total length limits", () => {
   const longLabel = "a".repeat(64);
   assert.throws(
     () => canonicalizeHostname(`${longLabel}.com`),
-    (err: unknown) => err instanceof HostnameValidationError && err.code === "LABEL_TOO_LONG",
+    (err: unknown) =>
+      err instanceof HostnameValidationError &&
+      err.code === "LABEL_TOO_LONG",
   );
 
   const maxValidLabel = "a".repeat(63);
-  assert.equal(canonicalizeHostname(`${maxValidLabel}.com`), `${maxValidLabel}.com`);
+  assert.equal(
+    canonicalizeHostname(`${maxValidLabel}.com`),
+    `${maxValidLabel}.com`,
+  );
 });
 
 test("validateAnchorRegistry: detects duplicates across case, trailing dots, and IDN variants", () => {
@@ -116,9 +128,9 @@ test("validateAnchorRegistry: detects duplicates across Unicode and punycode for
   );
 });
 
-
 test("canonicalizeHostname: rejects mixed-script confusables in Unicode and punycode forms", () => {
   const confusable = "pаypal.com"; // Cyrillic small a in an otherwise Latin label.
+
   assert.throws(
     () => canonicalizeHostname(confusable),
     (err: unknown) =>
@@ -127,6 +139,7 @@ test("canonicalizeHostname: rejects mixed-script confusables in Unicode and puny
   );
 
   const punycode = new URL(`https://${confusable}`).hostname;
+
   assert.throws(
     () => canonicalizeHostname(punycode),
     (err: unknown) =>
