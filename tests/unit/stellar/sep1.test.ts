@@ -52,6 +52,13 @@ ORG_NAME = "Reference Anchor"
   assert.equal(data.signingKey, "GREFERENCE");
 });
 
+test("buildSep1TomlUrl uses the canonical hostname identity", () => {
+  assert.equal(
+    buildSep1TomlUrl("MÜNCHEN.DE."),
+    "https://xn--mnchen-3ya.de/.well-known/stellar.toml",
+  );
+});
+
 test("buildSep1TomlUrl rejects malformed home domains", () => {
   assert.throws(
     () => buildSep1TomlUrl("https://anchor.example/path"),

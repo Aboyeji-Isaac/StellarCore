@@ -57,7 +57,17 @@ export function CorridorRateEvidence({ rates }: Props) {
             No rate observations are currently persisted for this corridor.
           </p>
         ) : (
-          <div className="mt-5 overflow-x-auto border-t border-[var(--ghost)] pt-4">
+          <>
+            <p id="rate-observations-scroll-hint" className="sr-only">
+              The observations table scrolls horizontally. Focus it and use the left and right arrow keys to reveal every column.
+            </p>
+            <div
+              className="mt-5 overflow-x-auto border-t border-[var(--ghost)] pt-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]"
+              role="region"
+              aria-label="Persisted rate observations"
+              aria-describedby="rate-observations-scroll-hint"
+              tabIndex={0}
+            >
             <table className="w-full min-w-[680px] border-collapse text-left text-sm">
               <caption className="sr-only">Persisted rate observations</caption>
               <thead>
@@ -72,7 +82,9 @@ export function CorridorRateEvidence({ rates }: Props) {
               <tbody>
                 {rates.observations.map((observation) => (
                   <tr key={observation.anchor.slug} className="border-t border-[var(--ghost)] align-top">
-                    <td className="px-3 py-3 text-[var(--white)]">{observation.anchor.name}</td>
+                    <td className="px-3 py-3 text-[var(--white)]">
+                      {observation.anchor.name?.trim() ? observation.anchor.name : observation.anchor.slug}
+                    </td>
                     <td className="px-3 py-3 text-[var(--white)]">{observation.rate}</td>
                     <td className="px-3 py-3 text-[var(--muted)]">
                       <EvidenceTimestamp value={observation.capturedAt} />
@@ -87,7 +99,8 @@ export function CorridorRateEvidence({ rates }: Props) {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </section>

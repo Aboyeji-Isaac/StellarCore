@@ -1,0 +1,14 @@
+{
+  "name": "anchors.detail.error_400",
+  "domain": "anchors",
+  "endpoint": "GET /api/anchors/:slug",
+  "method": "GET",
+  "expectedStatus": 400,
+  "description": "Bad request error for malformed anchor slug",
+  "body": {
+    "error": {
+      "code": "invalid_anchor_slug",
+      "message": "A valid anchor slug is required."
+    }
+  }
+}

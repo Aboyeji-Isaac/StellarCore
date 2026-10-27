@@ -1,0 +1,32 @@
+{
+  "name": "reputation.detail.insufficient_200",
+  "domain": "reputation",
+  "endpoint": "GET /api/reputation/:slug",
+  "method": "GET",
+  "expectedStatus": 200,
+  "description": "Reputation detail with insufficient_evidence state, null score/band, and non-zero evidence",
+  "body": {
+    "reputation": {
+      "anchor": {
+        "slug": "cowrie",
+        "name": "Cowrie"
+      },
+      "state": "insufficient_evidence",
+      "score": null,
+      "scoreBand": null,
+      "evidence": {
+        "outcomeCount": 5
+      },
+      "metrics": {
+        "fillRate7d": null,
+        "fillRate30d": null,
+        "fillRate90d": null,
+        "settleP50Ms": null,
+        "settleP95Ms": null,
+        "slippageP50": null,
+        "slippageP95": null
+      },
+      "computedAt": "2026-08-28T12:00:00.000Z"
+    }
+  }
+}

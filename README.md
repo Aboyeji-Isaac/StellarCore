@@ -184,10 +184,13 @@ the completed-outcome ratio. Settlement and slippage p50/p95 metrics use
 completed outcomes in the trailing 30 days and deterministic nearest-rank
 percentiles; they are explanatory metrics, not hidden score inputs.
 
-The schema has one `ReputationScore` per anchor (`anchorId` is unique), so each
-calculation upserts the current row and advances `computedAt`; it does not append
-historical scores. The engine is run by the authenticated scheduled-refresh
-boundary and remains independent of the public, read-only reputation API.
+The schema has one `ReputationScore` per anchor (`anchorId` is unique). A
+calculation advances `computedAt` only when it is later than the stored
+evaluation; an older write is explicitly rejected. When timestamps tie, the
+existing row wins, so the first committed result remains current. Evaluations
+update this single row and do not append historical scores. The engine is run by
+the authenticated scheduled-refresh boundary and remains independent of the
+public, read-only reputation API.
 
 `TransferOutcome` is implemented data modeling, not a production evidence feed. StellarCore has no trusted production outcome-ingestion source today and does not infer outcomes from Horizon or a successful on-chain payment. SEP-6 and SEP-24 history is customer-scoped where authentication applies; SEP-31 lifecycle access is scoped to authorized participants and partner anchors. Until a legitimate, authorized source with provenance exists, sparse reputation is the intended result and established scores are not supported by sufficient evidence.
 
@@ -199,7 +202,14 @@ StellarCore exposes persisted anchors, corridors, rates, and reputation through 
 
 ### 5. The Dashboard
 
-The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse.
+The server-rendered `/dashboard` consumes the same bounded read models as the public API. It shows persisted observations, freshness, null medians where evidence is insufficient, and null reputation scores where outcome evidence is sparse. Reloading the page requests a fresh read. While the page is visible, the dashboard re-reads the same panels at most once per minute (`DASHBOARD_REFRESH_INTERVAL_MS`, 60 seconds); a hidden tab cancels the pending refresh and issues no requests, and returning to the tab refreshes immediately when the interval has already elapsed or waits for the remaining time otherwise. The rate panel labels its latest valid persisted observation time separately from the read evaluation time; when no valid observation time exists, it displays `Freshness unavailable — no valid observation time`. Anchor and corridor directory data has no evidence timestamp, so those panels do not display a freshness time.
+
+The corridor detail rate-history panel allows timeframe changes while loading.
+Only the latest started request may update its evidence, error, or loading state;
+obsolete completions are ignored, including requests pending when the panel is
+unmounted. Deferred-promise regression tests run with
+`npm test -- tests/unit/dashboard/panelRequestState.test.ts`, without network
+requests, timers, or database writes.
 
 ---
 
@@ -285,6 +295,7 @@ stellarcore/
 │   ├── stellar/            # SEP-1 discovery, SEP-10 boundary, SEP-38 client
 │   ├── rates/              # Candidate preparation, snapshots, and latest-rate read model
 │   ├── reputation/         # Evidence reads, deterministic scoring, and score persistence
+│   ├── integrity/          # Read-only evidence-graph integrity audit and remediation guidance
 │   └── scheduled/          # Internal cron authorization and orchestration
 ├── prisma/                 # Schema and committed migration history
 ├── scripts/                # Bootstrap, snapshot, and verification utilities
@@ -316,19 +327,48 @@ stellarcore/
 ```bash
 # .env.example
 
+# Explicit runtime environment identity.
+# One of: production, preview, development, test, ci.
+STELLARCORE_ENVIRONMENT="development"
+
 # Server-only application/runtime PostgreSQL connection for this environment.
+# Required outside tests. Must use postgres:// or postgresql://.
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 
-# Required in production when Vercel Cron is enabled; never expose to the client.
+# Required in production; never expose to the client.
 CRON_SECRET="replace-with-a-random-server-only-secret"
+
+# Optional rate-engine settings.
+RATE_FRESHNESS_THRESHOLD_MS="120000"
+MIN_FRESH_SOURCES="2"
+
+# Optional writable directory for bounded last-known-good public evidence snapshots.
+STALE_EVIDENCE_DIRECTORY="/path/to/writable/stale-evidence"
 ```
+
+`STELLARCORE_ENVIRONMENT` declares the runtime identity explicitly. Valid
+values are `production`, `preview`, `development`, `test`, and `ci`.
+When it is absent on Vercel, `VERCEL_ENV` is used; test runs may fall back to
+`NODE_ENV=test`. Runtime identity is never inferred from hostnames or database
+URL contents.
 
 `DATABASE_URL` is server-only. The application runtime uses the connection
 appropriate to its deployment environment; local development may use a
 compatible PostgreSQL database. Separately, the protected production migration
 workflow supplies its direct Prisma Postgres credential through its GitHub
 Actions `DATABASE_URL` secret. Neither credential belongs in client code,
-repository files, or logs.
+repository files, or logs. The URL must use `postgres://` or `postgresql://`.
+
+`CRON_SECRET` is required in production and optional in non-production
+environments. `RATE_FRESHNESS_THRESHOLD_MS` and `MIN_FRESH_SOURCES` are
+optional positive integers with defaults of 120000 and 2 respectively.
+
+`STALE_EVIDENCE_DIRECTORY` is optional. By default, the Node.js runtime stores
+verified public read snapshots in its temporary directory under
+`stellarcore-stale-evidence`. On multi-instance or serverless deployments this
+store is local to a warm instance; use a writable shared mount if fallback must
+survive instance replacement. If the store is unavailable, corrupt, or older
+than five minutes, the APIs fail closed.
 
 ---
 
@@ -365,6 +405,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+Hit a snag during setup? See [docs/troubleshooting.md](docs/troubleshooting.md) for verified workarounds.
+
 ### Running Sync Jobs Locally
 
 ```bash
@@ -382,6 +424,9 @@ npm run verify:reputation
 
 # Print a human-readable summary of the checked-in registries
 npm run registry:print
+
+# Read-only integrity audit of the persisted evidence graph (requires DATABASE_URL)
+npm run audit:integrity
 ```
 
 ### Running Tests
@@ -393,6 +438,15 @@ npm test
 # Pure offline audit of reviewed registry relationships
 npm run audit:config
 
+# Public API compatibility contract gate
+npm run audit:compatibility
+
+# Read-only persisted evidence integrity audit
+npm run audit:integrity
+
+# Update canonical API contract fixtures (intentional reviewed changes only)
+npm run contract:update
+
 # Human-readable inspection of the checked-in anchor/corridor registry
 npm run registry:print
 
@@ -402,6 +456,12 @@ npx tsc --noEmit
 # Opt-in live SEP-10 verification against the official Stellar test anchor
 npm run verify:sep10
 
+# Opt-in: latest-observation queries against a throwaway PostgreSQL database
+RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1 DATABASE_URL=postgresql://... \
+  npm test -- tests/integration/rates/latestObservationsDifferential.database.integration.test.ts
+
+# Opt-in: reproducible latest-observation benchmark (throwaway database only)
+BENCHMARK_DATABASE_URL=postgresql://... npm run benchmark:latest-observations
 ```
 
 `snapshot:rates` is an opt-in network-backed check; it discovers only reviewed
@@ -409,7 +469,8 @@ registry sources, verifies their advertised SEP-38 pair, and appends individual
 rate snapshots. It is not run by tests, builds, postinstall, or dev startup.
 
 `audit:config` performs a pure, deterministic check of the checked-in anchor,
-corridor, membership, and reviewed rate-source relationships. It requires no
+corridor, membership, and reviewed rate-source relationships, and verifies that
+`vercel.json` retains the single daily midnight-UTC refresh cron. It requires no
 database, network, or environment secrets. Registry bootstrap and reviewed rate
 snapshot preparation run the same preflight before operational work begins.
 Passing this audit means only that repository-controlled configuration is
@@ -418,12 +479,22 @@ advertisement, quote availability, fresh observations, or transfer support.
 Live discovery, rate-engine validation, and persisted-association checks remain
 independent defense-in-depth boundaries.
 
+`audit:compatibility` verifies that StellarCore's public API serializers and error
+envelopes conform to versioned compatibility contracts (`contracts/api/v1/`). It
+detects accidental breaking changes such as field removals, renames, type or
+nullability regressions, status-code changes, and ordering changes. Compatible
+additive fields are reported separately. Intentional contract changes must use
+`npm run contract:update` and the reviewed manifest workflow documented in
+[`docs/api-compatibility.md`](docs/api-compatibility.md).
+
 `registry:print` is a read-only companion to `audit:config`. It prints the
 checked-in anchors with their home domains, the corridors mapped to each anchor,
 and which corridors have a reviewed live rate source. It requires no database,
 network, or environment secrets and writes nothing. The registry does not store
 SEP support — that is discovered from each anchor's `stellar.toml` during
 `bootstrap:registry` — so the script says so rather than guessing.
+
+`audit:integrity` is a read-only audit of the persisted evidence graph. It loads a bounded snapshot of anchors, corridors, reviewed memberships, rate snapshots, transfer outcomes, and reputation rows using `findMany` selects only, then checks cross-table semantic invariants that the PostgreSQL schema cannot express as simple constraints: orphan-equivalent memberships, impossible anchor/corridor relationships, incompatible timestamps, invalid score/evidence combinations, and duplicate corridor identities. It prints a bounded JSON report of stable record identifiers, violation codes, and non-destructive remediation guidance — never raw row payloads or environment values — and it performs no write, update, delete, or transaction. It exits nonzero when any violation is found so a periodic scheduler or CI job can surface drift after migrations, imports, or operational mistakes. Database constraints and boundary validation remain the first-line write protection; this audit is defense-in-depth.
 
 `verify:latest-rates` is an opt-in local database read. It selects the latest
 snapshot per independent anchor, evaluates freshness at read time, computes the
@@ -435,10 +506,44 @@ MoneyGram, and Zeam. It uses one evaluation timestamp, performs no live network
 request, upserts each anchor's single current `ReputationScore`, and prints only
 safe structured evidence and results.
 
+The latest-observation reads behind `GET /api/rates` and reputation evidence
+take the newest snapshot per anchor (or per corridor) with a bounded lateral
+lookup instead of walking each group's history. The database-backed test
+compares them against the previous `DISTINCT ON` queries, kept verbatim in
+`tests/support/legacyLatestObservationQueries.ts`, on empty groups, uneven
+histories, tied timestamps, stale-only anchors and historically associated
+anchors, then compares the complete public rate and reputation outputs at a
+fixed evaluation time. It also asserts that rows visited do not grow with
+history depth (a row count, never a wall-clock time). It is skipped unless
+`RUN_LATEST_OBSERVATION_DATABASE_INTEGRATION=1`, and it creates and removes its
+own uniquely named rows, so run it only against a database you can afford to
+write to.
+
+`benchmark:latest-observations` seeds deterministic synthetic snapshots and
+records `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for both forms of each query
+across a history-depth sweep and a group-count sweep. It reads
+`BENCHMARK_DATABASE_URL`, never `DATABASE_URL`, refuses a database that holds
+any anchor or corridor it did not create, and deletes only its own rows. Set
+`BENCHMARK_COLD_RESTART_COMMAND` (for example `podman restart my-postgres`) to
+add a cold-`shared_buffers` measurement. Flags: `--scenario <name>`,
+`--runs <n>`, `--out <file>`, `--plans-dir <dir>`. Results, method and caveats
+are in [docs/benchmarks/latest-observations.md](docs/benchmarks/latest-observations.md).
+It is not run by `npm test`, builds, or `postinstall`, and must never be pointed
+at production.
+
 `verify:sep10` generates an unfunded ephemeral authentication key in memory,
 prints safe verification metadata only, and never prints or persists the secret
 seed, challenge XDR, JWT, or Authorization header. It is not run by `npm test`,
 the production build, or `postinstall`.
+
+SEP-10 contract notes: the signer callback must return the challenge it was
+given with signatures added; StellarCore compares the SDK transaction hash of
+the returned body with the original challenge before any token POST. When a
+client domain was requested, the returned token's `client_domain` claim must be
+present, well formed, and equal to it; otherwise no such claim is required.
+Token claims are decoded, not cryptographically verified: decoding is not JWT
+signature verification, and the SEP-10 signing key is not assumed to be the JWT
+verification key.
 
 ## Production deployment
 
@@ -457,7 +562,73 @@ StellarCore targets Vercel Node.js functions with managed PostgreSQL and Prisma 
 
 All public endpoints return JSON and are read-only.
 
+The anchor and corridor directory endpoints accept optional `limit` (1–100)
+and `offset` (a non-negative integer) query parameters. Invalid pagination returns
+400 with `invalid_pagination` before reading evidence. Records are ordered by
+slug before paging, and only the selected page's fields are serialized. `count`
+is the number of records returned, including zero for an offset beyond the end;
+there is no total-count, next-page, or truncation flag. Advance `offset` by
+`limit` until a short or empty page is returned.
+
+For compatibility, omitting `limit` returns all records after the optional
+offset; it does not implicitly cap the response at 100. This pagination bounds
+field serialization for limited requests, but the repository still loads and
+sorts the directory. Other evidence endpoints have no generic row or byte cap;
+the rate-history days limit bounds the requested time window, not response size.
+Generated boundary regression fixtures run with
+`npm test -- tests/unit/api/responseBounds.test.ts` and require no database or
+network access.
+
+Public evidence GET routes use the URL path and query parameters as input.
+They always return `application/json`, including errors; they do not negotiate
+representations using `Accept` (and do not return 406 for other requested media
+types). Request `Content-Type` does not affect processing and does not cause
+415 responses, because these routes do not inspect, parse, or use request bodies.
+Clients should send GET requests without a body. A body reaching a handler is
+ignored; it cannot supply or override path or query parameters. Normal parameter
+validation and rate limiting still apply regardless of these headers. This
+contract covers anchors, corridors, rates, rate history, and reputation, including
+detail routes; it does not cover the internal cron endpoint.
+
+
+### Public API error contract
+
+All public API failures use one bounded envelope:
+
+```json
+{
+  "error": {
+    "code": "corridor_not_found",
+    "message": "Corridor not found."
+  }
+}
+```
+
+The top level contains only `error`; the error object contains only stable
+`code` and bounded human-readable `message`. Successful payload shapes are
+unchanged. Unknown exceptions are reported through a server-side reporter seam
+and never serialized to clients.
+
+| HTTP | Codes |
+|---|---|
+| 400 | `missing_corridor`, `invalid_corridor`, `invalid_days`, `invalid_corridor_slug`, `invalid_anchor_slug`, `invalid_pagination` |
+| 404 | `anchor_not_found`, `corridor_not_found` |
+| 429 | `rate_limited` (reserved for throttling) |
+| 500 | `internal_error` |
+| 503 | `upstream_unavailable` (reserved for bounded dependency failures) |
+
+Responses never expose stack traces, ORM/database messages, raw upstream
+responses, credentials, JWTs, or private endpoint details. Dynamic evidence
+routes retain their stale-evidence response headers when serving a verified
+last-known-good payload.
+
 ### `GET /api/anchors`
+
+The anchor and corridor list routes accept optional `limit` and `offset` query
+parameters. Omission returns the full collection from offset zero. An explicitly
+empty or whitespace-only value is invalid; `limit` must be an integer from 1 to
+100 and `offset` a non-negative integer. Invalid values return HTTP 400
+`invalid_pagination` before a repository read.
 
 Returns the public directory of anchors currently persisted by StellarCore,
 ordered by slug ascending. The static anchor registry is synchronization input
@@ -530,6 +701,12 @@ live SEP calls, authentication, or writes.
 
 ### `GET /api/rates?corridor=<slug>`
 
+The `corridor` parameter is required. Omitted and explicitly empty values return
+HTTP 400 `missing_corridor`; whitespace-only or malformed values return HTTP 400
+`invalid_corridor`. For `/api/rates/history`, optional `days` defaults to 30 when
+omitted or explicitly empty. Whitespace-only values are invalid; valid values
+are integers from 1 to 365.
+
 Returns the latest persisted rate observation per independent anchor for the
 requested stable corridor slug. The endpoint reads existing snapshots only and
 never performs live SEP-38 requests.
@@ -588,6 +765,15 @@ when that observation is fresh.
 
 Freshness is evaluated dynamically on every request. Responses include
 `Cache-Control: no-store` so changing source age cannot be hidden by caching.
+
+The latest rates, rate history, and reputation GETs may serve a bounded
+last-known-good response only for recognized transient PostgreSQL connectivity
+or connection-pool errors. Such responses preserve their original
+`evaluatedAt`, `computedAt`, and `capturedAt` values and include a `degraded`
+object with `state: "stale"`, the snapshot `generatedAt`, source evidence
+times, expiry, and snapshot age. They also send `X-Evidence-State: stale` and an HTTP
+`Warning: 110` header. All responses remain `no-store`. Fallback snapshots are
+never read by rate aggregation or reputation evaluation code.
 
 Errors use stable codes:
 
@@ -791,7 +977,9 @@ Browse open issues at [github.com/YOUR_USERNAME/stellarcore/issues](https://gith
 - [x] SEP-10 authentication boundary/harness
 - [x] Deterministic reputation scoring and public read-only reputation APIs
 - [x] Public anchors, corridors, rates, and reputation APIs plus `/dashboard`
+- [x] Read-only evidence-graph integrity audit with bounded reports and per-class remediation guidance
 - [x] Manual production migration/registry-bootstrap workflows and authenticated daily refresh
+- [x] Read-only evidence-graph integrity audit with bounded reports and per-class remediation guidance
 
 ### Planned/Future
 

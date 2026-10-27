@@ -1,0 +1,166 @@
+{
+  "version": "1.0.0",
+  "contractVersion": "v1",
+  "updatedAt": "2026-09-30T14:16:42.032Z",
+  "reviewedBy": "StellarCore Core Team",
+  "reviewReason": "Public API compatibility contract baseline",
+  "breakingChangesApproved": false,
+  "totalFixtures": 31,
+  "fixtures": [
+    {
+      "name": "anchors.detail.error_400",
+      "path": "fixtures/anchors/detail-error-400.json",
+      "sha256": "94fc4dd10ec378466a31cec46da132abf54049be8aea6e4437d1a293d6c6befd"
+    },
+    {
+      "name": "anchors.detail.error_404",
+      "path": "fixtures/anchors/detail-error-404.json",
+      "sha256": "a877db4ff147e7d6ad184d18abc0151ef87195b8acbe2436e9cb33a9793eec39"
+    },
+    {
+      "name": "anchors.detail.error_500",
+      "path": "fixtures/anchors/detail-error-500.json",
+      "sha256": "fd8a2a6eea08d03aa8bb538d50c489252b39f5b05c4ff7ce08c43a8d628e4f04"
+    },
+    {
+      "name": "anchors.detail.success",
+      "path": "fixtures/anchors/detail-success.json",
+      "sha256": "e521659898b9107b6df92f947aa3172f0b53617287568e200366757e38cc4b3f"
+    },
+    {
+      "name": "anchors.list.empty",
+      "path": "fixtures/anchors/list-empty.json",
+      "sha256": "64304bdfedd3e0135e82e725474856e5b24b80e6e53e61584a47765627c77a67"
+    },
+    {
+      "name": "anchors.list.error_500",
+      "path": "fixtures/anchors/list-error-500.json",
+      "sha256": "512c629984c79833249a1d6f4ce19c11c95f21742f3dd9af2cfa52d6d013609a"
+    },
+    {
+      "name": "anchors.list.success",
+      "path": "fixtures/anchors/list-success.json",
+      "sha256": "2b27757a7a1b7a0e0a5257a81ea3b624e52ae8f687fb2f3fe791c307950b224a"
+    },
+    {
+      "name": "corridors.detail.empty_anchors",
+      "path": "fixtures/corridors/detail-empty-anchors.json",
+      "sha256": "f9e1e7d7d9519e87a4994eb39717b163dbfe187cb94298ae987027f161cbaa97"
+    },
+    {
+      "name": "corridors.detail.error_400",
+      "path": "fixtures/corridors/detail-error-400.json",
+      "sha256": "73a3a6b9635af905fe83d0646917991e11768f0b32005d920740ee084d4d6260"
+    },
+    {
+      "name": "corridors.detail.error_404",
+      "path": "fixtures/corridors/detail-error-404.json",
+      "sha256": "0e6cdc305851ba50c45be40457474b5ad8766a2322553ae832f993b14b66ee5d"
+    },
+    {
+      "name": "corridors.detail.error_500",
+      "path": "fixtures/corridors/detail-error-500.json",
+      "sha256": "b683af5ce0059ea07a28aab4a2d36f4aeeb06cc91ebdb91c94a97bcecae28fbf"
+    },
+    {
+      "name": "corridors.detail.success",
+      "path": "fixtures/corridors/detail-success.json",
+      "sha256": "a8da6bb7437e03b781d0c397a81939da2863a21e95dfd611ea35ae687ec358b1"
+    },
+    {
+      "name": "corridors.list.empty",
+      "path": "fixtures/corridors/list-empty.json",
+      "sha256": "496ca47b0139e9230649eb04113a25cb3f5cd446755f63a6d81e59df3f3f4c2a"
+    },
+    {
+      "name": "corridors.list.error_500",
+      "path": "fixtures/corridors/list-error-500.json",
+      "sha256": "a366f69bf50305f647490b516a97cd7793a45fe83e6f6ba5a7cb43271cab1473"
+    },
+    {
+      "name": "corridors.list.success",
+      "path": "fixtures/corridors/list-success.json",
+      "sha256": "9c17cc84c7e5672113a42ce3b21363b6660af55b44ac49060b18062775e3f52a"
+    },
+    {
+      "name": "rates.empty.success",
+      "path": "fixtures/rates/empty-success.json",
+      "sha256": "4f8949a9a284cd2f1d74bf8aa624910fdaa0f6748880f602996465dd7e5fb887"
+    },
+    {
+      "name": "rates.error_400_invalid",
+      "path": "fixtures/rates/error-invalid-corridor-400.json",
+      "sha256": "d9ea6f7521ec996287065862a8763358a8ec6c7876941ac68428a81ab2f47c78"
+    },
+    {
+      "name": "rates.error_400_missing",
+      "path": "fixtures/rates/error-missing-corridor-400.json",
+      "sha256": "c3519340ab7483bfbc5ea1b7178d8730c1ade9ef8603de1cd439791d60c8c4d9"
+    },
+    {
+      "name": "rates.error_404",
+      "path": "fixtures/rates/error-corridor-not-found-404.json",
+      "sha256": "1d82b935c32aa169d54d8265e8abbdf9aebae713d18d62fdef9d23deb01b0c2e"
+    },
+    {
+      "name": "rates.error_500",
+      "path": "fixtures/rates/error-internal-500.json",
+      "sha256": "2050429a3df1ad3011f33387fbad0c26469b008278c4c1d2ae88f77cdb4e74c8"
+    },
+    {
+      "name": "rates.healthy.success",
+      "path": "fixtures/rates/healthy-success.json",
+      "sha256": "7d7579ba6fdac3477befd4d8171eae496b1412b135cdb013367756a9468e1bd9"
+    },
+    {
+      "name": "rates.insufficient.success",
+      "path": "fixtures/rates/insufficient-success.json",
+      "sha256": "cd18b072d75dca67660f3537a80030781c343005b97135f43468d084f367c34b"
+    },
+    {
+      "name": "reputation.detail.error_400",
+      "path": "fixtures/reputation/detail-error-400.json",
+      "sha256": "b4619897a9729991f5f9488df53939e801a5c065107718972763860627170c71"
+    },
+    {
+      "name": "reputation.detail.error_404",
+      "path": "fixtures/reputation/detail-error-404.json",
+      "sha256": "55f3abd66c34f8ef9e606b75e87ffed8b4110ff424ff159fc977a780e9cedb2f"
+    },
+    {
+      "name": "reputation.detail.error_500",
+      "path": "fixtures/reputation/detail-error-500.json",
+      "sha256": "2023b675ffc69b8a6f038e7c6c0f72ba186c202f73d37efef33b4a47a7395fc8"
+    },
+    {
+      "name": "reputation.detail.established_200",
+      "path": "fixtures/reputation/detail-established-200.json",
+      "sha256": "dcf6cb5fd1156a2bbbfd519b09fe122d172159d170b7912b9008be15d1fd134e"
+    },
+    {
+      "name": "reputation.detail.insufficient_200",
+      "path": "fixtures/reputation/detail-insufficient-200.json",
+      "sha256": "5c818a10837efc279411d15740149c5ecef148890bafce788c953801839a97d7"
+    },
+    {
+      "name": "reputation.detail.not_evaluated_200",
+      "path": "fixtures/reputation/detail-not-evaluated-200.json",
+      "sha256": "fe7d8b5993050b1f71c5794ad5e97c3b84919bafe65e034a8b294d7a09552930"
+    },
+    {
+      "name": "reputation.list.empty",
+      "path": "fixtures/reputation/list-empty.json",
+      "sha256": "ee996200164b22ffb92d4a95dac2bed9d0613702e8fdcd6e9ad3af2f13897d3e"
+    },
+    {
+      "name": "reputation.list.error_500",
+      "path": "fixtures/reputation/list-error-500.json",
+      "sha256": "028e4004bf8a6d9975fdecd74fecb2c8ed45e6dba8d2b444ebb57fea94276f0c"
+    },
+    {
+      "name": "reputation.list.success",
+      "path": "fixtures/reputation/list-success.json",
+      "sha256": "097f563537a18bc574513c4c0f191c28e4c36720a91675efbd021ea7538be41c"
+    }
+  ]
+}

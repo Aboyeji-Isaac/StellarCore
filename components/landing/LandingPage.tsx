@@ -230,7 +230,6 @@ function Hero({ reviewedCorridors }: { reviewedCorridors: readonly ReviewedCorri
 }
 
 function EvidenceTicker() {
-  const stream = [...INSPECTION_AREAS, ...INSPECTION_AREAS];
   return (
     <section className="rate-section" id="evidence-model" aria-label="StellarCore evidence model">
       <div className="section-intro">
@@ -239,13 +238,22 @@ function EvidenceTicker() {
       </div>
       <div className="ticker-window">
         <div className="ticker-track">
-          {stream.map((item, index) => (
+          {INSPECTION_AREAS.map((item, index) => (
             <article className="rate-item" key={`${item.area}-${index}`}>
               <span>{item.area}</span>
               <strong>{item.title}</strong>
               <small>{item.detail}</small>
             </article>
           ))}
+          <div aria-hidden="true" style={{ display: "contents" }}>
+            {INSPECTION_AREAS.map((item, index) => (
+              <article className="rate-item" key={`${item.area}-dup-${index}`}>
+                <span>{item.area}</span>
+                <strong>{item.title}</strong>
+                <small>{item.detail}</small>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>

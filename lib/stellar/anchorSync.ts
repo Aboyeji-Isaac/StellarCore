@@ -23,13 +23,14 @@ export type PersistedAnchor = Readonly<{
 export type AnchorSyncFailureCode =
   | Sep1ErrorCode
   | "PERSISTENCE_FAILURE"
+  | "STALE_WRITE_REJECTED"
   | "UNEXPECTED_ERROR";
 
 export type AnchorSyncFailure = Readonly<{
   slug: string;
   phase: "DISCOVERY" | "PERSISTENCE";
   code: AnchorSyncFailureCode;
-  statusUpdate: "MARKED_DOWN" | "NOT_FOUND" | "FAILED" | "NOT_ATTEMPTED";
+  statusUpdate: "MARKED_DOWN" | "NOT_FOUND" | "FAILED" | "STALE" | "NOT_ATTEMPTED";
 }>;
 
 export type AnchorSyncResult = Readonly<{
@@ -42,8 +43,9 @@ export type AnchorSyncResult = Readonly<{
 
 export type AnchorSyncDependencies = Readonly<{
   discover: (entry: AnchorRegistryEntry) => Promise<DiscoveredAnchor>;
-  persist: (anchor: DiscoveredAnchor) => Promise<PersistedAnchor>;
-  markDown: (slug: string) => Promise<boolean>;
+  allocateOrder: () => Promise<bigint>;
+  persist: (anchor: DiscoveredAnchor, order: bigint) => Promise<PersistedAnchor | null>;
+  markDown: (slug: string, order: bigint) => Promise<"MARKED_DOWN" | "NOT_FOUND" | "STALE">;
 }>;
 
 const ANCHOR_SELECT = {
@@ -58,41 +60,44 @@ const ANCHOR_SELECT = {
 
 export async function persistDiscoveredAnchor(
   anchor: DiscoveredAnchor,
-): Promise<PersistedAnchor> {
+  order: bigint,
+): Promise<PersistedAnchor | null> {
   const { db } = await import("@/lib/dbClient");
-  const data = {
-    name: anchor.name,
-    homeDomain: anchor.homeDomain,
-    tomlUrl: anchor.tomlUrl,
-    seps: [...anchor.seps],
-    isTransferCapable: anchor.isTransferCapable,
-    status: AnchorStatus.LIVE,
-  };
-
-  const persisted = await db.anchor.upsert({
-    where: { slug: anchor.slug },
-    create: { slug: anchor.slug, ...data },
-    update: data,
-    select: ANCHOR_SELECT,
-  });
-
+  const affected = await db.$executeRaw`
+    INSERT INTO anchors (slug, name, home_domain, toml_url, seps, is_transfer_capable, status, last_sync_order)
+    VALUES (${anchor.slug}, ${anchor.name}, ${anchor.homeDomain}, ${anchor.tomlUrl}, ${[...anchor.seps]}, ${anchor.isTransferCapable}, 'LIVE'::anchor_status, ${order})
+    ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, home_domain = EXCLUDED.home_domain,
+      toml_url = EXCLUDED.toml_url, seps = EXCLUDED.seps, is_transfer_capable = EXCLUDED.is_transfer_capable,
+      status = EXCLUDED.status, last_sync_order = EXCLUDED.last_sync_order, updated_at = CURRENT_TIMESTAMP
+    WHERE anchors.last_sync_order < EXCLUDED.last_sync_order
+  `;
+  if (affected === 0) return null;
+  const persisted = await db.anchor.findUniqueOrThrow({ where: { slug: anchor.slug }, select: ANCHOR_SELECT });
   return freezePersistedAnchor(persisted);
 }
 
-export async function markAnchorDownIfExists(slug: string): Promise<boolean> {
+export async function allocateAnchorSyncOrder(): Promise<bigint> {
+  const { db } = await import("@/lib/dbClient");
+  const rows = await db.$queryRaw<[{ order: bigint }]>`SELECT nextval('anchor_sync_order_seq') AS order`;
+  return rows[0]!.order;
+}
+
+export async function markAnchorDownIfExists(slug: string, order: bigint): Promise<"MARKED_DOWN" | "NOT_FOUND" | "STALE"> {
   const { db } = await import("@/lib/dbClient");
   const result = await db.anchor.updateMany({
-    where: { slug },
-    data: { status: AnchorStatus.DOWN },
+    where: { slug, lastSyncOrder: { lt: order } },
+    data: { status: AnchorStatus.DOWN, lastSyncOrder: order },
   });
 
-  return result.count > 0;
+  if (result.count > 0) return "MARKED_DOWN";
+  return await db.anchor.findUnique({ where: { slug }, select: { slug: true } }) ? "STALE" : "NOT_FOUND";
 }
 
 export async function syncAnchorRegistry(
   entries: readonly AnchorRegistryEntry[] = ANCHOR_REGISTRY,
   dependencies: AnchorSyncDependencies = DEFAULT_SYNC_DEPENDENCIES,
 ): Promise<AnchorSyncResult> {
+  const order = await dependencies.allocateOrder();
   const successfulSlugs: string[] = [];
   const failures: AnchorSyncFailure[] = [];
 
@@ -102,20 +107,25 @@ export async function syncAnchorRegistry(
     try {
       discovered = await dependencies.discover(entry);
     } catch (error) {
+      const code = classifyDiscoveryFailure(error);
       failures.push(
         Object.freeze({
           slug: entry.slug,
           phase: "DISCOVERY",
-          code: classifyDiscoveryFailure(error),
-          statusUpdate: await safelyMarkDown(entry.slug, dependencies.markDown),
+          code,
+          statusUpdate:
+            code === "EGRESS_POLICY"
+              ? "NOT_ATTEMPTED"
+              : await safelyMarkDown(entry.slug, order, dependencies.markDown),
         }),
       );
       continue;
     }
 
     try {
-      await dependencies.persist(discovered);
-      successfulSlugs.push(entry.slug);
+      const persisted = await dependencies.persist(discovered, order);
+      if (persisted) successfulSlugs.push(entry.slug);
+      else failures.push(Object.freeze({ slug: entry.slug, phase: "PERSISTENCE", code: "STALE_WRITE_REJECTED", statusUpdate: "NOT_ATTEMPTED" }));
     } catch {
       failures.push(
         Object.freeze({
@@ -139,6 +149,7 @@ export async function syncAnchorRegistry(
 
 const DEFAULT_SYNC_DEPENDENCIES = Object.freeze({
   discover: discoverRegistryAnchor,
+  allocateOrder: allocateAnchorSyncOrder,
   persist: persistDiscoveredAnchor,
   markDown: markAnchorDownIfExists,
 }) satisfies AnchorSyncDependencies;
@@ -149,10 +160,11 @@ function classifyDiscoveryFailure(error: unknown): AnchorSyncFailureCode {
 
 async function safelyMarkDown(
   slug: string,
+  order: bigint,
   markDown: AnchorSyncDependencies["markDown"],
 ): Promise<AnchorSyncFailure["statusUpdate"]> {
   try {
-    return (await markDown(slug)) ? "MARKED_DOWN" : "NOT_FOUND";
+    return await markDown(slug, order);
   } catch {
     return "FAILED";
   }

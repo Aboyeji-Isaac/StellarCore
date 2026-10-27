@@ -1,0 +1,52 @@
+name: Audit production database TLS
+
+on:
+  pull_request:
+    paths:
+      - "lib/database/tlsPolicy.ts"
+      - "lib/database/tlsPolicyRuntime.ts"
+      - "lib/dbClient.ts"
+      - "lib/db/poolManager.ts"
+      - "lib/config/runtimeConfig.ts"
+      - "instrumentation.ts"
+      - "tests/unit/database/tlsPolicy*.test.ts"
+      - "tests/integration/database/tls*.test.ts"
+      - "docs/database-tls-policy.md"
+      - ".github/workflows/audit-database-tls.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit production database TLS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+        run: npx prisma generate
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Run TLS policy tests
+        run: node --import tsx --test tests/unit/database/tlsPolicy.test.ts tests/unit/database/tlsPolicyRuntime.test.ts tests/integration/database/tlsDriver.integration.test.ts tests/integration/database/tlsLive.database.integration.test.ts
+      - name: Lint
+        run: npm run lint
+      - name: Run full test suite
+        env:
+          STELLARCORE_ENVIRONMENT: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: npm test
+      - name: Build application
+        env:
+          DATABASE_URL: postgresql://stellarcore:stellarcore@localhost:5432/stellarcore
+          STELLARCORE_ENVIRONMENT: ci
+        run: npm run build
