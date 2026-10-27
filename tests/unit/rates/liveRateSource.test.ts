@@ -115,6 +115,7 @@ test("indicative adapter uses only the prepared public price boundary", async ()
 
 test("safe summary excludes remote metadata and retains only normalized snapshot fields", () => {
   const result: RateEngineResult = Object.freeze({
+    captureRunId: "run-1",
     totalCandidates: 1,
     totalAttempted: 1,
     succeeded: 1,
