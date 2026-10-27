@@ -4,6 +4,7 @@ import { createRequestId } from "@/lib/api/requestId";
 import type { PublicReputationScoreBand, PublicReputationState, ReputationApiListResult } from "@/types/api/reputation";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
+import { EvidenceTimestamp } from "@/components/ui/EvidenceTimestamp";
 
 function stateCopy(state: PublicReputationState): string {
   switch (state) {
@@ -136,11 +137,9 @@ export function ReputationSectionView({ result }: { result: ReputationApiListRes
             </dl>
           ) : null}
 
-          {entry.computedAt ? (
-            <p className="mt-3 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-              Computed {new Date(entry.computedAt).toLocaleString()}
-            </p>
-          ) : null}
+          <p className="mt-3 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+            Computed <EvidenceTimestamp value={entry.computedAt} />
+          </p>
         </article>
       ))}
     </div>

@@ -6,6 +6,7 @@ import type { RateFreshnessState } from "@/types/rates";
 import type { RatesApiResult } from "@/types/api/rates";
 import { Badge } from "@/components/dashboard/Badge";
 import { SectionEmpty, SectionError } from "@/components/dashboard/SectionStates";
+import { EvidenceTimestamp } from "@/components/ui/EvidenceTimestamp";
 
 const FEATURED_CORRIDOR_SLUG = "usdc-us-brl-br";
 
@@ -100,7 +101,7 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
           </h3>
 
           <p className="mt-1 text-xs text-[var(--muted)]">
-            Evaluated {new Date(evaluatedAt).toLocaleString()}
+            Evaluated <EvidenceTimestamp value={evaluatedAt} />
           </p>
 
           <p
@@ -235,11 +236,7 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
                   </td>
 
                   <td className="px-3 py-2 text-[var(--muted)]">
-                    {isValidEvidenceTime(observation.capturedAt)
-                      ? new Date(
-                          observation.capturedAt
-                        ).toLocaleString()
-                      : "Unavailable"}
+                    <EvidenceTimestamp value={observation.capturedAt} />
                   </td>
 
                   <td className="px-3 py-2">
