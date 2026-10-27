@@ -15,6 +15,12 @@ function isValidEvidenceTime(value: string): boolean {
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
 
+function describeSnapshotAge(ageMs: number): string {
+  if (!Number.isFinite(ageMs) || ageMs < 0) return "an unknown age";
+  const seconds = Math.round(ageMs / 1_000);
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
 function freshnessTone(state: RateFreshnessState) {
   switch (state) {
     case "fresh":
@@ -121,6 +127,18 @@ export function RatePanelView({ result }: { result: RatesApiResult }) {
           label={state.replace(/_/g, " ")}
         />
       </div>
+
+      {result.degraded ? (
+        <p
+          role="status"
+          data-testid="rate-evidence-degraded"
+          className="mt-4 rounded-lg border border-[rgba(243,184,100,0.4)] bg-[rgba(243,184,100,0.08)] p-3 text-xs leading-relaxed text-[#f3b864]"
+        >
+          Stale evidence — the latest read failed, so this panel is showing the last verified
+          response generated {new Date(result.degraded.generatedAt).toLocaleString()} (
+          {describeSnapshotAge(result.degraded.snapshotAgeMs)} old). It is not a fresh observation.
+        </p>
+      ) : null}
 
       <dl className="mt-6 grid grid-cols-1 gap-4 border-t border-[var(--ghost)] pt-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
         <div>

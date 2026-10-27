@@ -1,3 +1,4 @@
+
 # Changelog
 
 All notable changes to StellarCore are documented in this file.
@@ -55,6 +56,9 @@ with your pull request.
 
 ### Fixed
 
+- The dashboard rate panel now labels a degraded last-known-good response as
+  stale evidence with its snapshot generation time, instead of presenting it as
+  a current read (#445).
 - Public directory pagination now rejects `offset` values that overflow the
   safe integer range instead of silently serving an empty page (#444).
 - Prevented stale pooled PostgreSQL connections from being reused indefinitely after transient primary termination or endpoint rotation (#209).
