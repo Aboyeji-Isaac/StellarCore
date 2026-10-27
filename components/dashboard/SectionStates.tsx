@@ -1,3 +1,6 @@
+
+import { SectionRetry } from "@/components/dashboard/SectionRetry";
+
 /**
  * Shared loading, empty, and unavailable states for the read-only evidence views
  * (anchors, corridors, rates, reputation).
@@ -18,9 +21,17 @@ const STATE_TAG: Record<EvidenceViewState, string> = {
   unavailable: "Unavailable",
 };
 
-function StateTag({ state, className }: { state: EvidenceViewState; className: string }) {
+function StateTag({
+  state,
+  className,
+}: {
+  state: EvidenceViewState;
+  className: string;
+}) {
   return (
-    <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${className}`}>
+    <p
+      className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${className}`}
+    >
       {STATE_TAG[state]}
       <span className="sr-only">: </span>
     </p>
@@ -39,6 +50,7 @@ export function SectionError({ message }: { message: string }) {
       <p className="mt-1 text-xs text-[var(--muted)]">
         Evidence could not be loaded. This does not mean it is absent.
       </p>
+      <SectionRetry />
     </div>
   );
 }
@@ -65,7 +77,9 @@ export function SectionSkeleton({ label }: { label: string }) {
       className="rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-8"
     >
       <StateTag state="loading" className="text-[var(--muted)]" />
-      <p className="mt-2 text-sm text-[var(--muted)]">Loading {label}…</p>
+      <p className="mt-2 text-sm text-[var(--muted)]">
+        Loading {label}…
+      </p>
       <div aria-hidden="true" className="mt-4 animate-pulse">
         <div className="h-3 w-28 rounded bg-[var(--ghost)]" />
         <div className="mt-4 h-24 rounded bg-[var(--ghost)]" />
