@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import * as anchorDetailRoute from "@/app/api/anchors/[slug]/route";
-import * as anchorsListRoute from "@/app/api/anchors/route";
-import * as corridorDetailRoute from "@/app/api/corridors/[slug]/route";
-import * as corridorsListRoute from "@/app/api/corridors/route";
 import * as ratesRoute from "@/app/api/rates/route";
-import * as rateHistoryRoute from "@/app/api/rates/history/route";
-import * as reputationDetailRoute from "@/app/api/reputation/[slug]/route";
-import * as reputationListRoute from "@/app/api/reputation/route";
 
 import { isValidRequestId } from "@/lib/api/requestId";
 import {
@@ -26,17 +19,25 @@ import {
   getReputationApiResult,
 } from "@/lib/api/reputation";
 
-import {
-  PUBLIC_API_ERROR_CODES,
-  PUBLIC_API_ERROR_STATUS_BY_CODE,
-  type PublicApiErrorCode,
-} from "@/types/api/errors";
-
 /**
  * Pinned public error codes and canonical public error messages across all
  * public evidence endpoints. These exact string constants must remain stable
  * across internal refactorings.
  */
+type PublicErrorBody = Readonly<{
+  error: Readonly<{ code: string; message: string }>;
+}>;
+
+function errorBody(result: { readonly body: unknown }): PublicErrorBody {
+  assert.ok(
+    typeof result.body === "object"
+      && result.body !== null
+      && "error" in result.body,
+    "Expected a public API error body",
+  );
+  return result.body as PublicErrorBody;
+}
+
 const CANONICAL_ERROR_CONTRACT = Object.freeze({
   validation: [
     {
@@ -171,7 +172,6 @@ const CANONICAL_ERROR_CONTRACT = Object.freeze({
       invoke: () =>
         getCorridorApiResult("unknown-corridor", {
           repository: {
-            findAll: async () => [],
             findBySlug: async () => null,
           },
         }),
@@ -268,7 +268,6 @@ const CANONICAL_ERROR_CONTRACT = Object.freeze({
             findAll: async () => {
               throw new Error("Simulated database failure");
             },
-            findBySlug: async () => null,
           },
           reportError: () => {},
         }),
@@ -282,7 +281,6 @@ const CANONICAL_ERROR_CONTRACT = Object.freeze({
       invoke: () =>
         getCorridorApiResult("test-corridor", {
           repository: {
-            findAll: async () => [],
             findBySlug: async () => {
               throw new Error("Simulated database failure");
             },
@@ -341,12 +339,12 @@ test("documented error codes and message categories remain stable for validation
       `${entry.name} status must be ${entry.expectedStatus}`,
     );
     assert.equal(
-      result.body.error.code,
+      errorBody(result).error.code,
       entry.expectedCode,
       `${entry.name} code must be ${entry.expectedCode}`,
     );
     assert.equal(
-      result.body.error.message,
+      errorBody(result).error.message,
       entry.expectedMessage,
       `${entry.name} message must strictly match canonical contract`,
     );
@@ -362,12 +360,12 @@ test("documented error codes and message categories remain stable for missing re
       `${entry.name} status must be ${entry.expectedStatus}`,
     );
     assert.equal(
-      result.body.error.code,
+      errorBody(result).error.code,
       entry.expectedCode,
       `${entry.name} code must be ${entry.expectedCode}`,
     );
     assert.equal(
-      result.body.error.message,
+      errorBody(result).error.message,
       entry.expectedMessage,
       `${entry.name} message must strictly match canonical contract`,
     );
@@ -383,12 +381,12 @@ test("documented error codes and message categories remain stable for server err
       `${entry.name} status must be ${entry.expectedStatus}`,
     );
     assert.equal(
-      result.body.error.code,
+      errorBody(result).error.code,
       entry.expectedCode,
       `${entry.name} code must be ${entry.expectedCode}`,
     );
     assert.equal(
-      result.body.error.message,
+      errorBody(result).error.message,
       entry.expectedMessage,
       `${entry.name} message must strictly match canonical contract`,
     );
@@ -423,7 +421,7 @@ test("internal exception messages and secrets are never exposed as public text",
       `Public response must not leak sensitive detail: ${leak}`,
     );
     assert.equal(
-      result.body.error.message,
+      errorBody(result).error.message,
       "Unable to read rates.",
       "Must return stable sanitized message",
     );

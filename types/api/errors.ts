@@ -83,10 +83,15 @@ export function isPublicApiResultRecoverable(
   }
 
   const body = (result as { body?: unknown }).body;
-  if (typeof body?.error?.code !== "string") {
+  if (typeof body !== "object" || body === null) {
     return false;
   }
 
-  const code = (body.error as { code: string }).code;
-  return RECOVERABLE_PUBLIC_API_ERROR_CODES.includes(code);
+  const error = (body as { error?: unknown }).error;
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && isRecoverablePublicApiErrorCode(code);
 }

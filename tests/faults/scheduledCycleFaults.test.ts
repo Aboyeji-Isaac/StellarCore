@@ -266,6 +266,7 @@ test("[O8] mixed task outcomes preserve committed evidence and report partial fa
       quote: async () => okQuote(),
       repository: rateRepository,
       now: () => STARTED_AT,
+      configurationFingerprint: "test-fingerprint",
     })),
     evaluateReputation: ({ evaluatedAt }) => evaluatePersistedAnchorReputations({
       anchorSlugs: Object.keys(evidenceBySlug),
@@ -299,6 +300,7 @@ test("[O8] mixed task outcomes preserve committed evidence and report partial fa
     quote: async () => okQuote(),
     repository: faultSnapshotRepository(rateEvidence) as RateSnapshotRepository,
     now: () => STARTED_AT,
+    configurationFingerprint: "test-fingerprint",
   });
   assert.equal(rateRetry.succeeded, 1);
   assert.equal(rateRetry.failed, 0);

@@ -78,8 +78,8 @@ describe("ReputationSection null-evidence handling", () => {
   test("computedAt=null hides the timestamp instead of rendering 'null'", () => {
     assert.match(
       reputationSection,
-      /entry\.computedAt \?/,
-      "must guard computedAt rendering on truthiness",
+      /<EvidenceTimestamp value=\{entry\.computedAt\} \/>/,
+      "must render computedAt through the nullable timestamp formatter",
     );
   });
 
@@ -99,8 +99,8 @@ describe("ReputationSection null-evidence handling", () => {
     );
     assert.doesNotMatch(
       reputationSection,
-      /\{entry\.computedAt\}(?!\s*<\/)/,
-      "computedAt must not be interpolated directly",
+      /<[^>]+>\s*\{entry\.computedAt\}\s*<\/[^>]+>/,
+      "computedAt must use the nullable timestamp formatter",
     );
   });
 });
@@ -139,14 +139,14 @@ describe("RatePanel null-evidence handling", () => {
     );
     assert.match(
       ratePanel,
-      /No median is published until the fresh independent-observation requirement is met/,
+      /No median is published until the fresh independent-observation\s+requirement is met/,
     );
   });
 
   test("observation.exclusionReason (optional) is guarded before interpolation", () => {
     assert.match(
       ratePanel,
-      /observation\.exclusionReason \?/,
+      /observation\.exclusionReason\s*\?/,
       "must guard exclusionReason with a truthiness check before interpolating",
     );
   });
@@ -177,8 +177,8 @@ describe("RatePanel null-evidence handling", () => {
   test("evaluatedAt timestamp is always rendered", () => {
     assert.match(
       ratePanel,
-      /Evaluated.*new Date\(evaluatedAt\)/,
-      "evaluatedAt must always be visible",
+      /Evaluated <EvidenceTimestamp value=\{evaluatedAt\} \/>/,
+      "evaluatedAt must always use the stable timestamp formatter",
     );
   });
 

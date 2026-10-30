@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { getRatesApiResult } from "@/lib/api/rates";
+import type { LatestCorridorRate } from "@/types/latestRates";
 
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const CORRIDOR = "usdc-us-brl-br";
 
-function readResult(overrides: Partial<any>) {
+function readResult(
+  overrides: Partial<LatestCorridorRate> = {},
+): LatestCorridorRate {
   return Object.freeze({
     ok: true,
     corridor: Object.freeze({

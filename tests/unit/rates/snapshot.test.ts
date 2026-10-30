@@ -15,6 +15,7 @@ const OBSERVATION: NormalizedRateObservation = Object.freeze({
   destinationAmount: "101",
   fee: "1",
   capturedAt: new Date("2026-08-27T12:00:00.000Z"),
+  configurationFingerprint: "test-fingerprint",
 });
 
 test("snapshot persistence resolves stable slugs and requires an existing association", async () => {
@@ -126,7 +127,7 @@ function repository() {
     },
     createSnapshot: async (input) => {
       rows.push(input);
-      return { id: `snapshot-${rows.length}`, ...input };
+      return { id: `snapshot-${rows.length}`, ...input, provenanceUnavailable: false };
     },
   };
   return state;

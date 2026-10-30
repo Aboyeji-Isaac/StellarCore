@@ -112,7 +112,7 @@ test("success after retry clears the panel error state", async () => {
   ]);
 
   assert.equal(results.length, 2);
-  assert.equal(results[0].status, 503);
+  assert.equal(results[0].status, 429);
   assert.equal(results[0].body.error.code, "rate_limited");
   assert.deepEqual(results[1], recovered);
 });
@@ -121,7 +121,7 @@ test("sibling success results are unchanged when one panel is retried", async ()
   const anchorsBody = { anchors: ["Acme Anchor"] };
   const ratesBody = { corridor: "usdc-us-brl-br", medianRate: "5.20" };
 
-  const stubs = await withRecoverableErrors([
+  const stubs = await withRecoverableErrors<unknown>([
     makeDashboardApiResult(200, anchorsBody),
     makeDashboardApiError({ code: "internal_error", message: "Transient rates failure." }),
     makeDashboardApiResult(200, ratesBody),

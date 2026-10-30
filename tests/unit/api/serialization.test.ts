@@ -2,14 +2,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  serializeRates,
-  type LatestCorridorRate,
-} from "@/lib/api/rates";
-import {
-  serializeRateHistory,
-  type CorridorRateHistory,
-} from "@/lib/api/rateHistory";
+import { serializeRates } from "@/lib/api/rates";
+import { serializeRateHistory } from "@/lib/api/rateHistory";
+import type { LatestCorridorRate } from "@/types/latestRates";
+import type { CorridorRateHistory } from "@/types/rateHistory";
 import { serializeReputation } from "@/lib/api/reputation";
 import type { ReputationApiAnchorRecord } from "@/lib/api/reputationRepository";
 

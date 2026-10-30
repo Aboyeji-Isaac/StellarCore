@@ -2,8 +2,18 @@ import {
   type DashboardPanelResult,
   type DashboardPanelError,
 } from "./dashboardPanel";
+import {
+  PUBLIC_API_ERROR_CODES,
+  PUBLIC_API_ERROR_STATUS_BY_CODE as SHARED_PUBLIC_API_ERROR_STATUS_BY_CODE,
+  isRecoverablePublicApiErrorCode,
+  type PublicApiErrorCode,
+} from "@/types/api/errors";
 
 export type DashboardFailure = DashboardPanelError;
+
+function isPublicApiErrorCode(code: string): code is PublicApiErrorCode {
+  return (PUBLIC_API_ERROR_CODES as readonly string[]).includes(code);
+}
 
 /**
  * Creates a dashboard API error result with the given error code and message.
@@ -13,27 +23,17 @@ export type DashboardFailure = DashboardPanelError;
 export function makeDashboardApiError(
   error: { code: string; message: string },
 ): DashboardPanelResult<never> {
-  const statusMap: Record<string, number> = {
-    missing_corridor: 400,
-    invalid_corridor: 400,
-    invalid_days: 400,
-    invalid_corridor_slug: 400,
-    invalid_anchor_slug: 400,
-    anchor_not_found: 404,
-    corridor_not_found: 404,
-    invalid_pagination: 400,
-    rate_limited: 429,
-    internal_error: 500,
-    upstream_unavailable: 503,
-  };
-
-  const status = (error.code in statusMap ? statusMap[error.code] : 503);
+  const code: DashboardPanelError["code"] = isPublicApiErrorCode(error.code)
+    ? error.code
+    : "unknown_error";
 
   return Object.freeze({
-    status,
+    status: isPublicApiErrorCode(code)
+      ? SHARED_PUBLIC_API_ERROR_STATUS_BY_CODE[code]
+      : 503,
     body: Object.freeze({
       error: Object.freeze({
-        code: error.code,
+        code,
         message: error.message,
       }),
     }),
@@ -47,9 +47,9 @@ export function makeDashboardApiError(
 export function makeDashboardApiResult<T>(
   status: 200,
   body: T,
-): DashboardPanelResult<200, T> {
+): DashboardPanelResult<T> {
   return Object.freeze({
-    status: 200,
+    status,
     body,
   });
 }
@@ -59,25 +59,13 @@ export function makeDashboardApiResult<T>(
  * makeDashboardApiError uses these mappings.
  * withRecoverableErrors also uses these mappings for recoverable errors.
  */
-export const PUBLIC_API_ERROR_STATUS_BY_CODE = {
-  missing_corridor: 400,
-  invalid_corridor: 400,
-  invalid_days: 400,
-  invalid_corridor_slug: 400,
-  invalid_anchor_slug: 400,
-  anchor_not_found: 404,
-  corridor_not_found: 404,
-  invalid_pagination: 400,
-  rate_limited: 429,
-  internal_error: 500,
-  upstream_unavailable: 503,
-} as const;
+export const PUBLIC_API_ERROR_STATUS_BY_CODE = SHARED_PUBLIC_API_ERROR_STATUS_BY_CODE;
 
 /**
  * Processes a sequence of dashboard API results, handling recoverable errors.
  * Non-recoverable errors pass through as-is, while recoverable errors allow
  * the sequence to continue. Returns all results in order.
- * 
+ *
  * Handles both DashboardPanelResult objects and plain error objects { code, message }.
  * Recoverable errors are mapped to their PUBLIC_API_ERROR_STATUS_BY_CODE status values.
  */
@@ -95,13 +83,13 @@ export async function withRecoverableErrors<T>(
       typeof item.code === "string" &&
       typeof item.message === "string"
     ) {
-      const code = item.code;
-      const isRecoverable = RECOVERABLE_PUBLIC_API_ERROR_CODES.includes(code);
+      const code: DashboardPanelError["code"] = isPublicApiErrorCode(item.code)
+        ? item.code
+        : "unknown_error";
 
-      if (isRecoverable) {
-        const errorStatus = PUBLIC_API_ERROR_STATUS_BY_CODE[code] ?? 503;
+      if (isRecoverablePublicApiErrorCode(code)) {
         results.push(Object.freeze({
-          status: errorStatus,
+          status: SHARED_PUBLIC_API_ERROR_STATUS_BY_CODE[code],
           body: Object.freeze({
             error: Object.freeze({ code, message: item.message }),
           }),
@@ -111,7 +99,7 @@ export async function withRecoverableErrors<T>(
         results.push(Object.freeze({
           status: 500,
           body: Object.freeze({
-            error: Object.freeze({ code: item.code, message: item.message }),
+            error: Object.freeze({ code, message: item.message }),
           }),
         }));
       }
@@ -128,32 +116,24 @@ export async function withRecoverableErrors<T>(
         continue;
       }
 
-      // Error status - check if recoverable
-      if (typeof item.body?.error?.code === "string") {
-        const code = item.body.error.code;
-        const isRecoverable = RECOVERABLE_PUBLIC_API_ERROR_CODES.includes(code);
-
-        if (isRecoverable) {
-          // Map to the proper status code from the public API error status map
-          const errorStatus = PUBLIC_API_ERROR_STATUS_BY_CODE[code] ?? 503;
-          results.push({
-            status: errorStatus,
-            body: Object.freeze({
-              error: Object.freeze({ code, message: item.body.error.message }),
-            }),
-          });
-        } else {
-          // Non-recoverable error - pass through as-is
-          results.push(Object.freeze(item as DashboardPanelResult<T>));
-        }
-        continue;
+      const error = item.body.error;
+      if (isRecoverablePublicApiErrorCode(error.code)) {
+        // Map to the proper status code from the public API error status map
+        results.push(Object.freeze({
+          status: SHARED_PUBLIC_API_ERROR_STATUS_BY_CODE[error.code],
+          body: Object.freeze({
+            error: Object.freeze({ code: error.code, message: error.message }),
+          }),
+        }));
+      } else {
+        // Non-recoverable error - pass through as-is
+        results.push(Object.freeze(item));
       }
-
-      // Unknown status or format - pass through as-is
-      results.push(Object.freeze(item as DashboardPanelResult<T>));
-    } else {
-      results.push(Object.freeze(item as DashboardPanelResult<T>));
+      continue;
     }
+
+    // Unknown status or format - pass through as-is
+    results.push(Object.freeze(item as unknown as DashboardPanelResult<T>));
   }
 
   return results;
@@ -171,12 +151,7 @@ export function isPublicApiResultRecoverable(
     return false;
   }
 
-  if (typeof result.body?.error?.code !== "string") {
-    return false;
-  }
-
-  const code = result.body.error.code;
-  return RECOVERABLE_PUBLIC_API_ERROR_CODES.includes(code);
+  return isRecoverablePublicApiErrorCode(result.body.error.code);
 }
 
 /**

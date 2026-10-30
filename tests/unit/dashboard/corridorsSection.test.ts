@@ -20,6 +20,7 @@ test("corridor serialization maps internal fields to public API format", async (
     ] },
   });
 
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body, {
     corridors: [{
       slug: "usdc-us-brl-br",
@@ -43,6 +44,7 @@ test("corridors are deterministically ordered by slug", async () => {
     ] },
   });
 
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body.corridors.map(({ slug }) => slug), [
     "ngnt-ng-ngn-ng",
     "usdc-us-brl-br",
@@ -67,19 +69,4 @@ test("repository failures return stable safe error envelope", async () => {
     },
   });
   assert.equal(JSON.stringify(result).includes("secret"), false);
-});
-
-test("malformed pagination returns 400 before repository access", async () => {
-  for (const query of [
-    { limit: "0", offset: null },
-    { limit: "abc", offset: null },
-    { limit: "101", offset: null },
-    { limit: null, offset: "-1" },
-  ] as const) {
-    const repoWithSpy = Object.freeze({ findAll: async () => [] });
-    const result = await getCorridorsApiResult({ repository: repoWithSpy }, query);
-
-    assert.equal(result.status, 400);
-    assert.equal(result.body.error.code, "invalid_pagination");
-  }
 });

@@ -7,6 +7,7 @@ import { AnchorsSection, AnchorsSectionView } from "@/components/dashboard/Ancho
 import { CorridorsSection, CorridorsSectionView } from "@/components/dashboard/CorridorsSection";
 import { RatePanel, RatePanelView } from "@/components/dashboard/RatePanel";
 import { ReputationSection, ReputationSectionView } from "@/components/dashboard/ReputationSection";
+import { formatEvidenceTimestamp } from "@/components/ui/EvidenceTimestamp";
 import type { AnchorsApiResult } from "@/types/api/anchors";
 import type { CorridorsApiResult } from "@/types/api/corridors";
 import type { RatesApiResult } from "@/types/api/rates";
@@ -145,6 +146,10 @@ function corridorsErrorResponse(message = "Unable to load corridors."): Corridor
   };
 }
 
+function timestampMarkup(value: string): string {
+  return `<time dateTime="${value}">${formatEvidenceTimestamp(value)}</time>`;
+}
+
 test("RatePanel clears error state upon recovery and restores response data with freshness metadata", () => {
   // 1. Initial simulated transient database outage
   const outageHtml = renderToStaticMarkup(
@@ -167,10 +172,7 @@ test("RatePanel clears error state upon recovery and restores response data with
     recoveredHtml,
     new RegExp(`Latest observation captured ${new Date(CAPTURE_TIME).toLocaleString()}`),
   );
-  assert.match(
-    recoveredHtml,
-    new RegExp(`Evaluated ${new Date(EVALUATION_TIME).toLocaleString()}`),
-  );
+  assert.ok(recoveredHtml.includes(timestampMarkup(EVALUATION_TIME)));
 });
 
 test("ReputationSection clears error state upon recovery and restores score and computation timestamp", () => {
@@ -190,10 +192,7 @@ test("ReputationSection clears error state upon recovery and restores score and 
   assert.doesNotMatch(recoveredHtml, /Reputation database unreachable\./);
   assert.match(recoveredHtml, />88<\/span>/);
   assert.match(recoveredHtml, /Outcomes evaluated: <span[^>]*>142<\/span>/);
-  assert.match(
-    recoveredHtml,
-    new RegExp(`Computed ${new Date(COMPUTED_TIME).toLocaleString()}`),
-  );
+  assert.ok(recoveredHtml.includes(timestampMarkup(COMPUTED_TIME)));
 });
 
 test("AnchorsSection and CorridorsSection clear error state upon recovery", () => {
@@ -285,10 +284,7 @@ test("recovery in one panel does not incorrectly reset sibling panels", () => {
   );
   // Reputation data now active
   assert.match(bothRecoveredHtml, />94<\/span>/);
-  assert.match(
-    bothRecoveredHtml,
-    new RegExp(`Computed ${new Date(COMPUTED_TIME).toLocaleString()}`),
-  );
+  assert.ok(bothRecoveredHtml.includes(timestampMarkup(COMPUTED_TIME)));
 
   // State 4: Transient failure in sibling reputation panel does NOT reset healthy rate panel
   const reputationFailedAgainHtml = renderDashboardRow(

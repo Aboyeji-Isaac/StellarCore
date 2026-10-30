@@ -487,6 +487,7 @@ function reputationRepository(
       id: "row-1",
       anchorSlug: calculation.anchorSlug,
       computedAt: new Date(calculation.computedAt),
+      writeStatus: "written",
     }),
     ...overrides,
   };

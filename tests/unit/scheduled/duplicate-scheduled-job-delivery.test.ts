@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runScheduledRefresh } from "@/lib/scheduled/refresh";
+import { runScheduledRefresh, type ScheduledRefreshDependencies } from "@/lib/scheduled/refresh";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 
 const NOW = new Date("2026-08-31T16:00:00.000Z");
@@ -47,8 +47,6 @@ function runConcurrently<T>(
  * The second delivery should not create duplicate data.
  */
 test("sequential duplicate delivery does not double-count", async () => {
-  // Two refresh runs of the same logical should complete without error
-  // Idempotency: the workflow must handle duplicates gracefully
   await runScheduledRefresh({
     snapshotRates: async () => rateSummary(),
     evaluateReputation: async () =>
@@ -80,7 +78,7 @@ test("sequential duplicate delivery does not double-count", async () => {
 test("concurrent duplicate delivery completes without errors", async () => {
   const concurrency = 4;
 
-  const deps = {
+  const deps: ScheduledRefreshDependencies = {
     snapshotRates: async () => rateSummary(),
     evaluateReputation: async () =>
       ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
@@ -97,7 +95,6 @@ test("concurrent duplicate delivery completes without errors", async () => {
     concurrency,
   );
 
-  // All concurrent runs should complete successfully
   assert.equal(results.length, concurrency);
   assert.equal(
     results.every((r: { ok: boolean }) => r.ok),
@@ -115,7 +112,7 @@ test("concurrent duplicate delivery passes reliably on repeated runs", async () 
   const iterations = 20;
 
   for (let i = 0; i < iterations; i++) {
-    const deps = {
+    const deps: ScheduledRefreshDependencies = {
       snapshotRates: async () => rateSummary(),
       evaluateReputation: async () =>
         ({ attempted: 3, succeeded: 3, failed: 0, failures: [] }) as never,
@@ -136,7 +133,6 @@ test("concurrent duplicate delivery passes reliably on repeated runs", async () 
     }
   }
 
-  // Should have zero failures across 20 iterations
   assert.equal(
     failures,
     0,
@@ -155,7 +151,7 @@ test("distinct legitimate runs remain independent – both commit", async () => 
   let run2SnapshotCount = 0;
   let run2RepCount = 0;
 
-  const deps1 = {
+  const deps1: ScheduledRefreshDependencies = {
     snapshotRates: async () => {
       run1SnapshotCount += 1;
       return rateSummary();
@@ -172,7 +168,7 @@ test("distinct legitimate runs remain independent – both commit", async () => 
     now: () => NOW,
   };
 
-  const deps2 = {
+  const deps2: ScheduledRefreshDependencies = {
     snapshotRates: async () => {
       run2SnapshotCount += 1;
       return rateSummary();
@@ -189,11 +185,9 @@ test("distinct legitimate runs remain independent – both commit", async () => 
     now: () => NOW,
   };
 
-  // Two different logical runs should both execute independently
   await runScheduledRefresh(deps1);
   await runScheduledRefresh(deps2);
 
-  // Each run should have executed once per call
   assert.equal(
     run1SnapshotCount,
     1,
@@ -215,3 +209,4 @@ test("distinct legitimate runs remain independent – both commit", async () => 
     `run2 evaluateReputation called ${run2RepCount} times, expected 1`,
   );
 });
+

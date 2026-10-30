@@ -80,6 +80,6 @@ test("empty or invalid evidence timestamps use the documented fallback", () => {
   const invalidHtml = renderToStaticMarkup(createElement(RatePanelView, {
     result: response("2026-08-28T12:01:00.000Z", "invalid"),
   }));
-  assert.match(invalidHtml, />Unavailable<\/td>/);
+  assert.match(invalidHtml, />Unavailable<\/span>/);
   assert.doesNotMatch(invalidHtml, /Invalid Date/);
 });

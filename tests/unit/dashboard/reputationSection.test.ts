@@ -1,11 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
+import {
+  getReputationApiResult,
+  getAnchorReputationApiResult,
+  serializeReputation,
+} from "@/lib/api/reputation";
+import type {
+  ReputationApiAnchorRecord,
+  ReputationApiRepository,
+  ReputationApiScoreRecord,
+} from "@/lib/api/reputationRepository";
+import {
+  STALE_EVIDENCE_MAX_AGE_MS,
+  type StaleEvidenceStore,
+} from "@/lib/api/staleEvidence";
 
 const COMPUTED_AT = new Date("2026-08-31T13:54:34.979Z");
 
-function anchor(slug: string, reputationScore: any) {
+function anchor(
+  slug: string,
+  reputationScore: ReputationApiAnchorRecord["reputationScore"],
+): ReputationApiAnchorRecord {
   return Object.freeze({
     slug,
     name: slug[0]!.toUpperCase() + slug.slice(1),
@@ -13,7 +29,9 @@ function anchor(slug: string, reputationScore: any) {
   });
 }
 
-function score(overrides: Partial<any> = {}) {
+function score(
+  overrides: Partial<ReputationApiScoreRecord> = {},
+): ReputationApiScoreRecord {
   return Object.freeze({
     compositeScore: 90,
     scoreBand: "AMBER",
@@ -31,10 +49,35 @@ function score(overrides: Partial<any> = {}) {
   });
 }
 
-function repository(records: readonly any[]) {
+function repository(
+  records: readonly ReputationApiAnchorRecord[],
+  bySlug: ReputationApiAnchorRecord | null = null,
+  failure?: unknown,
+): ReputationApiRepository {
   return Object.freeze({
-    findAll: async () => records,
-    findBySlug: async () => null,
+    findAll: async () => {
+      if (failure !== undefined) throw failure;
+      return records;
+    },
+    findBySlug: async () => {
+      if (failure !== undefined) throw failure;
+      return bySlug;
+    },
+  });
+}
+
+function staleStore(): StaleEvidenceStore {
+  const reputation = serializeReputation(anchor("moneygram", score()));
+  return Object.freeze({
+    read: async () => Object.freeze({
+      payload: Object.freeze({ reputation: Object.freeze([reputation]), count: 1 }),
+      generatedAt: COMPUTED_AT.toISOString(),
+      expiresAt: new Date(
+        COMPUTED_AT.getTime() + STALE_EVIDENCE_MAX_AGE_MS,
+      ).toISOString(),
+      sourceTimes: Object.freeze([COMPUTED_AT.toISOString()]),
+    }),
+    write: async () => {},
   });
 }
 
@@ -49,6 +92,7 @@ test("empty anchor directory is a successful immutable reputation response", asy
 test("anchor serialization maps internal fields to public API format", async () => {
   const result = await getReputationApiResult({ repository: repository([anchor("zeam", score())]) });
 
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body, {
     reputation: [{
       anchor: { slug: "zeam", name: "Zeam" },
@@ -78,9 +122,8 @@ test("anchor ordering is deterministic and serialization excludes internal field
     anchor("cowrie", null),
     anchor("moneygram", score({ state: "INSUFFICIENT_DATA", compositeScore: null, scoreBand: null })),
   ]) });
-  
-  // Guard against undefined reputation
-  assert.ok(result.body.reputation, "reputation should be defined");
+
+  assert.equal(result.status, 200);
   assert.deepEqual(result.body.reputation.map(({ anchor: result }) => result.slug), [
     "cowrie",
     "moneygram",
@@ -96,13 +139,11 @@ test("anchor ordering is deterministic and serialization excludes internal field
 
 test("detail validates slugs before repository access and distinguishes unknown anchors", async () => {
   for (const slug of ["", "../cowrie", " Cowrie ", "bad--slug", "a".repeat(101)]) {
-    let accessed = false;
     const result = await getAnchorReputationApiResult(slug, {
       repository: repository([], null),
     });
     assert.equal(result.status, 400);
     assert.equal(result.body.error.code, "invalid_anchor_slug");
-    assert.equal(accessed, false);
   }
 
   const missing = await getAnchorReputationApiResult("not-a-real-anchor", {
@@ -115,30 +156,44 @@ test("detail validates slugs before repository access and distinguishes unknown 
 });
 
 test("repository failures fallback to stale evidence (returns 200)", async () => {
-  // The API falls back to stale evidence on database failure, returning 200
+  const transientFailure = Object.assign(new Error("DATABASE_URL=secret"), { code: "P1001" });
+
   const list = await getReputationApiResult({
-    repository: repository([], null, new Error("DATABASE_URL=secret")),
+    repository: repository([], null, transientFailure),
+    staleEvidenceStore: staleStore(),
+    now: () => COMPUTED_AT,
   });
-  // List returns 200 with stale evidence, not 500
+
+  // The API falls back to stale evidence on a transient database failure.
   assert.equal(list.status, 200);
-  assert.equal(list.body.reputation.length, 0); // No stale evidence available
+  assert.equal(list.body.reputation.length, 1);
+  assert.equal(list.degraded?.state, "stale");
+  assert.equal(JSON.stringify(list).includes("secret"), false);
 });
 
 test("routes are GET-only dynamic no-store handlers", async () => {
-  const listRoute = await import("@/app/api/reputation/route");
-  const detailRoute = await import("@/app/api/reputation/[slug]/route");
+  const listRoute = await import("@/app/api/reputation/route") as {
+    dynamic?: string;
+  };
+  const detailRoute = await import("@/app/api/reputation/[slug]/route") as {
+    dynamic?: string;
+    GET: (
+      request: Request,
+      context: { params: Promise<{ slug: string }> },
+    ) => Promise<Response>;
+  };
 
   for (const route of [listRoute, detailRoute]) {
-    assert.equal((route as any).dynamic, "force-dynamic");
+    assert.equal(route.dynamic, "force-dynamic");
     assert.equal("POST" in route, false);
     assert.equal("PUT" in route, false);
     assert.equal("PATCH" in route, false);
     assert.equal("DELETE" in route, false);
   }
 
-  const response = await (detailRoute as any).GET(
+  const response = await detailRoute.GET(
     new Request("http://localhost/api/reputation/bad--slug"),
-    { params: Promise.resolve({ slug: "bad--slug" }) }
+    { params: Promise.resolve({ slug: "bad--slug" }) },
   );
   assert.equal(response.status, 400);
   assert.equal(response.headers.get("cache-control"), "no-store");

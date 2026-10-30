@@ -40,6 +40,7 @@ test("duplicate anchor/corridor candidates are skipped within one run", async ()
     quote: async () => { quoteCalls += 1; return quote(); },
     repository: repository(),
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
   assert.equal(quoteCalls, 1);
   assert.deepEqual({ attempted: result.totalAttempted, succeeded: result.succeeded, skipped: result.skipped }, {
@@ -61,6 +62,7 @@ test("quote and normalization failures are isolated and safely classified", asyn
       },
       repository: repository(),
       now: () => NOW,
+      configurationFingerprint: "test-fingerprint",
     },
   );
   assert.equal(result.succeeded, 1);
@@ -116,6 +118,7 @@ test("persistence failure does not prevent a later source from succeeding", asyn
     quote: async () => quote(),
     repository: store,
     now: () => NOW,
+    configurationFingerprint: "test-fingerprint",
   });
   assert.equal(result.succeeded, 1);
   assert.deepEqual(result.failures, [{
@@ -132,6 +135,7 @@ function repository(): RateSnapshotRepository {
     findAnchorBySlug: async (slug) => ({ id: slug }),
     findCorridorBySlug: async (slug) => ({ id: slug }),
     hasAssociation: async () => true,
-    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input }),
+    findProvenanceBySnapshotId: async () => null,
+    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input, provenanceUnavailable: false }),
   };
 }

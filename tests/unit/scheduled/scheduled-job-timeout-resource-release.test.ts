@@ -275,7 +275,6 @@ async function settleWithin(run: JobRun, budgetMs = 2_000): Promise<void> {
     timer = setTimeout(() => {
       reject(new Error(`the job never released its resources (${budgetMs}ms budget)`));
     }, budgetMs);
-    timer.unref?.();
   });
 
   try {
@@ -781,7 +780,12 @@ test("a transaction timeout in the scheduled evidence read fails closed, is not 
     readEvidence: async () => (result.ok ? null : result.failure),
     upsertScore: async () => {
       upserts += 1;
-      return { id: "score-1", anchorSlug: "zeam", computedAt: NOW };
+      return {
+        id: "score-1",
+        anchorSlug: "zeam",
+        computedAt: NOW,
+        writeStatus: "written",
+      };
     },
   };
 

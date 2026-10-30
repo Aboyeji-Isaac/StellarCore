@@ -117,6 +117,7 @@ test("duplicate candidate identity skips re-ingesting the same reviewed source i
     },
     repository: repository(),
     now: () => new Date("2026-08-27T12:00:00.000Z"),
+    configurationFingerprint: "test-configuration-fingerprint",
   });
 
   assert.equal(observedIdentities, 1);
@@ -143,6 +144,7 @@ function repository(): RateSnapshotRepository {
     findAnchorBySlug: async (slug) => ({ id: slug }),
     findCorridorBySlug: async (slug) => ({ id: slug }),
     hasAssociation: async () => true,
-    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input }),
+    findProvenanceBySnapshotId: async () => null,
+    createSnapshot: async (input) => ({ id: `snapshot-${++count}`, ...input, provenanceUnavailable: false }),
   };
 }

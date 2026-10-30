@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { RatePanelView } from "@/components/dashboard/RatePanel";
+import { formatEvidenceTimestamp } from "@/components/ui/EvidenceTimestamp";
 import { getRatesApiResult } from "@/lib/api/rates";
 import { createFileStaleEvidenceStore, STALE_EVIDENCE_MAX_AGE_MS } from "@/lib/api/staleEvidence";
 import type { LatestCorridorRate } from "@/types/latestRates";
@@ -65,6 +66,11 @@ function render(result: RatesApiResult): string {
   );
 }
 
+function timestampMarkup(value: Date): string {
+  const iso = value.toISOString();
+  return `<time dateTime="${iso}">${formatEvidenceTimestamp(iso)}</time>`;
+}
+
 test("a panel keeps previously loaded evidence only as an explicitly stale response", async () => {
   const directory = await mkdtemp(join(tmpdir(), "stellar-panel-states-"));
   const staleEvidenceStore = createFileStaleEvidenceStore(directory);
@@ -120,11 +126,11 @@ test("a panel keeps previously loaded evidence only as an explicitly stale respo
     assert.ok(staleHtml.includes("1 second old"));
     assert.match(staleHtml, /It is not a fresh observation\./);
     assert.equal(
-      staleHtml.includes(`Evaluated ${outageAt.toLocaleString()}`),
+      staleHtml.includes(timestampMarkup(outageAt)),
       false,
       "a failed refresh must not publish a newer evaluation time",
     );
-    assert.ok(staleHtml.includes(`Evaluated ${START.toLocaleString()}`));
+    assert.ok(staleHtml.includes(timestampMarkup(START)));
     assert.ok(staleHtml.includes(`Latest observation captured ${new Date(FIRST_SOURCE).toLocaleString()}`));
 
     mode = "recovered";
@@ -137,7 +143,7 @@ test("a panel keeps previously loaded evidence only as an explicitly stale respo
     const recoveredHtml = render(recovered);
     assert.equal(recoveredHtml.includes('data-testid="rate-evidence-degraded"'), false);
     assert.equal(recoveredHtml.includes("Stale evidence"), false);
-    assert.ok(recoveredHtml.includes(`Evaluated ${recoveredAt.toLocaleString()}`));
+    assert.ok(recoveredHtml.includes(timestampMarkup(recoveredAt)));
     assert.ok(recoveredHtml.includes(`Latest observation captured ${new Date(RECOVERED_SOURCE).toLocaleString()}`));
     assert.match(recoveredHtml, /1\.50/);
   } finally {
@@ -226,7 +232,7 @@ test("a stale panel is replaced by a fresh healthy panel on the next successful 
     assert.equal(recovered.degraded, undefined);
     const html = render(recovered);
     assert.equal(html.includes("Stale evidence"), false);
-    assert.ok(html.includes(`Evaluated ${recoveredAt.toLocaleString()}`));
+    assert.ok(html.includes(timestampMarkup(recoveredAt)));
     assert.match(html, /1\.25/);
   } finally {
     await rm(directory, { recursive: true, force: true });
