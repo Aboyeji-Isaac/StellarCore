@@ -23,6 +23,10 @@ const T0 = new Date("2026-08-27T12:00:00.000Z");
 // T1 is 2 hours later, past the 15-minute freshness threshold
 const T1 = new Date(T0.getTime() + 2 * 60 * 60 * 1000);
 
+function dateValue(value: Date | string): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
 function createCandidate(anchorSlug: string): RateCandidate {
   return Object.freeze({
     anchorSlug,
@@ -123,7 +127,7 @@ test("capture failure before validation boundary (network/quote failure) does no
   });
   assert.equal(initialRun.succeeded, 1);
   assert.equal(store.records.length, 1);
-  assert.equal(store.records[0]?.capturedAt.getTime(), T0.getTime());
+  assert.equal(dateValue(store.records[0]!.capturedAt).getTime(), T0.getTime());
 
   // At T0, the observation is fresh
   const freshnessAtT0 = getRateFreshness(store.records[0]!.capturedAt, T0);
@@ -145,7 +149,7 @@ test("capture failure before validation boundary (network/quote failure) does no
 
   // Repository must not have been modified or updated with a new snapshot or timestamp
   assert.equal(store.records.length, 1);
-  assert.equal(store.records[0]?.capturedAt.getTime(), T0.getTime());
+  assert.equal(dateValue(store.records[0]!.capturedAt).getTime(), T0.getTime());
 
   // Freshness evaluated at T1 must reflect the age since T0 (now stale), NOT refreshed to T1
   const freshnessAtT1 = getRateFreshness(store.records[0]!.capturedAt, T1);
@@ -197,7 +201,7 @@ test("capture failure during normalization (validation boundary) preserves prior
 
     // Repository continues to hold only the initial snapshot with T0 timestamp
     assert.equal(store.records.length, 1);
-    assert.equal(store.records[0]?.capturedAt.getTime(), T0.getTime());
+    assert.equal(dateValue(store.records[0]!.capturedAt).getTime(), T0.getTime());
   }
 
   // Evaluated at T1, freshness state is stale based strictly on original T0
@@ -238,7 +242,7 @@ test("capture failure at persistence boundary does not advance freshness state",
 
   // Existing store remains at T0
   assert.equal(store.records.length, 1);
-  assert.equal(store.records[0]?.capturedAt.getTime(), T0.getTime());
+  assert.equal(dateValue(store.records[0]!.capturedAt).getTime(), T0.getTime());
   assert.equal(store.records[0]?.rate, "1");
 
   // Read model confirms freshness is not advanced

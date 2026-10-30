@@ -3,7 +3,6 @@ import test, { afterEach } from "node:test";
 import { createElement } from "react";
 import * as React from "react";
 import { render, cleanup } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 
 // --- happy-dom global setup for @testing-library/react ---

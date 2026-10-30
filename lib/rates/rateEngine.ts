@@ -15,7 +15,7 @@ export async function runRateEngine(
     quote: RateQuoteProvider;
     repository: RateSnapshotRepository;
     now?: () => Date;
-Run npm run test:e2e    configurationFingerprint?: string;
+    configurationFingerprint?: string;
   }>,
 ): Promise<RateEngineResult> {
   const seen = new Set<string>();
@@ -54,17 +54,13 @@ Run npm run test:e2e    configurationFingerprint?: string;
         quote,
         capturedAt: dependencies.now?.() ?? new Date(),
       });
-// <<<<<<< feat/link-rate-snapshots-to-capture-run
-//       observation = candidate.captureRunId
-//         ? Object.freeze({ ...normalized, captureRunId: candidate.captureRunId })
-//         : normalized;
-// =======
-//       // Add fingerprint from dependencies
-//       observation = {
-//         ...observation,
-//         configurationFingerprint: dependencies.configurationFingerprint,
-//       };
-// >>>>>>> development
+      observation = Object.freeze({
+        ...normalized,
+        ...(dependencies.configurationFingerprint !== undefined
+          ? { configurationFingerprint: dependencies.configurationFingerprint }
+          : {}),
+        ...(candidate.captureRunId ? { captureRunId: candidate.captureRunId } : {}),
+      });
     } catch (error) {
       failures.push(engineFailure(
         candidate,

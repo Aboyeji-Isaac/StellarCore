@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import * as anchorDetailRoute from "@/app/api/anchors/[slug]/route";
-import * as anchorsListRoute from "@/app/api/anchors/route";
-import * as corridorDetailRoute from "@/app/api/corridors/[slug]/route";
-import * as corridorsListRoute from "@/app/api/corridors/route";
 import * as ratesRoute from "@/app/api/rates/route";
-import * as rateHistoryRoute from "@/app/api/rates/history/route";
-import * as reputationDetailRoute from "@/app/api/reputation/[slug]/route";
-import * as reputationListRoute from "@/app/api/reputation/route";
 
 import { isValidRequestId } from "@/lib/api/requestId";
 import {
@@ -25,12 +18,6 @@ import {
   getAnchorReputationApiResult,
   getReputationApiResult,
 } from "@/lib/api/reputation";
-
-import {
-  PUBLIC_API_ERROR_CODES,
-  PUBLIC_API_ERROR_STATUS_BY_CODE,
-  type PublicApiErrorCode,
-} from "@/types/api/errors";
 
 /**
  * Pinned public error codes and canonical public error messages across all

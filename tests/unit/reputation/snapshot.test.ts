@@ -89,8 +89,8 @@ test("readInReputationSnapshot succeeds on first attempt without retrying", asyn
     ): Promise<R> => {
       transactionCalls += 1;
       const fakeTx = {
-        $executeRawUnsafe: async (sql: string) => {
-          assert.equal(sql, "SET TRANSACTION READ ONLY");
+        $executeRaw: async (query: TemplateStringsArray) => {
+          assert.equal(query.join(""), "SET TRANSACTION READ ONLY");
           return 1;
         },
         $queryRaw: async () => [
@@ -133,7 +133,7 @@ test("readInReputationSnapshot retries on 40001 (serialization failure) and succ
       }
 
       const fakeTx = {
-        $executeRawUnsafe: async () => 1,
+        $executeRaw: async () => 1,
         $queryRaw: async () => [
           { snapshot_id: "snapshot-attempt-2", read_at: new Date("2026-10-19T12:00:01.000Z") },
         ],
@@ -177,7 +177,7 @@ test("readInReputationSnapshot retries on 40P01 (deadlock detected) and 55P03 (l
       }
 
       const fakeTx = {
-        $executeRawUnsafe: async () => 1,
+        $executeRaw: async () => 1,
         $queryRaw: async () => [
           { snapshot_id: "snapshot-attempt-3", read_at: new Date("2026-10-19T12:00:02.000Z") },
         ],
@@ -249,7 +249,7 @@ test("readInReputationSnapshot exits immediately without retrying on ReputationS
     ): Promise<R> => {
       transactionCalls += 1;
       const fakeTx = {
-        $executeRawUnsafe: async () => 1,
+        $executeRaw: async () => 1,
         $queryRaw: async () => [
           { snapshot_id: "snapshot-abort", read_at: new Date() },
         ],
@@ -284,7 +284,7 @@ test("readInReputationSnapshot passes correct transaction options to $transactio
     ): Promise<R> => {
       passedOptions = options;
       const fakeTx = {
-        $executeRawUnsafe: async () => 1,
+        $executeRaw: async () => 1,
         $queryRaw: async () => [{ snapshot_id: "snap", read_at: new Date() }],
       } as unknown as Prisma.TransactionClient;
       return fn(fakeTx);

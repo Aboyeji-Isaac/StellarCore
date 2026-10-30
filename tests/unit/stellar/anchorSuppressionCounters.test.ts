@@ -36,7 +36,6 @@ function makeDependencies(
   const lastOrders = new Map<string, bigint>();
 
   const dependencies: AnchorSyncDependencies = {
-    allocateOrder: async () => 1n,
     discover: async (entry) => {
       run += 1;
       if (runOutcome(run).discovery === "FAIL") {
@@ -149,7 +148,6 @@ test("recovery resets suppression only when discovery and persistence both succe
 
 test("recovery-probe failures remain distinguishable from ordinary failed runs", async () => {
   const notFound: AnchorSyncDependencies = {
-    allocateOrder: async () => 1n,
     discover: async () => {
       throw new Error("simulated discovery failure");
     },
@@ -179,7 +177,6 @@ test("recovery-probe failures remain distinguishable from ordinary failed runs",
   );
 
   const persistedOnlyFailed: AnchorSyncDependencies = {
-    allocateOrder: async () => 1n,
     discover: async (entry) => Object.freeze({ ...entry }) as DiscoveredAnchor,
     allocateOrder: async () => 1n,
     persist: async () => {

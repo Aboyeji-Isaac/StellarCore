@@ -11,7 +11,6 @@ import type { PublicApiErrorReporter } from "@/lib/api/errors";
 import { getReputationApiResult, getAnchorReputationApiResult } from "@/lib/api/reputation";
 import type { ReputationApiRepository } from "@/lib/api/reputationRepository";
 import type { StaleEvidenceStore } from "@/lib/api/staleEvidence";
-import type { PublicApiErrorReporter } from "@/lib/api/errors";
 
 // ---------------------------------------------------------------------------
 // Helpers

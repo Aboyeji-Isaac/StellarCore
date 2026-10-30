@@ -119,25 +119,33 @@ test.describe("persisted-evidence views — controlled API error", () => {
   test("anchors view surfaces the safe error without crashing", async ({ page }) => {
     const anchors = view(page, "anchors");
     await expectHeading(page, "anchors");
-    await expect(anchors.getByRole("alert")).toHaveText("Unable to load anchors.");
+    await expect(anchors.getByRole("alert").getByTestId("section-error-message")).toHaveText(
+      "Unable to load anchors.",
+    );
   });
 
   test("corridors view surfaces the safe error without crashing", async ({ page }) => {
     const corridors = view(page, "corridors");
     await expectHeading(page, "corridors");
-    await expect(corridors.getByRole("alert")).toHaveText("Unable to load corridors.");
+    await expect(corridors.getByRole("alert").getByTestId("section-error-message")).toHaveText(
+      "Unable to load corridors.",
+    );
   });
 
   test("rate view surfaces the safe error without crashing", async ({ page }) => {
     const rates = view(page, "rates");
     await expectHeading(page, "rates");
-    await expect(rates.getByRole("alert")).toHaveText("Unable to read rates.");
+    await expect(rates.getByRole("alert").getByTestId("section-error-message")).toHaveText(
+      "Unable to read rates.",
+    );
   });
 
   test("reputation view surfaces the safe error without crashing", async ({ page }) => {
     const reputation = view(page, "reputation");
     await expectHeading(page, "reputation");
-    await expect(reputation.getByRole("alert")).toHaveText("Unable to load reputation.");
+    await expect(reputation.getByRole("alert").getByTestId("section-error-message")).toHaveText(
+      "Unable to load reputation.",
+    );
   });
 });
 
