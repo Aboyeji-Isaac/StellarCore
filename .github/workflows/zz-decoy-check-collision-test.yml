@@ -1,0 +1,24 @@
+name: Decoy check-name collision test (inert, temporary)
+
+# TEMPORARY SECURITY TEST - never merge. Simulates an untrusted PR adding a job
+# whose name collides with the trusted required check. It has no permissions,
+# no checkout, no actions, no network access, and no secrets: it only sleeps
+# and echoes so it completes after the trusted scanner.
+on:
+  pull_request:
+    branches: [development]
+  pull_request_review:
+    types: [submitted]
+
+permissions: {}
+
+jobs:
+  decoy:
+    name: Scan untrusted PR changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inert delay so the decoy completes after the trusted scanner
+        run: sleep 90
+      - name: Report inert decoy success
+        run: echo "Inert decoy for event ${{ github.event_name }}; no checkout, no secrets, no network."
