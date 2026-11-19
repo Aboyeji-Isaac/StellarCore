@@ -870,27 +870,37 @@ authentication, or live Stellar reads.
 
 StellarCore is community-maintained. Every anchor, corridor, and feature addition is a welcome contribution.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch protection and pull request workflow.
+Use the [fork-and-branch workflow](CONTRIBUTING.md#fork-and-branch): fork the
+upstream repository, create a focused branch from `development` (for example,
+`docs/contributing-development-base` for documentation), and open the pull
+request against `development`, not `main`. See
+[review requirements](CONTRIBUTING.md#review-requirements) for the checks and
+maintainer review applied to every pull request.
+
+When describing data or documentation changes, distinguish read-only persisted
+evidence from current anchor availability, firm SEP-38 quotes, or verified
+transfers; see [How It Works](README.md#how-it-works) and
+[The Public API](README.md#4-the-public-api).
 
 ### Adding an Anchor
 
-1. Fork the repository and create a branch.
+1. Fork the repository and create a focused branch from `development`.
 2. Propose a reviewed registry change in `constants/anchors.ts` and, when needed, `constants/corridors.ts`.
-3. Include tests appropriate to the change and open a PR with the source used for the review.
+3. Include tests appropriate to the change and open a PR against `development` with the source used for the review.
 
 ### Adding a Corridor
 
 1. Add the corridor definition to `constants/corridors.ts`.
 2. Associate it only with reviewed anchor support.
-3. Open a PR with evidence for the association.
+3. Open a PR against `development` with evidence for the association.
 
 ### Code Contributions
 
-- Fork the repo
-- Create a branch off `main`
-- Write tests for all new logic
-- Ensure `npx tsc --noEmit` and `npm test` pass
-- Open a PR with a clear description of the change
+- Fork the repository.
+- Create a focused branch from `development`; use `docs/<topic>` for documentation changes.
+- Write tests for all new logic.
+- Ensure `npx tsc --noEmit`, `npm run lint`, and `npm test` pass.
+- Open a PR against `development` with a clear description of the change.
 
 ---
 
