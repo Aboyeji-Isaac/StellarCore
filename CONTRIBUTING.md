@@ -12,7 +12,7 @@ and work from your fork.
 
 ## Branches
 
-Create a focused branch from `main` using one of these prefixes:
+Create a focused branch from `development` using one of these prefixes:
 
 - `feat/` for a new feature
 - `fix/` for a bug fix
@@ -31,7 +31,7 @@ npm run lint
 npm test
 ```
 
-Open a pull request from your fork's branch into `main`. Describe what changed,
+Open a pull request from your fork's branch into `development`. Describe what changed,
 include relevant tests and evidence, reference the issue being resolved when
 applicable (for example `Closes #12`), and add a changelog entry under
 `Unreleased` when applicable — see [Changelog](#changelog) below.
@@ -54,11 +54,15 @@ under the `Unreleased` section in the same pull request:
 Small typo fixes and changes that are purely internal to CI or tooling do not
 need an entry.
 
-## Protected Main Branch
+## Branch Protection and Review
 
-The `main` branch is protected. All changes must go through a pull request and
-receive approval from at least one maintainer. Direct pushes to `main` are
-rejected.
+The `development` branch is the active contribution target and is protected.
+All changes must go through a pull request and receive approval from at least
+one maintainer. Direct pushes to `development` are rejected.
+
+> **Historical note:** `main` was the previous contribution target and remains
+> a protected release branch. It is no longer the recommended PR base; target
+> `development` for all new contributions.
 
 ## Evidence Integrity
 

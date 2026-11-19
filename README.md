@@ -874,23 +874,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch protection and pull reques
 
 ### Adding an Anchor
 
-1. Fork the repository and create a branch.
+1. Fork the repository and create a branch off `development`.
 2. Propose a reviewed registry change in `constants/anchors.ts` and, when needed, `constants/corridors.ts`.
-3. Include tests appropriate to the change and open a PR with the source used for the review.
+3. Include tests appropriate to the change and open a PR targeting `development` with the source used for the review.
 
 ### Adding a Corridor
 
 1. Add the corridor definition to `constants/corridors.ts`.
 2. Associate it only with reviewed anchor support.
-3. Open a PR with evidence for the association.
+3. Open a PR targeting `development` with evidence for the association.
 
 ### Code Contributions
 
 - Fork the repo
-- Create a branch off `main`
+- Create a branch off `development`
 - Write tests for all new logic
 - Ensure `npx tsc --noEmit` and `npm test` pass
-- Open a PR with a clear description of the change
+- Open a PR targeting `development` with a clear description of the change
 
 ---
 
