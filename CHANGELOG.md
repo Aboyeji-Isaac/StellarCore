@@ -37,6 +37,7 @@ with your pull request.
 - Database deadline and transaction-safety helpers for failover windows, including explicit ambiguous-commit reporting (#209).
 - Isolated PostgreSQL wire-level failover tests covering outage, recovery, interrupted transactions, deadlines, and pool storm bounds (#209).
 - Operational failover behavior and tuning guidance in `docs/database-failover.md` (#209).
+- Public API error troubleshooting guide covering the bounded envelope, current request-ID limitations, 429 handling, and safe report redaction (#596).
 
 ### Fixed
 
