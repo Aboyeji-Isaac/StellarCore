@@ -42,6 +42,13 @@ test("[R1] quote-phase fault fails exactly one source without fabricating succes
   assert.deepEqual(ledger.idsForAnchor("anchor-a"), []);
   assert.equal(ledger.idsForAnchor("anchor-b").length, 1);
   assert.equal(ledger.idsForAnchor("anchor-c").length, 1);
+  // Committed rows share one capture-run identity; the failed source left
+  // neither a snapshot nor a provenance row.
+  assert.deepEqual(
+    [...new Set(ledger.rows.map(({ captureRunId }) => captureRunId))],
+    [result.captureRunId],
+  );
+  assert.equal(ledger.rows.every(({ configurationDigest }) => configurationDigest === "c".repeat(64)), true);
 });
 
 // [R2] A persistence fault mid-cycle: the quote succeeded but nothing is
@@ -218,6 +225,7 @@ function candidate(anchorSlug: string): RateCandidate {
       countryTo: "NG",
     }),
     request: Object.freeze({ sellAsset: USDC, buyAsset: NGN, sellAmount: "100", context: "sep31" }),
+    configurationDigest: "c".repeat(64),
   });
 }
 

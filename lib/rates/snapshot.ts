@@ -1,3 +1,4 @@
+import type { RateSnapshotProvenanceInput } from "@/types/rateProvenance";
 import type {
   NormalizedRateObservation,
   PersistedRateSnapshot,
@@ -34,6 +35,7 @@ async function evidenceDb(): Promise<
 
 export async function persistRateSnapshot(
   observation: NormalizedRateObservation,
+  provenance: RateSnapshotProvenanceInput,
   repository: RateSnapshotRepository = PRISMA_RATE_SNAPSHOT_REPOSITORY,
 ): Promise<RateSnapshotPersistenceResult> {
   try {
@@ -53,6 +55,9 @@ export async function persistRateSnapshot(
       destinationAmount: observation.destinationAmount,
       fee: observation.fee,
       capturedAt: observation.capturedAt,
+      // Capture-time provenance (#113) is written in the same transaction as
+      // the snapshot row, so a snapshot can never exist without lineage.
+      provenance,
     });
     const snapshot: PersistedRateSnapshot = Object.freeze({
       id: row.id,
@@ -100,16 +105,33 @@ export const PRISMA_RATE_SNAPSHOT_REPOSITORY: RateSnapshotRepository =
   async createSnapshot(input) {
     const environment = await evidenceDb();
     if (!environment.ok) throw new EnvironmentIsolationRejection();
-    return environment.db.rateSnapshot.create({
-      data: input,
-      select: {
-        id: true,
-        rate: true,
-        sourceAmount: true,
-        destinationAmount: true,
-        fee: true,
-        capturedAt: true,
-      },
+    const { provenance, ...snapshotInput } = input;
+    return environment.db.$transaction(async (tx) => {
+      const snapshot = await tx.rateSnapshot.create({
+        data: snapshotInput,
+        select: {
+          id: true,
+          rate: true,
+          sourceAmount: true,
+          destinationAmount: true,
+          fee: true,
+          capturedAt: true,
+        },
+      });
+      const provenanceRow = await tx.rateSnapshotProvenance.create({
+        data: {
+          snapshotId: snapshot.id,
+          captureRunId: provenance.captureRunId,
+          sourceType: provenance.sourceType,
+          anchorSlug: provenance.anchorSlug,
+          corridorSlug: provenance.corridorSlug,
+          configurationDigest: provenance.configurationDigest,
+          requestShapeVersion: provenance.requestShapeVersion,
+          capturedAt: provenance.capturedAt,
+        },
+        select: { id: true },
+      });
+      return { ...snapshot, provenanceId: provenanceRow.id };
     });
   },
 });

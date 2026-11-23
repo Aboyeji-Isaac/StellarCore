@@ -1,5 +1,6 @@
 import { consolePublicApiErrorReporter, publicApiErrorResult } from "@/lib/api/errors";
 import { publicApiJsonResponse } from "@/lib/api/http";
+import { publicApiJsonResponse, respondUnlessRequestAborted } from "@/lib/api/http";
 import { getRateLimiter } from "@/lib/api/rateLimiter";
 import { getAnchorReputationApiResult } from "@/lib/api/reputation";
 import { staleEvidenceHeaders } from "@/lib/api/staleEvidence";
@@ -10,8 +11,9 @@ export async function GET(
   request: Request,
   context: Readonly<{ params: Promise<Readonly<{ slug: string }>> }>,
 ): Promise<Response> {
-  const decision = await getRateLimiter().check(request, Date.now());
-  if (!decision.allowed) return decision.response;
+  return respondUnlessRequestAborted(request, async () => {
+    const decision = await getRateLimiter().check(request, Date.now());
+    if (!decision.allowed) return decision.response;
 
   try {
     const { slug } = await context.params;
@@ -32,4 +34,12 @@ export async function GET(
       request,
     );
   }
+    const { slug } = await context.params;
+    const result = await getAnchorReputationApiResult(slug, { signal: request.signal });
+
+    return publicApiJsonResponse(
+      result,
+      staleEvidenceHeaders("degraded" in result ? result.degraded : undefined),
+    );
+  });
 }

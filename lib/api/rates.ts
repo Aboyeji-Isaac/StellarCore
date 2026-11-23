@@ -31,10 +31,11 @@ export type RatesApiDependencies = Readonly<{
   now?: () => Date;
   staleEvidenceStore?: StaleEvidenceStore;
   reportError?: PublicApiErrorReporter;
+  signal?: AbortSignal;
 }>;
 
 export async function getRatesApiResult(
-  corridorParameter: string | null,
+  corridorParameter: string | readonly string[] | null,
   dependencies: RatesApiDependencies = {},
 ): Promise<RatesApiResult> {
   const validation = validateCorridorParameter(corridorParameter);
@@ -49,6 +50,9 @@ export async function getRatesApiResult(
   try {
     result = await read(validation.corridorSlug, { evaluatedAt });
   } catch (error) {
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     if (isTransientDatabaseFailure(error)) {
       const stale = await restoreStaleEvidence(store, snapshotKey, evaluatedAt);
       if (stale) {
@@ -61,6 +65,10 @@ export async function getRatesApiResult(
     }
     reportError(dependencies, error, "rates.read");
     return publicApiErrorResult("internal_error", "Unable to read rates.");
+  }
+
+  if (dependencies.signal?.aborted) {
+    throw dependencies.signal.reason ?? new Error("The operation was aborted");
   }
 
   if (!result.ok) {
@@ -147,7 +155,7 @@ export function serializeRates(result: LatestCorridorRate): PublicRatesResponse 
 }
 
 function validateCorridorParameter(
-  value: string | null,
+  value: string | readonly string[] | null,
 ):
   | Readonly<{ ok: true; corridorSlug: string }>
   | Readonly<{ ok: false; result: RatesApiResult }> {
@@ -155,6 +163,13 @@ function validateCorridorParameter(
     return Object.freeze({
       ok: false,
       result: publicApiErrorResult("missing_corridor", "A corridor slug is required."),
+    });
+  }
+
+  if (typeof value !== "string") {
+    return Object.freeze({
+      ok: false,
+      result: publicApiErrorResult("invalid_corridor", "The corridor slug is invalid."),
     });
   }
 

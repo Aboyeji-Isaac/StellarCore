@@ -10,12 +10,15 @@ import {
 } from "@/lib/scheduled/suppressionRepository";
 import type { SafeLiveRateRunSummary } from "@/types/liveRateSource";
 import type { ScheduledRateFailure, ScheduledRefreshResult } from "@/types/scheduled";
+import { randomUUID } from "node:crypto";
 
 export type ScheduledRefreshDependencies = Readonly<{
   snapshotRates: () => Promise<SafeLiveRateRunSummary>;
   evaluateReputation: (options: Readonly<{ evaluatedAt: Date }>) => Promise<ReputationEvaluationRunSummary>;
   suppressions?: SuppressionRepository;
   now: () => Date;
+  runId?: string;
+  attempt?: number;
 }>;
 
 /**
@@ -28,6 +31,8 @@ export async function runScheduledRefresh(
   dependencies: ScheduledRefreshDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<ScheduledRefreshResult> {
   const startedAt = dependencies.now();
+  const runId = dependencies.runId ?? randomUUID();
+  const attempt = dependencies.attempt ?? 1;
   let rates: ScheduledRefreshResult["rates"];
 
   try {
@@ -47,8 +52,10 @@ export async function runScheduledRefresh(
 
   return Object.freeze({
     ok: rates.failed === 0 && reputation.failed === 0,
+    runId,
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
+    attempt,
     rates,
     reputation: Object.freeze({
       attempted: reputation.attempted,

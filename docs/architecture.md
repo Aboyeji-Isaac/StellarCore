@@ -55,6 +55,14 @@ persists successful observations as individual rate snapshots. A failed
 source is isolated and reported; it does not turn an unverified response into
 evidence.
 
+Every persisted snapshot is written together with immutable capture-time
+provenance: the capture-run identity, reviewed source type, anchor/corridor
+identity, reviewed configuration digest, and request-shape version used to
+select the candidate. Legacy snapshots predating provenance keep unknown
+lineage rather than reconstructed metadata. See `docs/rate-provenance.md` for
+the fingerprint canonicalization rules, redaction rules, and the internal
+trace path.
+
 The latest-rate read model selects the newest snapshot per anchor/corridor
 source, evaluates freshness at read time, and calculates a median only from
 the required number of fresh independent sources. Freshness is inclusive at

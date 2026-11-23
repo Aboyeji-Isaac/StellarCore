@@ -23,7 +23,6 @@ import type {
   PublicReputationScoreBand,
   PublicReputationState,
   ReputationApiDetailResult,
-  ReputationApiErrorResponse,
   ReputationApiListResult,
 } from "@/types/api/reputation";
 
@@ -32,6 +31,7 @@ export type ReputationApiDependencies = Readonly<{
   staleEvidenceStore?: StaleEvidenceStore;
   now?: () => Date;
   reportError?: PublicApiErrorReporter;
+  signal?: AbortSignal;
 }>;
 
 export async function getReputationApiResult(
@@ -43,9 +43,15 @@ export async function getReputationApiResult(
   try {
     const repository = dependencies.repository ?? PRISMA_REPUTATION_API_REPOSITORY;
     const body = serializeReputationList(await repository.findAll());
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     await saveLastKnownGoodEvidence(store, key, body, reputationSourceTimes(body.reputation), now);
     return Object.freeze({ status: 200, body });
   } catch (error) {
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     if (isTransientDatabaseFailure(error)) {
       const stale = await restoreStaleEvidence(store, key, now);
       if (stale) {
@@ -82,12 +88,18 @@ export async function getAnchorReputationApiResult(
       return publicApiErrorResult("anchor_not_found", "Anchor not found.");
     }
     const body = Object.freeze({ reputation: serializeReputation(record) });
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     await saveLastKnownGoodEvidence(store, key, body, reputationSourceTimes([body.reputation]), now);
     return Object.freeze({
       status: 200,
       body,
     });
   } catch (error) {
+    if (dependencies.signal?.aborted) {
+      throw dependencies.signal.reason ?? new Error("The operation was aborted");
+    }
     if (isTransientDatabaseFailure(error)) {
       const stale = await restoreStaleEvidence(store, key, now);
       if (stale) {
