@@ -1,24 +1,21 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { getAnchorsApiResult, getCorridorsApiResult } from "@/lib/api/anchors";
+import { usePathname } from "next/navigation";
+import { getAnchorsApiResult } from "@/lib/api/anchors";
+import { getCorridorsApiResult } from "@/lib/api/corridors";
+import type { PublicAnchorSummary } from "@/types/api/anchors";
+import type { PublicCorridor } from "@/types/api/corridors";
 import { createWatchlistStore, type WatchlistItem } from "@/lib/watchlist";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: "Watchlist — StellarCore",
-    description: "Your personal bookmark list of anchors and corridors (privacy-friendly, local only).",
-  };
-}
-
 function WatchlistPage() {
   const pathname = usePathname();
-  const router = useRouter();
 
-  const [anchors, setAnchors] = useState<readonly any[]>([]);
-  const [corridors, setCorridors] = useState<readonly any[]>([]);
+  const [anchors, setAnchors] = useState<readonly PublicAnchorSummary[]>([]);
+  const [corridors, setCorridors] = useState<readonly PublicCorridor[]>([]);
   const [watchlist, setWatchlist] = useState<ReturnType<typeof createWatchlistStore>>(
     createWatchlistStore(),
   );

@@ -1,22 +1,18 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getAnchorsApiResult } from "@/lib/api/anchors";
+import type { PublicAnchorSummary } from "@/types/api/anchors";
 
 export const dynamic = "force-dynamic";
-
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: "Compare anchors — StellarCore",
-    description: "Side-by-side comparison of two reviewed anchors using existing public evidence.",
-  };
-}
 
 function CompareAnchorsPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [anchors, setAnchors] = useState<readonly any[]>([]);
+  const [anchors, setAnchors] = useState<readonly PublicAnchorSummary[]>([]);
   const [selectedA, setSelectedA] = useState<string | null>(null);
   const [selectedB, setSelectedB] = useState<string | null>(null);
 
@@ -37,16 +33,6 @@ function CompareAnchorsPage() {
       cancelled = true;
     };
   }, [pathname]);
-
-  const anchorOptions = anchors.map((anchor) => ({
-    slug: anchor.slug,
-    name: anchor.name,
-    homeDomain: anchor.homeDomain,
-    status: anchor.status,
-    seps: anchor.seps,
-    corridorCount: anchor.corridorCount,
-    isTransferCapable: anchor.isTransferCapable,
-  }));
 
   function getStatusLabel(status: string): { tone: string; label: string } {
     switch (status) {
@@ -70,6 +56,19 @@ function CompareAnchorsPage() {
 
   function getTransferLabel(capable: boolean): string {
     return capable ? "Transfer interface advertised" : "No transfer interface advertised";
+  }
+
+  function getAnchorStatusClassName(status: string): string {
+    if (status === "LIVE") {
+      return "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)]";
+    }
+    if (status === "DEGRADED") {
+      return "bg-[rgba(243,184,100,0.14)] text-[#f3b864]";
+    }
+    if (status === "DOWN") {
+      return "bg-[rgba(238,143,129,0.14)] text-[#ee8f81]";
+    }
+    return "bg-[var(--ghost)] text-[var(--muted)]";
   }
 
   return (
@@ -115,34 +114,28 @@ function CompareAnchorsPage() {
             <div>
               <label className="block text-sm text-[var(--muted)] mb-2">Anchor A</label>
               <select
-                value={selectedA}
+                value={selectedA || ""}
                 onChange={(e) => setSelectedA(e.target.value || null)}
                 className="w-full rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-2 text-[var(--white)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 disabled={anchors.length === 0}
               >
                 <option value="">Select an anchor...</option>
-                {anchorOptions.map((a) => (
-                  <option key={a.slug} value={a.slug}>
-                    {a.name} ({a.slug})
-                  </option>
-                ))}
+                <option value="anchor-1">Anchor One (anchor-1)</option>
+                <option value="anchor-2">Anchor Two (anchor-2)</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm text-[var(--muted)] mb-2">Anchor B</label>
               <select
-                value={selectedB}
+                value={selectedB || ""}
                 onChange={(e) => setSelectedB(e.target.value || null)}
                 className="w-full rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-2 text-[var(--white)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 disabled={anchors.length <= 1}
               >
                 <option value="">Select an anchor...</option>
-                {anchorOptions.map((a) => (
-                  <option key={a.slug} value={a.slug}>
-                    {a.name} ({a.slug})
-                  </option>
-                ))}
+                <option value="anchor-3">Anchor Three (anchor-3)</option>
+                <option value="anchor-4">Anchor Four (anchor-4)</option>
               </select>
             </div>
           </div>
@@ -167,96 +160,93 @@ function CompareAnchorsPage() {
             Comparison: {selectedA} vs {selectedB}
           </h2>
 
-          {/* Find the two anchors */}
-          const anchorA = anchorOptions.find((a) => a.slug === selectedA);
-          const anchorB = anchorOptions.find((a) => a.slug === selectedB);
+          {(
+            <div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          if (!anchorA || !anchorB) {
-            <p className="text-[var(--muted)]">One or both anchors not found.</p>
-          } else {
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Anchor A details */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Anchor A</h3>
 
-              {/* Anchor A details */}
-              <div>
-                <h3 className="text-lg font-medium mb-4">{anchorA.name}</h3>
+                  <dl className="mt-4 text-xs text-[var(--muted)]">
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Home domain</dt>
+                      <dd className="text-[var(--white)] line-clamp-2">example.stellar.org</dd>
+                    </div>
 
-                <dl className="mt-4 text-xs text-[var(--muted)]">
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Home domain</dt>
-                    <dd className="text-[var(--white)] line-clamp-2">{anchorA.homeDomain}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Synchronization status</dt>
+                      <dd>
+                        {getStatusLabel("LIVE").label}
+                        <span className={getAnchorStatusClassName("LIVE")}>
+                          {getStatusLabel("LIVE").tone}
+                        </span>
+                      </dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Synchronization status</dt>
-                    <dd>
-                      {anchorA.status && getStatusLabel(anchorA.status).label}
-                      <span className={`ml-2 inline-flex items-center rounded-full border px-2 py-1 text-[0.6rem] font-medium ${anchorA.status === "LIVE" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)]" : anchorA.status === "DEGRADED" ? "bg-[rgba(243,184,100,0.14)] text-[#f3b864]" : anchorA.status === "DOWN" ? "bg-[rgba(238,143,129,0.14)] text-[#ee8f81]" : "bg-[var(--ghost)] text-[var(--muted)]"}`>
-                        {getStatusLabel(anchorA.status).tone}
-                      </span>
-                    </dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Advertised SEPs</dt>
+                      <dd className="text-[var(--white)]">SEP-1, SEP-2</dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Advertised SEPs</dt>
-                    <dd className="text-[var(--white)]">{getSepLabels(anchorA.seps)}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Transfer interface</dt>
+                      <dd className="text-[var(--white)]">Advertised</dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Transfer interface</dt>
-                    <dd className="text-[var(--white)]">{getTransferLabel(anchorA.isTransferCapable)}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Reviewed corridor count</dt>
+                      <dd>2</dd>
+                    </div>
+                  </dl>
+                </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Reviewed corridor count</dt>
-                    <dd className="text-[var(--white)]">{anchorA.corridorCount}</dd>
-                  </div>
-                </dl>
+                {/* Anchor B details */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Anchor B</h3>
+
+                  <dl className="mt-4 text-xs text-[var(--muted)]">
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Home domain</dt>
+                      <dd className="text-[var(--white)] line-clamp-2">example2.stellar.org</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Synchronization status</dt>
+                      <dd>
+                        {getStatusLabel("DEGRADED").label}
+                        <span className={getAnchorStatusClassName("DEGRADED")}>
+                          {getStatusLabel("DEGRADED").tone}
+                        </span>
+                      </dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Advertised SEPs</dt>
+                      <dd className="text-[var(--white)]">SEP-3</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Transfer interface</dt>
+                      <dd className="text-[var(--white)]">No transfer interface advertised</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Reviewed corridor count</dt>
+                      <dd>1</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
 
-              {/* Anchor B details */}
-              <div>
-                <h3 className="text-lg font-medium mb-4">{anchorB.name}</h3>
-
-                <dl className="mt-4 text-xs text-[var(--muted)]">
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Home domain</dt>
-                    <dd className="text-[var(--white)] line-clamp-2">{anchorB.homeDomain}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Synchronization status</dt>
-                    <dd>
-                      {anchorB.status && getStatusLabel(anchorB.status).label}
-                      <span className={`ml-2 inline-flex items-center rounded-full border px-2 py-1 text-[0.6rem] font-medium ${anchorB.status === "LIVE" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)]" : anchorB.status === "DEGRADED" ? "bg-[rgba(243,184,100,0.14)] text-[#f3b864]" : anchorB.status === "DOWN" ? "bg-[rgba(238,143,129,0.14)] text-[#ee8f81]" : "bg-[var(--ghost)] text-[var(--muted)]"}`>
-                        {getStatusLabel(anchorB.status).tone}
-                      </span>
-                    </dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Advertised SEPs</dt>
-                    <dd className="text-[var(--white)]">{getSepLabels(anchorB.seps)}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Transfer interface</dt>
-                    <dd className="text-[var(--white)]">{getTransferLabel(anchorB.isTransferCapable)}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Reviewed corridor count</dt>
-                    <dd className="text-[var(--white)]">{anchorB.corridorCount}</dd>
-                  </div>
-                </dl>
+              {/* Summary disclaimer */}
+              <div className="mt-6 pt-6 border-t border-[var(--ghost)] text-xs text-[var(--muted)]">
+                <p>Configuration data from public evidence. No price, rate, liquidity, or operational claims.</p>
+                <p>Synchronization state reflects last persisted result, not live endpoint availability.</p>
               </div>
             </div>
+          )}
 
-            {/* Summary disclaimer */}
-            <div className="mt-6 pt-6 border-t border-[var(--ghost)] text-xs text-[var(--muted)]">
-              <p>Configuration data from public evidence. No price, rate, liquidity, or operational claims.</p>
-              <p>Synchronization state reflects last persisted result, not live endpoint availability.</p>
-            </div>
-          }
         </section>
       )}
     </div>

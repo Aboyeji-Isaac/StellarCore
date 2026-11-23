@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { exposeReactForClassicJsx } from "../../support/dashboardContracts";
-import WatchlistPage from "./app/watchlist/page"; // relative path
+import WatchlistPage from "@/app/watchlist/page";
 
 exposeReactForClassicJsx();
 

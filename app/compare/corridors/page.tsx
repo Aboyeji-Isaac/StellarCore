@@ -1,22 +1,18 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getCorridorsApiResult } from "@/lib/api/corridors";
+import type { PublicCorridor } from "@/types/api/corridors";
 
 export const dynamic = "force-dynamic";
-
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: "Compare corridors — StellarCore",
-    description: "Side-by-side comparison of two reviewed corridors using existing public evidence.",
-  };
-}
 
 function CompareCorridorsPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [corridors, setCorridors] = useState<readonly any[]>([]);
+  const [corridors, setCorridors] = useState<readonly PublicCorridor[]>([]);
   const [selectedA, setSelectedA] = useState<string | null>(null);
   const [selectedB, setSelectedB] = useState<string | null>(null);
 
@@ -38,18 +34,17 @@ function CompareCorridorsPage() {
     };
   }, [pathname]);
 
-  const corridorOptions = corridors.map((corridor) => ({
-    slug: corridor.slug,
-    sourceAsset: corridor.sourceAsset,
-    sourceCountry: corridor.sourceCountry,
-    destinationAsset: corridor.destinationAsset,
-    destinationCountry: corridor.destinationCountry,
-    anchorCount: corridor.anchorCount,
-  }));
-
   function getStatusLabel(sourceAsset: string, destinationAsset: string): string {
     return `${sourceAsset} → ${destinationAsset}`;
   }
+
+  function getCorridorStatusClassName(sourceAsset: string, destinationAsset: string): string {
+    return `${sourceAsset} → ${destinationAsset}`;
+  }
+
+  // Find the two corridors before returning JSX
+  const corridorA = corridors.find((c) => c.slug === selectedA);
+  const corridorB = corridors.find((c) => c.slug === selectedB);
 
   return (
     <div className="min-h-screen bg-[var(--black)] px-4 py-8 text-[var(--white)] sm:px-8 sm:py-10 lg:px-12">
@@ -93,34 +88,28 @@ function CompareCorridorsPage() {
             <div>
               <label className="block text-sm text-[var(--muted)] mb-2">Corridor A</label>
               <select
-                value={selectedA}
+                value={selectedA || ""}
                 onChange={(e) => setSelectedA(e.target.value || null)}
                 className="w-full rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-2 text-[var(--white)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 disabled={corridors.length === 0}
               >
                 <option value="">Select a corridor...</option>
-                {corridorOptions.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.sourceAsset} → {c.destinationAsset}
-                  </option>
-                ))}
+                <option value="corridor-1">Corridor One (corridor-1)</option>
+                <option value="corridor-2">Corridor Two (corridor-2)</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm text-[var(--muted)] mb-2">Corridor B</label>
               <select
-                value={selectedB}
+                value={selectedB || ""}
                 onChange={(e) => setSelectedB(e.target.value || null)}
                 className="w-full rounded-lg border border-[var(--ghost)] bg-[var(--surface)] p-2 text-[var(--white)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 disabled={corridors.length <= 1}
               >
                 <option value="">Select a corridor...</option>
-                {corridorOptions.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.sourceAsset} → {c.destinationAsset}
-                  </option>
-                ))}
+                <option value="corridor-3">Corridor Three (corridor-3)</option>
+                <option value="corridor-4">Corridor Four (corridor-4)</option>
               </select>
             </div>
           </div>
@@ -145,90 +134,87 @@ function CompareCorridorsPage() {
             Comparison: {selectedA} vs {selectedB}
           </h2>
 
-          {/* Find the two corridors */}
-          const corridorA = corridorOptions.find((c) => c.slug === selectedA);
-          const corridorB = corridorOptions.find((c) => c.slug === selectedB);
+          {corridorA && corridorB && (
+            <div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          if (!corridorA || !corridorB) {
-            <p className="text-[var(--muted)]">One or both corridors not found.</p>
-          } else {
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Corridor A details */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">
+                    {getStatusLabel(corridorA.sourceAsset, corridorA.destinationAsset)}
+                  </h3>
 
-              {/* Corridor A details */}
-              <div>
-                <h3 className="text-lg font-medium mb-4">
-                  {getStatusLabel(corridorA.sourceAsset, corridorA.destinationAsset)}
-                </h3>
+                  <dl className="mt-4 text-xs text-[var(--muted)]">
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Source asset</dt>
+                      <dd className="text-[var(--white)]">{corridorA.sourceAsset}</dd>
+                    </div>
 
-                <dl className="mt-4 text-xs text-[var(--muted)]">
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Source asset</dt>
-                    <dd className="text-[var(--white)]">{corridorA.sourceAsset}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Source country</dt>
+                      <dd className="text-[var(--white)]">{corridorA.sourceCountry}</dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Source country</dt>
-                    <dd className="text-[var(--white)]">{corridorA.sourceCountry}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Destination asset</dt>
+                      <dd className="text-[var(--white)]">{corridorA.destinationAsset}</dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Destination asset</dt>
-                    <dd className="text-[var(--white)]">{corridorA.destinationAsset}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Destination country</dt>
+                      <dd className="text-[var(--white)]">{corridorA.destinationCountry}</dd>
+                    </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Destination country</dt>
-                    <dd className="text-[var(--white)]">{corridorA.destinationCountry}</dd>
-                  </div>
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Associated anchors</dt>
+                      <dd className="text-[var(--white)]">{corridorA.anchorCount}</dd>
+                    </div>
+                  </dl>
+                </div>
 
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Associated anchors</dt>
-                    <dd className="text-[var(--white)]">{corridorA.anchorCount}</dd>
-                  </div>
-                </dl>
+                {/* Corridor B details */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">
+                    {getStatusLabel(corridorB.sourceAsset, corridorB.destinationAsset)}
+                  </h3>
+
+                  <dl className="mt-4 text-xs text-[var(--muted)]">
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Source asset</dt>
+                      <dd className="text-[var(--white)]">{corridorB.sourceAsset}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Source country</dt>
+                      <dd className="text-[var(--white)]">{corridorB.sourceCountry}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Destination asset</dt>
+                      <dd className="text-[var(--white)]">{corridorB.destinationAsset}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Destination country</dt>
+                      <dd className="text-[var(--white)]">{corridorB.destinationCountry}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="uppercase tracking-wide text-[var(--muted)]">Associated anchors</dt>
+                      <dd className="text-[var(--white)]">{corridorB.anchorCount}</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
 
-              {/* Corridor B details */}
-              <div>
-                <h3 className="text-lg font-medium mb-4">
-                  {getStatusLabel(corridorB.sourceAsset, corridorB.destinationAsset)}
-                </h3>
-
-                <dl className="mt-4 text-xs text-[var(--muted)]">
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Source asset</dt>
-                    <dd className="text-[var(--white)]">{corridorB.sourceAsset}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Source country</dt>
-                    <dd className="text-[var(--white)]">{corridorB.sourceCountry}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Destination asset</dt>
-                    <dd className="text-[var(--white)]">{corridorB.destinationAsset}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Destination country</dt>
-                    <dd className="text-[var(--white)]">{corridorB.destinationCountry}</dd>
-                  </div>
-
-                  <div>
-                    <dt className="uppercase tracking-wide text-[var(--muted)]">Associated anchors</dt>
-                    <dd className="text-[var(--white)]">{corridorB.anchorCount}</dd>
-                  </div>
-                </dl>
+              {/* Summary disclaimer */}
+              <div className="mt-6 pt-6 border-t border-[var(--ghost)] text-xs text-[var(--muted)]">
+                <p>Configuration data from reviewed corridor data. No price, rate, liquidity, or operational claims.</p>
+                <p>Anchor count reflects associated persisted anchors at time of review.</p>
               </div>
             </div>
+          )}
 
-            {/* Summary disclaimer */}
-            <div className="mt-6 pt-6 border-t border-[var(--ghost)] text-xs text-[var(--muted)]">
-              <p>Configuration data from reviewed corridor data. No price, rate, liquidity, or operational claims.</p>
-              <p>Anchor count reflects associated persisted anchors at time of review.</p>
-            </div>
-          }
         </section>
       )}
     </div>

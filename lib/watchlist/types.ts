@@ -23,20 +23,23 @@ export function createWatchlistStore(
       : null;
     if (stored) {
       const parsed = JSON.parse(stored);
-      _items = parsed.filter((item: any) => {
-        // Validate: must have required fields and valid type
-        return (
-          item &&
-          typeof item.id === "string" &&
-          typeof item.type === "string" &&
-          (item.type === "anchor" || item.type === "corridor") &&
-          typeof item.slug === "string" &&
-          typeof item.name === "string"
+      if (typeof parsed === "object" && parsed !== null) {
+        _items = (parsed as readonly WatchlistItem[]).filter(
+          (item): item is WatchlistItem => {
+            return (
+              item &&
+              typeof item.id === "string" &&
+              typeof item.type === "string" &&
+              (item.type === "anchor" || item.type === "corridor") &&
+              typeof item.slug === "string" &&
+              typeof item.name === "string"
+            );
+          },
         );
-      });
+      }
     }
   } catch {
-    // Corrupt storage - safely ignore
+    // Corrupt storage - safely ignore, _items stays as empty array
   }
 
   const add = (item: WatchlistItem): WatchlistStore => {
