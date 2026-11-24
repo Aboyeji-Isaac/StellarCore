@@ -2,41 +2,49 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { exposeReactForClassicJsx } from "../../support/dashboardContracts";
-import CompareCorridorsPage from "@/app/compare/corridors/page";
+import CompareCorridorsPage, { CorridorComparison } from "@/app/compare/corridors/page";
+import type { PublicCorridor } from "@/types/api/corridors";
 
 exposeReactForClassicJsx();
 
-test("compare corridors page renders selection form", () => {
+const first: PublicCorridor = {
+  slug: "usd-us-brl-br", sourceAsset: "USDC", sourceCountry: "US",
+  destinationAsset: "BRL", destinationCountry: "BR", anchorCount: 2,
+};
+const second: PublicCorridor = {
+  slug: "eur-fr-ngn-ng", sourceAsset: "EUR", sourceCountry: "FR",
+  destinationAsset: "NGN", destinationCountry: "NG", anchorCount: 0,
+};
+
+test("corridor page renders accessible selectors with no invented options", () => {
   const markup = renderToStaticMarkup(<CompareCorridorsPage />);
+  assert.match(markup, /Compare two corridors/);
   assert.match(markup, /Select corridors/);
   assert.match(markup, /Corridor A/);
   assert.match(markup, /Corridor B/);
-  assert.match(markup, /Compare/);
+  assert.match(markup, /Loading reviewed corridors/);
+  assert.doesNotMatch(markup, /corridor-3|corridor-4/);
 });
 
-test("compare corridors page shows empty state when no corridors available", () => {
-  const markup = renderToStaticMarkup(<CompareCorridorsPage />);
-  assert.match(markup, /Select corridors/);
-});
-
-test("compare corridors page compares two selected corridors", () => {
-  const markup = renderToStaticMarkup(<CompareCorridorsPage />);
+test("comparison displays actual source, destination and persisted association counts", () => {
+  const markup = renderToStaticMarkup(<CorridorComparison first={first} second={second} />);
+  assert.match(markup, /USDC/);
+  assert.match(markup, /BRL/);
+  assert.match(markup, /EUR/);
+  assert.match(markup, /NGN/);
   assert.match(markup, /Source asset/);
   assert.match(markup, /Source country/);
   assert.match(markup, /Destination asset/);
   assert.match(markup, /Destination country/);
   assert.match(markup, /Associated anchors/);
+  assert.match(markup, /href="\/corridors\/usd-us-brl-br"/);
+  assert.match(markup, /No price, rate, liquidity, or operational claims/);
 });
 
-test("compare corridors page disclaimer shows no rate claims", () => {
+test("comparison does not link to a missing result page", () => {
   const markup = renderToStaticMarkup(<CompareCorridorsPage />);
-  assert.match(markup, /No price/);
-  assert.match(markup, /No rate/);
-  assert.match(markup, /No operational claims/);
-});
-
-test("compare corridors page keyboard accessible controls", () => {
-  const markup = renderToStaticMarkup(<CompareCorridorsPage />);
+  assert.match(markup, /id="corridor-compare-a"/);
+  assert.match(markup, /id="corridor-compare-b"/);
   assert.match(markup, /focus-visible/);
-  assert.match(markup, /aria-label/);
+  assert.doesNotMatch(markup, /\/compare\/corridors\/result/);
 });
