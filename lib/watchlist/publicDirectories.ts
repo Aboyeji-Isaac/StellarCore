@@ -51,10 +51,12 @@ async function loadList<T>(
     const response = await fetchImpl(url, { cache: "no-store", signal });
     if (!response.ok) return { ok: false, message };
     const data: unknown = await response.json();
-    if (!record(data) || !Array.isArray(data[property])) return { ok: false, message };
-    const entries: unknown[] = data[property];
-    if (!entries.every(check)) return { ok: false, message };
-    return { ok: true, items: Object.freeze([...entries]) };
+    if (!record(data)) return { ok: false, message };
+    const entries: unknown = data[property];
+    if (!Array.isArray(entries) || !entries.every((entry: unknown) => check(entry))) {
+      return { ok: false, message };
+    }
+    return { ok: true, items: Object.freeze([...entries] as T[]) };
   } catch {
     return { ok: false, message };
   }
