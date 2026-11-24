@@ -10,11 +10,21 @@ import { getRateHistoryApiResult } from "@/lib/api/rateHistory";
 
 type Props = Readonly<{ params: Promise<Readonly<{ slug: string }>> }>;
 
+export type CorridorPageDependencies = Readonly<{
+  getCorridor?: typeof getCorridorApiResult;
+  getRates?: typeof getRatesApiResult;
+  getRateHistory?: typeof getRateHistoryApiResult;
+}>;
+
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(
+  { params }: Props,
+  dependencies: CorridorPageDependencies = {},
+): Promise<Metadata> {
+  const { getCorridor = getCorridorApiResult } = dependencies;
   const { slug } = await params;
-  const result = await getCorridorApiResult(slug);
+  const result = await getCorridor(slug);
   if (result.status !== 200) return { title: "Corridor not found — StellarCore" };
 
   const { corridor } = result.body;
@@ -24,17 +34,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function CorridorPage({ params }: Props) {
+export default async function CorridorPage(
+  { params }: Props,
+  dependencies: CorridorPageDependencies = {},
+) {
+  const {
+    getCorridor = getCorridorApiResult,
+    getRates = getRatesApiResult,
+    getRateHistory = getRateHistoryApiResult,
+  } = dependencies;
+
   const { slug } = await params;
-  const corridorResult = await getCorridorApiResult(slug);
+  const corridorResult = await getCorridor(slug);
   if (corridorResult.status === 404 || corridorResult.status === 400) notFound();
   if (corridorResult.status !== 200) {
     return <ErrorState message={corridorResult.body.error.message} />;
   }
 
   const { corridor } = corridorResult.body;
-  const ratesResult = await getRatesApiResult(slug);
-  const historyResult = await getRateHistoryApiResult(slug);
+  const ratesResult = await getRates(slug);
+  const historyResult = await getRateHistory(slug);
 
   return (
     <>
@@ -92,7 +111,7 @@ export default async function CorridorPage({ params }: Props) {
           {ratesResult.status === 200 ? (
             <CorridorRateEvidence rates={ratesResult.body} />
           ) : (
-            <ErrorState message={ratesResult.body.error.message} />
+            <RateEvidenceErrorState message={ratesResult.body.error.message} />
           )}
 
           {historyResult.status === 200 ? (
@@ -100,10 +119,67 @@ export default async function CorridorPage({ params }: Props) {
               corridorSlug={corridor.slug}
               initialHistory={historyResult.body}
             />
-          ) : null}
+          ) : (
+            <RateHistoryFailureState message={historyResult.body?.error?.message} />
+          )}
         </div>
       </main>
     </>
+  );
+}
+
+function RateEvidenceErrorState({ message }: { message: string }) {
+  return (
+    <section aria-labelledby="rate-evidence-heading" className="mt-10">
+      <div>
+        <p className="eyebrow">Persisted observations</p>
+        <h2 id="rate-evidence-heading" className="mt-2 text-2xl" style={{ fontFamily: "var(--display)" }}>
+          Latest rate evidence
+        </h2>
+      </div>
+      <div
+        role="alert"
+        data-testid="rate-evidence-failure-state"
+        className="mt-5 rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]"
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">Unavailable</p>
+        <p className="mt-2">{message}</p>
+      </div>
+    </section>
+  );
+}
+
+function RateHistoryFailureState({ message }: { message?: string }) {
+  return (
+    <section
+      aria-labelledby="rate-history-heading"
+      className="mt-10"
+      data-testid="corridor-rate-history-section"
+    >
+      <div>
+        <p className="eyebrow">Rate timeline</p>
+        <h2
+          id="rate-history-heading"
+          className="mt-2 text-2xl"
+          style={{ fontFamily: "var(--display)" }}
+        >
+          Historical rate chart
+        </h2>
+      </div>
+      <div
+        role="alert"
+        data-testid="rate-history-failure-state"
+        className="mt-5 rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]"
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">Unavailable</p>
+        <p className="mt-2">
+          {message ?? "Historical rate evidence is unavailable."}
+        </p>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Historical rate observations could not be loaded for this corridor.
+        </p>
+      </div>
+    </section>
   );
 }
 
