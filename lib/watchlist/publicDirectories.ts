@@ -8,13 +8,20 @@ export type DirectoryResult<T> =
 
 export type DirectoryFetch = (input: string, init: RequestInit) => Promise<Response>;
 
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function validSlug(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0
+    && value.length <= 100 && SLUG_PATTERN.test(value);
+}
+
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function anchor(value: unknown): value is PublicAnchorSummary {
   return record(value)
-    && typeof value.slug === "string"
+    && validSlug(value.slug)
     && typeof value.name === "string"
     && typeof value.homeDomain === "string"
     && (value.status === "LIVE" || value.status === "DEGRADED"
@@ -28,7 +35,7 @@ function anchor(value: unknown): value is PublicAnchorSummary {
 
 function corridor(value: unknown): value is PublicCorridor {
   return record(value)
-    && typeof value.slug === "string"
+    && validSlug(value.slug)
     && typeof value.sourceAsset === "string"
     && typeof value.destinationAsset === "string"
     && typeof value.sourceCountry === "string"
