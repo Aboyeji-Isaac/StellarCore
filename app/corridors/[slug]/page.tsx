@@ -12,27 +12,23 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const result = await getCorridorApiResult(slug);
-
-  if (result.status !== 200) {
+  if (result.status === 200) {
+    const { corridor } = result.body;
+    return {
+      title: `${corridor.sourceAsset} → ${corridor.destinationAsset} — StellarCore`,
+      description: `Read-only evidence for the ${corridor.sourceCountry} to ${corridor.destinationCountry} corridor.`,
+    };
+  }
+  if (result.status === 400 || result.status === 404) {
     return { title: "Corridor not found — StellarCore" };
   }
-
-  const { corridor } = result.body;
-
-  return {
-    title: `${corridor.sourceAsset} → ${corridor.destinationAsset} — StellarCore`,
-    description: `Read-only evidence for the ${corridor.sourceCountry} to ${corridor.destinationCountry} corridor.`,
-  };
+  return { title: "Corridor unavailable — StellarCore" };
 }
 
 export default async function CorridorPage({ params }: Props) {
   const { slug } = await params;
   const corridorResult = await getCorridorApiResult(slug);
-
-  if (corridorResult.status === 404 || corridorResult.status === 400) {
-    notFound();
-  }
-
+  if (corridorResult.status === 404 || corridorResult.status === 400) notFound();
   if (corridorResult.status !== 200) {
     return <CorridorPageError message={corridorResult.body.error.message} />;
   }

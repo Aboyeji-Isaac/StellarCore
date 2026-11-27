@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import CorridorPage from "@/app/corridors/[slug]/page";
+import { createElement } from "react";
+import { CorridorDetailView } from "@/app/corridors/[slug]/CorridorDetailView";
 import type { CorridorApiResult } from "@/types/api/corridors";
 import type { RatesApiResult } from "@/types/api/rates";
 import type { RateHistoryApiResult } from "@/types/api/rateHistory";
@@ -32,22 +33,55 @@ const mockRatesResult: RatesApiResult = {
   body: getFixture("rates", "healthy-success"),
 };
 
+function render(ratesResult: RatesApiResult, historyResult: RateHistoryApiResult): string {
+  if (mockCorridorResult.status !== 200) throw new Error("Expected corridor fixture");
+  return renderToStaticMarkup(withTestAppRouter(createElement(CorridorDetailView, {
+    corridor: mockCorridorResult.body.corridor, ratesResult, historyResult,
+  })));
+}
+
 const mockSuccessHistoryResult: RateHistoryApiResult = {
   status: 200,
   body: {
-    corridor: "usdc-us-brl-br",
+    corridor: {
+      slug: "usdc-us-brl-br",
+      sourceAsset: "USDC",
+      sourceCountry: "US",
+      destinationAsset: "BRL",
+      destinationCountry: "BR",
+    },
     windowDays: 30,
     evaluatedAt: "2026-11-20T12:00:00Z",
     points: [
       {
         timestamp: "2026-11-19T00:00:00Z",
         medianRate: "5.40",
-        observationCount: 3,
+        state: "healthy",
+        sourceCount: 2,
+        freshSourceCount: 2,
+        observations: ["cowrie", "zeam"].map((slug) => ({
+          anchor: { slug, name: slug === "cowrie" ? "Cowrie" : "Zeam" },
+          rate: "5.40",
+          sourceAmount: "1",
+          destinationAmount: "5.40",
+          fee: "0",
+          capturedAt: "2026-11-19T00:00:00Z",
+        })),
       },
       {
         timestamp: "2026-11-20T00:00:00Z",
         medianRate: "5.42",
-        observationCount: 3,
+        state: "healthy",
+        sourceCount: 2,
+        freshSourceCount: 2,
+        observations: ["cowrie", "zeam"].map((slug) => ({
+          anchor: { slug, name: slug === "cowrie" ? "Cowrie" : "Zeam" },
+          rate: "5.42",
+          sourceAmount: "1",
+          destinationAmount: "5.42",
+          fee: "0",
+          capturedAt: "2026-11-20T00:00:00Z",
+        })),
       },
     ],
   },
@@ -56,7 +90,13 @@ const mockSuccessHistoryResult: RateHistoryApiResult = {
 const mockEmptyHistoryResult: RateHistoryApiResult = {
   status: 200,
   body: {
-    corridor: "usdc-us-brl-br",
+    corridor: {
+      slug: "usdc-us-brl-br",
+      sourceAsset: "USDC",
+      sourceCountry: "US",
+      destinationAsset: "BRL",
+      destinationCountry: "BR",
+    },
     windowDays: 30,
     evaluatedAt: "2026-11-20T12:00:00Z",
     points: [],
@@ -83,17 +123,8 @@ const mock404HistoryResult: RateHistoryApiResult = {
   },
 };
 
-test("CorridorPage: history status 200 renders the rate history chart and no failure state", async () => {
-  const jsx = await CorridorPage(
-    { params: Promise.resolve({ slug: "usdc-us-brl-br" }) },
-    {
-      getCorridor: async () => mockCorridorResult,
-      getRates: async () => mockRatesResult,
-      getRateHistory: async () => mockSuccessHistoryResult,
-    },
-  );
-
-  const html = renderToStaticMarkup(withTestAppRouter(jsx));
+test("CorridorPage: history status 200 renders the rate history chart and no failure state", () => {
+  const html = render(mockRatesResult, mockSuccessHistoryResult);
 
   // Chart is rendered
   assert.match(html, /Historical rate chart/);
@@ -104,17 +135,8 @@ test("CorridorPage: history status 200 renders the rate history chart and no fai
   assert.doesNotMatch(html, /data-testid="rate-history-failure-state"/);
 });
 
-test("CorridorPage: history error 500 renders a visible failure state without disappearing or breaking latest rates", async () => {
-  const jsx = await CorridorPage(
-    { params: Promise.resolve({ slug: "usdc-us-brl-br" }) },
-    {
-      getCorridor: async () => mockCorridorResult,
-      getRates: async () => mockRatesResult,
-      getRateHistory: async () => mock500HistoryResult,
-    },
-  );
-
-  const html = renderToStaticMarkup(withTestAppRouter(jsx));
+test("CorridorPage: history error 500 renders a visible failure state without disappearing or breaking latest rates", () => {
+  const html = render(mockRatesResult, mock500HistoryResult);
 
   // Latest rate panel still renders successfully
   assert.match(html, /Latest rate evidence/);
@@ -129,48 +151,31 @@ test("CorridorPage: history error 500 renders a visible failure state without di
   assert.match(html, /data-testid="corridor-rate-history-section"/);
   assert.match(html, /data-testid="rate-history-failure-state"/);
   assert.match(html, /role="alert"/);
-  assert.match(html, /Database failure reading rate history/);
+  assert.doesNotMatch(html, /Database failure reading rate history/);
   assert.match(html, /Historical rate observations could not be loaded for this corridor/);
 });
 
-test("CorridorPage: history error 404 does not cause whole corridor page to 404", async () => {
-  const jsx = await CorridorPage(
-    { params: Promise.resolve({ slug: "usdc-us-brl-br" }) },
-    {
-      getCorridor: async () => mockCorridorResult,
-      getRates: async () => mockRatesResult,
-      getRateHistory: async () => mock404HistoryResult,
-    },
-  );
-
-  const html = renderToStaticMarkup(withTestAppRouter(jsx));
+test("CorridorPage: history error 404 does not cause whole corridor page to 404", () => {
+  const html = render(mockRatesResult, mock404HistoryResult);
 
   // Header, breadcrumb, and anchors are preserved
   assert.match(html, /USDC \(US\) → BRL \(BR\)/);
   assert.match(html, /data-testid="rate-history-failure-state"/);
-  assert.match(html, /Rate history not recorded for corridor/);
+  assert.doesNotMatch(html, /Rate history not recorded for corridor/);
+  assert.match(html, /Historical rate observations could not be loaded for this corridor/);
 });
 
-test("CorridorPage: empty successful history remains distinct from failed request", async () => {
-  const jsx = await CorridorPage(
-    { params: Promise.resolve({ slug: "usdc-us-brl-br" }) },
-    {
-      getCorridor: async () => mockCorridorResult,
-      getRates: async () => mockRatesResult,
-      getRateHistory: async () => mockEmptyHistoryResult,
-    },
-  );
-
-  const html = renderToStaticMarkup(withTestAppRouter(jsx));
+test("CorridorPage: empty successful history remains distinct from failed request", () => {
+  const html = render(mockRatesResult, mockEmptyHistoryResult);
 
   // Does NOT render failure state
   assert.doesNotMatch(html, /data-testid="rate-history-failure-state"/);
 
   // Renders the empty history notification inside the chart component
-  assert.match(html, /No historical rate snapshots recorded for the 30-day window/);
+  assert.match(html, /No historical rate snapshots were returned for the/);
 });
 
-test("CorridorPage: rates failure is isolated from history success", async () => {
+test("CorridorPage: rates failure is isolated from history success", () => {
   const mockFailedRates: RatesApiResult = {
     status: 500,
     body: {
@@ -181,19 +186,10 @@ test("CorridorPage: rates failure is isolated from history success", async () =>
     },
   };
 
-  const jsx = await CorridorPage(
-    { params: Promise.resolve({ slug: "usdc-us-brl-br" }) },
-    {
-      getCorridor: async () => mockCorridorResult,
-      getRates: async () => mockFailedRates,
-      getRateHistory: async () => mockSuccessHistoryResult,
-    },
-  );
-
-  const html = renderToStaticMarkup(withTestAppRouter(jsx));
+  const html = render(mockFailedRates, mockSuccessHistoryResult);
 
   // Rates failure rendered
-  assert.match(html, /data-testid="rate-evidence-failure-state"/);
+  assert.match(html, /data-evidence-state="unavailable"/);
   assert.match(html, /Rates calculation service unavailable/);
 
   // History chart still rendered successfully

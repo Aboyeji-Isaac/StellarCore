@@ -148,14 +148,15 @@ test("history failure is independent of a successful latest-rate read", () => {
   assertSingleMain(html);
   assert.match(html, /Latest rate evidence/);
   assert.doesNotMatch(html, />7D</);
-  assert.doesNotMatch(html, /role="alert"/);
+  assert.match(html, /data-testid="rate-history-failure-state"/);
+  assert.equal(count(html, /role="alert"/g), 1);
 });
 
 test("both rate and history failures still yield one main with corridor context", () => {
   const html = render(fixture<RatesApiResult>("rates", "error-internal-500"), historyFailure);
   assertSingleMain(html);
   assertCorridorContext(html);
-  assert.equal(count(html, /role="alert"/g), 1);
+  assert.equal(count(html, /role="alert"/g), 2);
 });
 
 test("top-level corridor-fetch failure keeps its own single main and alert", () => {
