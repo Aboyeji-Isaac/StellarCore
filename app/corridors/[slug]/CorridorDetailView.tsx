@@ -85,10 +85,32 @@ export function CorridorDetailView({ corridor, ratesResult, historyResult }: Pro
               corridorSlug={corridor.slug}
               initialHistory={historyResult.body}
             />
-          ) : null}
+          ) : (
+            <RateHistoryFailureState />
+          )}
         </div>
       </main>
     </>
+  );
+}
+
+function RateHistoryFailureState() {
+  return (
+    <section
+      aria-labelledby="rate-history-heading"
+      className="mt-10"
+      data-testid="corridor-rate-history-section"
+    >
+      <p className="eyebrow">Rate timeline</p>
+      <h2 id="rate-history-heading" className="mt-2 text-2xl" style={{ fontFamily: "var(--display)" }}>
+        Historical rate chart
+      </h2>
+      <div role="alert" data-testid="rate-history-failure-state"
+        className="mt-5 rounded-lg border border-[rgba(238,143,129,0.35)] bg-[rgba(238,143,129,0.08)] p-5 text-sm text-[#ee8f81]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">Unavailable</p>
+        <p className="mt-2">Historical rate observations could not be loaded for this corridor.</p>
+      </div>
+    </section>
   );
 }
 
